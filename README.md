@@ -85,14 +85,27 @@ Relations between constructs can be in one of four tetra states: `TRUE`, `FALSE`
 
 ## Repository files
 
-|File                               |Description                  |
-|-----------------------------------|-----------------------------|
-|`Sirisys_Framework_v12_1.py`       |SIRISYS engine               |
-|`Sirisys_Server.py`                |FastAPI/WebSocket server     |
-|`Sirisys_Live_Visualizer.html`     |Live visualizer              |
-|`Sirisys_Static_Visualizer_v6.html`|Static visualizer (post-hoc) |
-|`Sirisys_Live_Guia.md`             |Complete user guide (Spanish)|
-|`requirements.txt`                 |Python dependencies          |
+|File                               |Description                               |
+|-----------------------------------|------------------------------------------|
+|`Sirisys_Framework_v12_1.py`       |SIRISYS engine                            |
+|`Sirisys_Server.py`                |FastAPI/WebSocket server                  |
+|`Sirisys_Live_Visualizer.html`     |Live visualizer                           |
+|`Sirisys_Static_Visualizer_v6.html`|Static visualizer (post-hoc)              |
+|`Sirisys_Live_Guia.md`             |Complete user guide (Spanish)             |
+|`requirements.txt`                 |Python dependencies                       |
+|`LICENSE`                          |PolyForm Noncommercial 1.0.0 license terms|
+
+-----
+
+## License
+
+This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
+
+You may use, modify, and distribute the software for any **noncommercial purpose**, including academic research, personal study, educational use, and public-interest research, provided that proper attribution is maintained.
+
+Commercial use is not permitted under this license. For commercial licensing inquiries, please contact the author.
+
+See the `LICENSE` file for the complete terms.
 
 -----
 
