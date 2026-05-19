@@ -1,0 +1,1539 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIRISYS — Field Topology v6</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+/* ── COLOR TOKENS ─────────────────────────────────────────── */
+/* Surfaces: 4-tier depth, each layer slightly lifted from the last */
+–bg-0:            #07080a;  /* app backdrop */
+–bg-1:            #0b0d11;  /* panel */
+–bg-2:            #12151b;  /* card / elevated */
+–bg-3:            #1a1e26;  /* hover / elevated-active */
+/* Legacy aliases (do not remove — JS references may inline these) */
+–bg:              var(–bg-0);
+–bg-panel:        var(–bg-1);
+–bg-card:         var(–bg-2);
+
+```
+/* Borders */
+--border:          #1a1e26;
+--border-hi:       #2a2f3a;
+--border-focus:    #3a4050;
+
+/* Text hierarchy */
+--text:            #b8c0cc;
+--text-dim:        #5c6475;
+--text-muted:      #8a92a3;
+--text-bright:     #eef1f6;
+
+/* Brand */
+--accent:          #4af0c4;
+--accent-soft:     rgba(74,240,196,.12);
+--accent-strong:   rgba(74,240,196,.22);
+
+/* Ontological palette — tetra states */
+--col-BOTH:        #f0a832;
+--col-TRUE:        #4af0c4;
+--col-FALSE:       #f05050;
+--col-NEITHER:     #5a6072;
+--col-APPARENT:    #eef1f6;
+
+/* Lagrangian palette */
+--L1: #4af0c4;
+--L2: #f0a832;
+--L3: #a070f0;
+--L4: #f05090;
+--L5: #50c0f0;
+
+/* ── SPACING — 4px base grid ──────────────────────────────── */
+--sp-1: 4px;
+--sp-2: 8px;
+--sp-3: 12px;
+--sp-4: 16px;
+--sp-5: 20px;
+--sp-6: 24px;
+
+/* ── TYPOGRAPHY ───────────────────────────────────────────── */
+--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+--font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+/* Modular scale (1.2 ratio) — consistent hierarchy */
+--fs-xs:   9px;
+--fs-sm:   10px;
+--fs-md:   11px;
+--fs-base: 12px;
+--fs-lg:   13px;
+--fs-xl:   15px;
+
+/* Line heights & letter spacing */
+--lh-tight:  1.25;
+--lh-normal: 1.5;
+--lh-loose:  1.7;
+--ls-wide:   .08em;
+--ls-wider:  .14em;
+--ls-label:  .18em;
+
+/* ── ELEVATION & RADII ────────────────────────────────────── */
+--radius-sm: 3px;
+--radius:    5px;
+--radius-lg: 8px;
+--shadow-1:  0 1px 2px rgba(0,0,0,.3);
+--shadow-2:  0 4px 16px rgba(0,0,0,.55);
+--shadow-3:  0 8px 28px rgba(0,0,0,.65);
+
+/* ── MOTION ───────────────────────────────────────────────── */
+--ease:      cubic-bezier(.2, .6, .2, 1);
+--dur-fast:  .12s;
+--dur:       .2s;
+--dur-slow:  .4s;
+```
+
+}
+
+/* ── RESET ─────────────────────────────────────────────────── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{
+background:var(–bg-0);
+color:var(–text);
+font-family:var(–font-sans);
+font-size:var(–fs-base);
+line-height:var(–lh-normal);
+font-feature-settings:“cv11”,“ss01”;
+-webkit-font-smoothing:antialiased;
+text-rendering:optimizeLegibility;
+display:flex;
+flex-direction:column;
+overflow:hidden;
+}
+::selection{background:var(–accent-strong);color:var(–text-bright);}
+
+/* Scrollbars — consistent, subtle */
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(–border-hi);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(–border-focus);}
+
+/* ── HEADER ────────────────────────────────────────────────── */
+header{
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:var(–sp-3) var(–sp-4);
+border-bottom:1px solid var(–border);
+background:var(–bg-1);
+flex-shrink:0;
+gap:var(–sp-3);
+height:48px;
+}
+.logo{
+font-family:var(–font-mono);
+font-size:var(–fs-lg);
+font-weight:600;
+letter-spacing:var(–ls-label);
+color:var(–accent);
+white-space:nowrap;
+display:flex;
+align-items:center;
+gap:var(–sp-2);
+}
+.logo::before{
+content:’’;
+width:6px;height:6px;border-radius:50%;
+background:var(–accent);
+box-shadow:0 0 8px var(–accent);
+animation:pulse-dot 2.4s ease-in-out infinite;
+}
+@keyframes pulse-dot{
+0%,100%{opacity:1;transform:scale(1);}
+50%    {opacity:.4;transform:scale(.8);}
+}
+.logo span{color:var(–text-dim);font-weight:400;letter-spacing:var(–ls-wider);}
+.header-controls{display:flex;align-items:center;gap:var(–sp-2);flex-wrap:wrap;}
+.header-meta{
+color:var(–text-dim);
+font-size:var(–fs-sm);
+font-family:var(–font-mono);
+letter-spacing:var(–ls-wide);
+flex:1;
+text-align:center;
+}
+
+/* ── BUTTON ────────────────────────────────────────────────── */
+.btn{
+background:transparent;
+border:1px solid var(–border-hi);
+color:var(–text-muted);
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+font-weight:500;
+padding:var(–sp-1) var(–sp-3);
+border-radius:var(–radius-sm);
+cursor:pointer;
+letter-spacing:var(–ls-wide);
+white-space:nowrap;
+height:26px;
+display:inline-flex;
+align-items:center;
+gap:var(–sp-1);
+transition:
+border-color var(–dur-fast) var(–ease),
+color        var(–dur-fast) var(–ease),
+background   var(–dur-fast) var(–ease),
+transform    var(–dur-fast) var(–ease);
+}
+.btn:hover{border-color:var(–accent);color:var(–accent);background:var(–accent-soft);}
+.btn:active{transform:translateY(1px);}
+.btn:focus-visible{outline:none;border-color:var(–accent);box-shadow:0 0 0 2px var(–accent-soft);}
+.btn.active{border-color:var(–accent);color:var(–accent);background:var(–accent-soft);}
+.btn.active:hover{background:var(–accent-strong);}
+
+/* ── APP LAYOUT ───────────────────────────────────────────── */
+.app{display:grid;grid-template-columns:204px 1fr 272px;flex:1;min-height:0;}
+
+/* ── PANELS (shared) ───────────────────────────────────────── */
+.panel-left, .panel-right{
+background:var(–bg-1);
+display:flex;
+flex-direction:column;
+overflow-y:auto;
+}
+.panel-left{
+border-right:1px solid var(–border);
+padding:var(–sp-4);
+gap:var(–sp-4);
+}
+.panel-right{
+border-left:1px solid var(–border);
+overflow:hidden;
+}
+
+.panel-section{display:flex;flex-direction:column;gap:var(–sp-2);}
+/* Reference sections (legends, overlay keys) — slightly de-emphasized
+so interactive filters dominate the hierarchy */
+.panel-section.reference{opacity:.85;}
+.panel-section.reference:hover{opacity:1;transition:opacity var(–dur) var(–ease);}
+.panel-label{
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+font-weight:600;
+letter-spacing:var(–ls-label);
+color:var(–text-muted);
+text-transform:uppercase;
+padding-bottom:var(–sp-2);
+border-bottom:1px solid var(–border);
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:var(–sp-2);
+}
+.filter-hint{
+font-size:var(–fs-xs);
+color:var(–text-dim);
+font-style:italic;
+font-weight:400;
+letter-spacing:0;
+text-transform:none;
+}
+
+/* ── STATS ─────────────────────────────────────────────────── */
+.stat-row{
+display:flex;
+justify-content:space-between;
+align-items:center;
+font-family:var(–font-mono);
+font-size:var(–fs-md);
+padding:2px 0;
+}
+.stat-key{color:var(–text-dim);letter-spacing:var(–ls-wide);}
+.stat-val{color:var(–text-bright);font-weight:500;font-variant-numeric:tabular-nums;}
+.stat-val.accent{color:var(–accent);}
+.instability-bar{
+height:3px;
+background:var(–bg-2);
+border-radius:2px;
+overflow:hidden;
+margin-top:var(–sp-1);
+}
+.instability-fill{
+height:100%;
+background:linear-gradient(90deg, var(–accent), var(–col-BOTH));
+transition:width var(–dur-slow) var(–ease);
+}
+
+/* ── LEGEND ITEMS ──────────────────────────────────────────── */
+.legend-item{
+display:flex;
+align-items:center;
+gap:var(–sp-2);
+cursor:pointer;
+padding:var(–sp-1) var(–sp-2);
+border-radius:var(–radius-sm);
+font-size:var(–fs-md);
+font-family:var(–font-mono);
+letter-spacing:var(–ls-wide);
+color:var(–text);
+transition:
+background var(–dur-fast) var(–ease),
+opacity    var(–dur) var(–ease),
+color      var(–dur-fast) var(–ease);
+user-select:none;
+}
+.legend-item:hover{background:var(–bg-2);color:var(–text-bright);}
+.legend-item.active{background:var(–bg-2);outline:1px solid var(–border-hi);}
+.legend-item.dimmed{opacity:.3;}
+.legend-dot,.legend-hex,.legend-star,.legend-dia{width:10px;height:10px;flex-shrink:0;}
+.legend-dot{border-radius:50%;}
+.legend-hex{clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);}
+.legend-star{clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);}
+.legend-dia{clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);background:none;border:1px dashed var(–border-focus);}
+
+/* ── UPLOAD ZONE ──────────────────────────────────────────── */
+.upload-zone{
+border:1px dashed var(–border-hi);
+border-radius:var(–radius);
+padding:var(–sp-3);
+text-align:center;
+cursor:pointer;
+color:var(–text-muted);
+font-size:var(–fs-md);
+font-family:var(–font-mono);
+letter-spacing:var(–ls-wide);
+transition:
+border-color var(–dur) var(–ease),
+color        var(–dur) var(–ease),
+background   var(–dur) var(–ease);
+}
+.upload-zone:hover{border-color:var(–accent);color:var(–accent);background:var(–accent-soft);}
+.upload-zone input{display:none;}
+
+/* ── TIMELINE ──────────────────────────────────────────────── */
+.timeline-wrap{display:flex;flex-direction:column;gap:var(–sp-2);}
+.tl-controls{display:flex;gap:var(–sp-1);align-items:center;}
+.tl-slider{
+width:100%;
+accent-color:var(–accent);
+cursor:pointer;
+height:20px;
+}
+.tl-info{
+font-family:var(–font-mono);
+font-size:var(–fs-md);
+color:var(–text-muted);
+text-align:center;
+letter-spacing:var(–ls-wide);
+}
+.tl-cycle{color:var(–accent);font-weight:600;font-variant-numeric:tabular-nums;}
+.tl-hint{
+font-size:var(–fs-xs);
+color:var(–text-dim);
+text-align:center;
+font-style:italic;
+}
+
+/* ── CANVAS ────────────────────────────────────────────────── */
+.canvas-area{
+position:relative;
+overflow:hidden;
+background:
+radial-gradient(ellipse at center, rgba(74,240,196,.015) 0%, transparent 55%),
+var(–bg-0);
+}
+svg#field{width:100%;height:100%;cursor:grab;}
+svg#field:active{cursor:grabbing;}
+svg#field.frozen{cursor:default;}
+
+/* ── CANVAS ELEMENTS ──────────────────────────────────────── */
+.layer-ring{fill:none;stroke-dasharray:4 4;opacity:.14;}
+
+.edge{
+stroke-opacity:.45;
+transition:stroke-opacity var(–dur) var(–ease);
+}
+.edge:hover{stroke-opacity:1;}
+.edge-BOTH   {stroke:var(–col-BOTH);   stroke-dasharray:6 3; animation:dash-flow 1.4s linear infinite;}
+.edge-TRUE   {stroke:var(–col-TRUE);}
+.edge-FALSE  {stroke:var(–col-FALSE);}
+.edge-NEITHER{stroke:var(–col-NEITHER);}
+@keyframes dash-flow{to{stroke-dashoffset:-27;}}
+
+@keyframes birth-glow{
+0%  {opacity:1;transform:scale(1.6);}
+100%{opacity:0;transform:scale(2.8);}
+}
+.birth-ring{animation:birth-glow .8s ease-out forwards;transform-origin:center;}
+
+.node-label{
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+fill:var(–text);
+pointer-events:none;
+text-anchor:middle;
+letter-spacing:.02em;
+}
+.lagrange-badge{
+font-family:var(–font-mono);
+font-size:7px;
+font-weight:700;
+pointer-events:none;
+letter-spacing:0;
+}
+.conflict-mark{
+font-family:var(–font-mono);
+font-weight:700;
+pointer-events:none;
+text-anchor:middle;
+dominant-baseline:central;
+}
+.zero-point-ring{
+fill:none;
+stroke:var(–accent);
+stroke-width:1.5;
+stroke-dasharray:3 2;
+opacity:.7;
+}
+.ring-label{
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+fill:var(–text-dim);
+opacity:.55;
+pointer-events:none;
+letter-spacing:var(–ls-wide);
+}
+
+/* ── FIELD EMPTY STATE ────────────────────────────────────── */
+.field-empty{
+position:absolute;
+top:50%;left:50%;
+transform:translate(-50%,-50%);
+text-align:center;
+color:var(–text-dim);
+pointer-events:none;
+max-width:420px;
+padding:0 var(–sp-4);
+}
+.field-empty h2{
+font-family:var(–font-mono);
+font-size:var(–fs-xl);
+font-weight:600;
+letter-spacing:var(–ls-label);
+margin-bottom:var(–sp-3);
+color:var(–text-muted);
+}
+.field-empty p{
+font-size:var(–fs-md);
+line-height:var(–lh-loose);
+opacity:.8;
+}
+.field-empty p + p{margin-top:var(–sp-3);opacity:.5;font-size:var(–fs-sm);}
+
+/* ── TOOLTIP ───────────────────────────────────────────────── */
+#tooltip{
+position:fixed;
+pointer-events:none;
+background:var(–bg-2);
+border:1px solid var(–border-hi);
+border-radius:var(–radius);
+padding:var(–sp-2) var(–sp-3);
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+color:var(–text);
+max-width:240px;
+z-index:9999;
+opacity:0;
+transform:translateY(2px);
+transition:
+opacity   var(–dur-fast) var(–ease),
+transform var(–dur-fast) var(–ease);
+box-shadow:var(–shadow-2);
+}
+#tooltip.visible{opacity:1;transform:translateY(0);}
+#tooltip .tt-name{
+color:var(–text-bright);
+font-weight:600;
+word-break:break-all;
+margin-bottom:var(–sp-1);
+letter-spacing:var(–ls-wide);
+}
+#tooltip .tt-row{
+color:var(–text-dim);
+display:flex;
+justify-content:space-between;
+gap:var(–sp-2);
+letter-spacing:var(–ls-wide);
+}
+#tooltip .tt-val{color:var(–text);font-variant-numeric:tabular-nums;}
+
+/* ── INSPECTOR ─────────────────────────────────────────────── */
+.inspector-header{
+padding:var(–sp-3) var(–sp-4);
+border-bottom:1px solid var(–border);
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+font-weight:600;
+letter-spacing:var(–ls-label);
+color:var(–text-muted);
+text-transform:uppercase;
+background:var(–bg-1);
+}
+.inspector-body{
+flex:1;
+overflow-y:auto;
+padding:var(–sp-4);
+display:flex;
+flex-direction:column;
+gap:var(–sp-3);
+}
+.inspector-empty{
+color:var(–text-dim);
+font-size:var(–fs-md);
+margin-top:var(–sp-6);
+text-align:center;
+font-style:italic;
+}
+.inspect-field{display:flex;flex-direction:column;gap:var(–sp-1);}
+.inspect-key{
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+font-weight:600;
+letter-spacing:var(–ls-wider);
+color:var(–text-dim);
+text-transform:uppercase;
+}
+.inspect-val{
+color:var(–text-bright);
+word-break:break-all;
+line-height:var(–lh-normal);
+font-size:var(–fs-md);
+}
+.layer-badge{
+display:inline-block;
+padding:2px var(–sp-2);
+border-radius:var(–radius-sm);
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+font-weight:600;
+letter-spacing:var(–ls-wide);
+}
+.lagrange-tag{
+display:inline-flex;
+align-items:center;
+gap:var(–sp-1);
+padding:2px var(–sp-2);
+border-radius:var(–radius-sm);
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+font-weight:700;
+letter-spacing:var(–ls-wide);
+border:1px solid currentColor;
+}
+.proof-chain{display:flex;flex-direction:column;gap:var(–sp-1);}
+.proof-entry{
+background:var(–bg-2);
+border:1px solid var(–border);
+border-radius:var(–radius-sm);
+padding:var(–sp-2) var(–sp-3);
+display:flex;
+flex-direction:column;
+gap:2px;
+transition:border-color var(–dur-fast) var(–ease);
+}
+.proof-entry:hover{border-color:var(–border-hi);}
+.proof-relation{
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+font-weight:700;
+letter-spacing:var(–ls-wider);
+}
+.proof-meta{
+color:var(–text-dim);
+font-family:var(–font-mono);
+font-size:var(–fs-xs);
+letter-spacing:var(–ls-wide);
+font-variant-numeric:tabular-nums;
+}
+.edge-entry{
+background:var(–bg-2);
+border:1px solid var(–border);
+border-radius:var(–radius-sm);
+padding:var(–sp-2);
+margin-top:var(–sp-1);
+display:flex;
+flex-direction:column;
+gap:2px;
+font-family:var(–font-mono);
+transition:border-color var(–dur-fast) var(–ease);
+}
+.edge-entry:hover{border-color:var(–border-hi);}
+
+/* ── GENESIS OVERLAY ──────────────────────────────────────── */
+.genesis-edge{
+stroke-opacity:.6;
+stroke-dasharray:6 3;
+stroke-width:1.4;
+pointer-events:none;
+}
+.genesis-node-hi{
+fill:none;
+stroke-width:1.5;
+stroke-dasharray:3 2;
+pointer-events:none;
+opacity:.6;
+}
+.genesis-op-label{
+font-family:var(–font-mono);
+font-size:var(–fs-md);
+font-weight:700;
+pointer-events:none;
+opacity:.7;
+letter-spacing:0;
+}
+.genesis-role-label{
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+font-weight:600;
+pointer-events:none;
+opacity:.5;
+letter-spacing:.04em;
+}
+
+/* ── FOOTER ────────────────────────────────────────────────── */
+footer{
+border-top:1px solid var(–border);
+padding:var(–sp-2) var(–sp-5);
+background:var(–bg-1);
+font-family:var(–font-mono);
+font-size:var(–fs-sm);
+color:var(–text-dim);
+display:flex;
+gap:var(–sp-5);
+flex-shrink:0;
+letter-spacing:var(–ls-wide);
+height:28px;
+align-items:center;
+}
+footer span{color:var(–accent);font-variant-numeric:tabular-nums;}
+</style>
+
+</head>
+<body>
+
+<div id="tooltip">
+  <div class="tt-name" id="tt-name"></div>
+  <div class="tt-row"><span>layer</span><span class="tt-val" id="tt-layer"></span></div>
+  <div class="tt-row"><span>state</span><span class="tt-val" id="tt-state"></span></div>
+  <div class="tt-row"><span>lagrange</span><span class="tt-val" id="tt-lagrange"></span></div>
+  <div class="tt-row"><span>energy</span><span class="tt-val" id="tt-energy"></span></div>
+</div>
+
+<header>
+  <div class="logo">SIRISYS <span>// FIELD TOPOLOGY v6</span></div>
+  <div class="header-meta" id="field-meta">Load state JSON files to begin</div>
+  <div class="header-controls">
+    <button class="btn" id="btn-proof">◈ Proofs</button>
+    <button class="btn" id="btn-layout">⬡ Radial</button>
+    <button class="btn" id="btn-freeze">❄ Freeze</button>
+    <button class="btn" id="btn-fit">⊡ Fit</button>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT -->
+
+  <div class="panel-left">
+    <div class="panel-section">
+      <div class="panel-label">State Files</div>
+      <div class="upload-zone" id="dropzone">
+        <input type="file" id="fileInput" accept=".json" multiple>
+        <div>↑ Load .json(s)<br><span style="font-size:9px;opacity:.6">multiple = timeline</span></div>
+      </div>
+    </div>
+
+```
+<!-- TIMELINE (hidden until ≥2 files) -->
+<div class="panel-section" id="timeline-section" style="display:none">
+  <div class="panel-label">Timeline</div>
+  <div class="timeline-wrap">
+    <div class="tl-info">Cycle <span class="tl-cycle" id="tl-cycle">—</span> of <span id="tl-max">—</span></div>
+    <input type="range" class="tl-slider" id="tl-slider" min="0" max="0" value="0">
+    <div class="tl-controls">
+      <button class="btn" id="btn-prev" style="flex:1">◀</button>
+      <button class="btn" id="btn-play" style="flex:2">▶ Play</button>
+      <button class="btn" id="btn-next" style="flex:1">▶</button>
+    </div>
+    <div class="tl-hint">New constructs glow on appearance</div>
+  </div>
+</div>
+
+<div class="panel-section" id="stats-section" style="display:none">
+  <div class="panel-label">Field Stats</div>
+  <div class="stat-row"><span class="stat-key">cycle</span><span class="stat-val accent" id="s-cycle">—</span></div>
+  <div class="stat-row"><span class="stat-key">T</span><span class="stat-val" id="s-T">—</span></div>
+  <div class="stat-row"><span class="stat-key">constructs</span><span class="stat-val" id="s-constructs">—</span></div>
+  <div class="stat-row"><span class="stat-key">edges</span><span class="stat-val" id="s-edges">—</span></div>
+  <div class="stat-row"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
+  <div class="stat-row"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
+  <div class="stat-row"><span class="stat-key">proofs</span><span class="stat-val" id="s-proofs">—</span></div>
+  <div class="stat-row"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
+  <div class="instability-bar"><div class="instability-fill" id="instability-fill" style="width:0%"></div></div>
+</div>
+
+<div class="panel-section">
+  <div class="panel-label">Layer <span class="filter-hint">toggle</span></div>
+  <div class="legend-item active" data-ftype="layer" data-fval="NULL_00"><div class="legend-dot" style="background:var(--col-NEITHER)"></div><span>NULL_00 [00]</span></div>
+  <div class="legend-item active" data-ftype="layer" data-fval="UMBRA_0"><div class="legend-dot" style="background:#3a4060"></div><span>UMBRA_0 [0]</span></div>
+  <div class="legend-item active" data-ftype="layer" data-fval="UNIT_1"><div class="legend-hex" style="background:var(--col-TRUE)"></div><span>UNIT_1 [1]</span></div>
+  <div class="legend-item active" data-ftype="layer" data-fval="APPARENT"><div class="legend-star" style="background:var(--col-APPARENT)"></div><span>APPARENT</span></div>
+  <div class="legend-item active" data-ftype="layer" data-fval="SYSTEM"><div class="legend-dia"></div><span>SYSTEM (infra)</span></div>
+</div>
+
+<div class="panel-section">
+  <div class="panel-label">Edge State <span class="filter-hint">toggle</span></div>
+  <div class="legend-item active" data-ftype="state" data-fval="BOTH"><div class="legend-dot" style="background:var(--col-BOTH)"></div><span>BOTH ···</span></div>
+  <div class="legend-item active" data-ftype="state" data-fval="TRUE"><div class="legend-dot" style="background:var(--col-TRUE)"></div><span>TRUE</span></div>
+  <div class="legend-item active" data-ftype="state" data-fval="FALSE"><div class="legend-dot" style="background:var(--col-FALSE)"></div><span>FALSE</span></div>
+  <div class="legend-item active" data-ftype="state" data-fval="NEITHER"><div class="legend-dot" style="background:var(--col-NEITHER)"></div><span>NEITHER</span></div>
+</div>
+
+<div class="panel-section">
+  <div class="panel-label">Lagrangian</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--L1)"></div><span>L1 safety/liveness</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--L2)"></div><span>L2 redund/effic</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--L3)"></div><span>L3 local/global</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--L4)"></div><span>L4 depth/perf</span></div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--L5)"></div><span>L5 entropy/det</span></div>
+</div>
+
+<div class="panel-section reference">
+  <div class="panel-label">Radial Rings</div>
+  <div style="font-size:9px;color:var(--text-dim);line-height:1.7">
+    ● Centre: Zero Points<br>
+    ○ Ring 1: NULL_00<br>
+    ○ Ring 2: UMBRA_0<br>
+    ○ Ring 3: UNIT_1<br>
+    ★ Ring 4: APPARENT
+  </div>
+</div>
+
+<div class="panel-section reference">
+  <div class="panel-label">◈ Proof Overlay</div>
+  <div style="font-size:9px;color:var(--text-dim);line-height:1.8">
+    Toggle with <span style="color:var(--accent)">◈ Proofs</span> button.<br>
+    Halo = dominant relation<br>
+    of last 3 proof objects:<br>
+    <span style="color:#4af0c4">━━</span> CONCORDANCE<br>
+    <span style="color:#f0a832">╌╌</span> CONFLICT / INTENSIFY<br>
+    <span style="color:#a070f0">╍╍</span> COLLAPSE<br>
+    <span style="color:#f05090">·····</span> ERODE<br>
+    π<i>n</i> = proof chain depth
+  </div>
+</div>
+
+<div class="panel-section reference">
+  <div class="panel-label">Genesis Overlay</div>
+  <div style="font-size:9px;color:var(--text-dim);line-height:1.8">
+    Click any node to reveal<br>
+    its causal origin:<br>
+    <span style="color:#4af0c4">╌╌</span> concordance parents<br>
+    <span style="color:#f0a832">╌╌</span> conflict parents<br>
+    <span style="color:#4af0c4;font-weight:700">::</span> / <span style="color:#f0a832;font-weight:700">⊗</span> at centroid = operation<br>
+    <span style="color:var(--text)">L</span> / <span style="color:var(--text)">R</span> on edges = Tensin role<br>
+    Click canvas to dismiss
+  </div>
+</div>
+```
+
+  </div>
+
+  <!-- CANVAS -->
+
+  <div class="canvas-area">
+    <div class="field-empty" id="field-empty">
+      <h2>CONCORDANCY FIELD</h2>
+      <p>Load a state JSON for a single snapshot,<br>or multiple JSONs to scrub the timeline.</p>
+      <p style="color:var(--text-dim);opacity:.7;margin-top:var(--sp-3);font-size:var(--fs-xs)">
+        ← Use the upload zone in the left panel
+      </p>
+      <p>Shape: layer · Color: state · Badge: Lagrangian · ⊗: conflict · ◈: proof depth · Click: genesis</p>
+    </div>
+    <svg id="field"></svg>
+  </div>
+
+  <!-- RIGHT -->
+
+  <div class="panel-right">
+    <div class="inspector-header">Construct Inspector</div>
+    <div class="inspector-body" id="inspector">
+      <div class="inspector-empty">Load a state to begin. Once loaded, click any construct to inspect its witness, proof chain, Lagrangian equilibrium, anchoring weight, and connected edges.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span id="ft-T">T=(—)</span>
+  <span id="ft-inv">Invariant: —</span>
+  <span>SIRISYS v12.1 · Walsh/DeSantis · DeOS Compiler Guide</span>
+</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
+const SC = {BOTH:'#f0a832',TRUE:'#4af0c4',FALSE:'#f05050',NEITHER:'#5a6072',APPARENT:'#e8ecf2'};
+const LC = {L1:'#4af0c4',L2:'#f0a832',L3:'#a070f0',L4:'#f05090',L5:'#50c0f0'};
+const LN = {0:'NULL_00',1:'UMBRA_0',2:'UNIT_1',3:'APPARENT'};
+const LD = {L1:'safety vs. liveness',L2:'redundancy vs. efficiency',L3:'local vs. global identity',L4:'proof depth vs. performance',L5:'entropy vs. determinism'};
+const PC = {CONCORDANCE:'#4af0c4',CONFLICT:'#f0a832',COLLAPSE:'#a070f0',PERCEIVE:'#50c0f0',ERODE:'#f05090',INTENSIFY:'#f0a832'};
+// Radial ring radii (% of min(W,H)/2 × scale)
+const RING_R = {ZP:0,SYSTEM:50,0:90,1:180,2:290,3:390};
+
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+let states = [];           // sorted array of loaded JSON states
+let curIdx  = 0;           // current state index
+let svgZoom = null;
+let simulation = null;
+let layoutMode   = 'force';  // 'force' | 'radial'
+let frozen       = false;
+let proofOverlay = false;    // proof field overlay on/off (DeOS: Proof = Kind:Construct)
+let playing    = false;
+let playTimer  = null;
+let nodePos    = {};        // name → {x,y}  persisted across frames
+let prevNames  = new Set(); // construct names in previous frame
+let selectedNode = null;    // currently selected construct name (for genesis overlay)
+const filters  = {layer:{NULL_00:true,UMBRA_0:true,UNIT_1:true,APPARENT:true,SYSTEM:true},
+                  state:{BOTH:true,TRUE:true,FALSE:true,NEITHER:true}};
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function isConflict(n){return n.includes('⊗')||n.startsWith('[CONFLICT');}
+function isZP(n){return n.startsWith('Z')&&n.includes('::');}
+function domState(name,edges){
+  const w={TRUE:0,FALSE:0,BOTH:0,NEITHER:0};
+  edges.filter(e=>e.src===name||e.tgt===name).forEach(e=>{w[e.state]=(w[e.state]||0)+e.weight;});
+  let b='NEITHER',bw=0; for(const[s,v]of Object.entries(w))if(v>bw){bw=v;b=s;} return b;
+}
+function nodeLayerKey(c){return c.name==='SYSTEM'?'SYSTEM':(LN[c.layer]||'UMBRA_0');}
+function isVisible(c){return !!filters.layer[nodeLayerKey(c)];}
+function nodeR(c){
+  if(c.name==='SYSTEM')return 7;
+  const b=c.layer===3?14:isZP(c.name)?10:8;
+  return b+Math.min((c.umbragiac_score||0)*2,8);
+}
+function hexPts(cx,cy,r){return d3.range(6).map(i=>{const a=Math.PI/180*(60*i-30);return[cx+r*Math.cos(a),cy+r*Math.sin(a)].join(',');}).join(' ');}
+function starPts(cx,cy,or_,ir,n){const p=[];for(let i=0;i<n*2;i++){const a=(Math.PI/n)*i-Math.PI/2,r=i%2===0?or_:ir;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)].join(','));}return p.join(' ');}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function radialR(c){
+  if(isZP(c.name))return 0;
+  if(c.name==='SYSTEM')return 50;
+  return RING_R[c.layer]??180;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOOLTIP
+// ═══════════════════════════════════════════════════════════════
+const tt=document.getElementById('tooltip');
+let ttT=null;
+function showTT(ev,c,dc){
+  clearTimeout(ttT);
+  document.getElementById('tt-name').textContent=c.name.length>40?c.name.slice(0,38)+'…':c.name;
+  document.getElementById('tt-layer').textContent=LN[c.layer]||'?';
+  const se=document.getElementById('tt-state'); se.textContent=dc; se.style.color=SC[dc]||'';
+  const le=document.getElementById('tt-lagrange');
+  le.textContent=c.lagrange||'—'; le.style.color=c.lagrange?(LC[c.lagrange]||''):'';
+  document.getElementById('tt-energy').textContent=(c.umbragiac_score||0).toFixed(3);
+  const W=window.innerWidth;
+  tt.style.left=(ev.clientX+14+(ev.clientX>W-240?-220:0))+'px';
+  tt.style.top=(ev.clientY-10)+'px';
+  tt.classList.add('visible');
+}
+function hideTT(){ttT=setTimeout(()=>tt.classList.remove('visible'),80);}
+
+// ═══════════════════════════════════════════════════════════════
+// FILE LOAD
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('dropzone').addEventListener('click',()=>document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change',e=>loadFiles([...e.target.files]));
+['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
+document.addEventListener('drop',e=>loadFiles([...e.dataTransfer.files]));
+
+function loadFiles(files){
+  if(!files.length)return;
+  const readers=files.map(f=>new Promise(res=>{
+    const r=new FileReader();
+    r.onload=ev=>{try{res(JSON.parse(ev.target.result));}catch{res(null);}};
+    r.readAsText(f);
+  }));
+  Promise.all(readers).then(results=>{
+    const valid=results.filter(Boolean).sort((a,b)=>a.cycle-b.cycle);
+    if(!valid.length){alert('No valid JSON files found.');return;}
+    states=valid; curIdx=0; prevNames=new Set(); nodePos={};
+    setupTimeline();
+    gotoState(0);
+  });
+}
+
+function setupTimeline(){
+  const hasMulti=states.length>1;
+  document.getElementById('field-empty').style.display='none';
+  document.getElementById('stats-section').style.cssText='display:flex;flex-direction:column;gap:5px;';
+  const tls=document.getElementById('timeline-section');
+  if(hasMulti){
+    tls.style.display='flex'; tls.style.flexDirection='column'; tls.style.gap='6px';
+    const sl=document.getElementById('tl-slider');
+    sl.max=states.length-1; sl.value=0;
+    document.getElementById('tl-max').textContent=states[states.length-1].cycle;
+  } else {
+    tls.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TIMELINE CONTROLS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('tl-slider').addEventListener('input',e=>{
+  stopPlay(); gotoState(+e.target.value);
+});
+document.getElementById('btn-prev').addEventListener('click',()=>{
+  stopPlay(); gotoState(Math.max(0,curIdx-1));
+});
+document.getElementById('btn-next').addEventListener('click',()=>{
+  stopPlay(); gotoState(Math.min(states.length-1,curIdx+1));
+});
+document.getElementById('btn-play').addEventListener('click',()=>{
+  if(playing) stopPlay();
+  else startPlay();
+});
+function startPlay(){
+  playing=true;
+  document.getElementById('btn-play').textContent='⏸ Pause';
+  document.getElementById('btn-play').classList.add('active');
+  playTimer=setInterval(()=>{
+    if(curIdx>=states.length-1){stopPlay();return;}
+    gotoState(curIdx+1);
+  },900);
+}
+function stopPlay(){
+  playing=false; clearInterval(playTimer);
+  document.getElementById('btn-play').textContent='▶ Play';
+  document.getElementById('btn-play').classList.remove('active');
+}
+
+function gotoState(idx){
+  curIdx=idx;
+  document.getElementById('tl-slider').value=idx;
+  document.getElementById('tl-cycle').textContent=states[idx].cycle;
+  renderState(states[idx]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FIT / FREEZE / LAYOUT
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-fit').addEventListener('click',()=>{
+  if(!svgZoom)return;
+  const svg=d3.select('#field'),g=svg.select('.field-g');
+  if(!g.node())return;
+  const b=g.node().getBBox(),W=svg.node().clientWidth,H=svg.node().clientHeight;
+  if(!b.width||!b.height)return;
+  const sc=Math.min(.9,Math.min(W/b.width,H/b.height))*.85;
+  svg.transition().duration(400).call(svgZoom.transform,
+    d3.zoomIdentity.translate(W/2-sc*(b.x+b.width/2),H/2-sc*(b.y+b.height/2)).scale(sc));
+});
+
+document.getElementById('btn-freeze').addEventListener('click',()=>{
+  frozen=!frozen;
+  const btn=document.getElementById('btn-freeze');
+  if(frozen){
+    simulation&&simulation.stop();
+    btn.classList.add('active');
+    btn.textContent='❄ Frozen';
+    document.getElementById('field').classList.add('frozen');
+  } else {
+    simulation&&simulation.alpha(.3).restart();
+    btn.classList.remove('active');
+    btn.textContent='❄ Freeze';
+    document.getElementById('field').classList.remove('frozen');
+  }
+});
+
+document.getElementById('btn-proof').addEventListener('click',()=>{
+  proofOverlay=!proofOverlay;
+  const btn=document.getElementById('btn-proof');
+  btn.classList.toggle('active',proofOverlay);
+  btn.textContent=proofOverlay?'◈ Proofs ON':'◈ Proofs';
+  if(states.length) renderState(states[curIdx]);
+});
+
+document.getElementById('btn-layout').addEventListener('click',()=>{
+  layoutMode = layoutMode==='force' ? 'radial' : 'force';
+  const btn=document.getElementById('btn-layout');
+  btn.textContent = layoutMode==='radial' ? '⬡ Force' : '⬡ Radial';
+  btn.classList.toggle('active', layoutMode==='radial');
+  if(states.length) renderState(states[curIdx]);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════════
+function updateStats(state){
+  const cs=state.field?.constructs||[],es=state.field?.edges||[];
+  const conflicts=cs.filter(c=>isConflict(c.name)).length;
+  const proofs=cs.reduce((a,c)=>a+(c.proof_chain||[]).length,0);
+  const EXCL=new Set(['SYSTEM','Z0::IDENTITY','Z1::ORIGIN','Z2::CONCORDANCY','Z3::RECURSION','Z4::APPARENCY']);
+  const nonApp=cs.filter(c=>c.layer!==3&&!EXCL.has(c.name));
+  const bothSet=new Set(es.filter(e=>e.state==='BOTH').flatMap(e=>[e.src,e.tgt]));
+  const instab=nonApp.length?nonApp.filter(c=>bothSet.has(c.name)||(c.lineage||[]).length>0).length/nonApp.length:0;
+  document.getElementById('s-cycle').textContent=state.cycle??'—';
+  document.getElementById('s-T').textContent=state.clock?`(${state.clock.era},${state.clock.offset})`:'—';
+  document.getElementById('s-constructs').textContent=cs.length;
+  document.getElementById('s-edges').textContent=es.length;
+  document.getElementById('s-apparents').textContent=(state.field?.apparent_log||[]).length;
+  document.getElementById('s-conflicts').textContent=conflicts;
+  document.getElementById('s-proofs').textContent=proofs;
+  document.getElementById('s-instability').textContent=instab.toFixed(3);
+  document.getElementById('instability-fill').style.width=(instab*100)+'%';
+  const T=state.clock?`(${state.clock.era}, ${state.clock.offset})`:'—';
+  document.getElementById('ft-T').textContent=`T=${T}`;
+  const vio=cs.filter(c=>c.layer!==3&&!EXCL.has(c.name)&&!c.lagrange);
+  document.getElementById('ft-inv').textContent=vio.length===0?'∀C,∃(Z,L) ✓':`∀C,∃(Z,L) ✗ (${vio.length})`;
+  document.getElementById('field-meta').textContent=
+    `cycle ${state.cycle} · ${cs.length} constructs · ${es.length} edges · ${proofs} proofs`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FILTERS
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll('[data-ftype]').forEach(item=>{
+  item.addEventListener('click',()=>{
+    const ft=item.dataset.ftype,fv=item.dataset.fval;
+    filters[ft][fv]=!filters[ft][fv];
+    item.classList.toggle('active',filters[ft][fv]);
+    item.classList.toggle('dimmed',!filters[ft][fv]);
+    applyFilters();
+  });
+});
+function applyFilters(){
+  d3.selectAll('.node-g').each(function(d){d3.select(this).style('display',isVisible(d.data)?null:'none');});
+  d3.selectAll('.eline').each(function(d){
+    const ok=isVisible(d.source.data)&&isVisible(d.target.data)&&filters.state[d.data.state];
+    d3.select(this).style('display',ok?null:'none');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENESIS EDGE OVERLAY
+// Draws causal ancestry edges from parent constructs (op.x, op.y)
+// to the selected construct (op.z), using the ops_log in the JSON.
+// Makes the [::] operation visible as geometry, not just text.
+// ═══════════════════════════════════════════════════════════════
+function drawGenesisEdges(){
+  const svg=d3.select('#field'),g=svg.select('.field-g');
+  g.selectAll('.genesis-layer').remove();
+  if(!selectedNode||!states[curIdx]) return;
+
+  const opsLog=(states[curIdx].ops_log)||[];
+  const op=opsLog.find(o=>o.z===selectedNode);
+  if(!op) return;
+
+  const zPos=nodePos[selectedNode];
+  if(!zPos) return;
+
+  const parents=[op.x,op.y].filter(p=>p&&nodePos[p]);
+  if(!parents.length) return;
+
+  const isConf=(op.state==='CONFLICT');
+  const edgeCol=isConf?'#f0a832':'#4af0c4';
+  const opLabel=isConf?'⊗':'::';
+
+  const gL=g.append('g').attr('class','genesis-layer');
+
+  parents.forEach((pName, idx) => {
+    const pPos=nodePos[pName];
+    const role = idx === 0 ? 'L' : 'R';   // x → TENSIN_LEFT, y → TENSIN_RIGHT
+    // Ghost edge: parent → selected
+    gL.append('line').attr('class','genesis-edge')
+      .attr('stroke',edgeCol)
+      .attr('x1',pPos.x).attr('y1',pPos.y)
+      .attr('x2',zPos.x).attr('y2',zPos.y);
+    // Highlight ring around parent
+    gL.append('circle').attr('class','genesis-node-hi')
+      .attr('stroke',edgeCol)
+      .attr('cx',pPos.x).attr('cy',pPos.y).attr('r',18);
+    // Tensate role label at midpoint of the ghost edge
+    const lx = pPos.x + (zPos.x - pPos.x) * 0.4;
+    const ly = pPos.y + (zPos.y - pPos.y) * 0.4;
+    gL.append('text').attr('class','genesis-role-label')
+      .attr('x',lx).attr('y',ly)
+      .attr('text-anchor','middle').attr('dominant-baseline','central')
+      .attr('fill',edgeCol)
+      .text(role);
+  });
+
+  // Operation label at centroid of the triangle
+  const p1=nodePos[parents[0]]||zPos;
+  const p2=nodePos[parents[1]]||p1;
+  const mx=(p1.x+p2.x+zPos.x)/3;
+  const my=(p1.y+p2.y+zPos.y)/3;
+  gL.append('text').attr('class','genesis-op-label')
+    .attr('x',mx).attr('y',my)
+    .attr('text-anchor','middle').attr('dominant-baseline','central')
+    .attr('fill',edgeCol)
+    .text(opLabel);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER STATE
+// ═══════════════════════════════════════════════════════════════
+function renderState(state){
+  updateStats(state);
+  const cs=state.field?.constructs||[],es=state.field?.edges||[];
+  const newNames=new Set(cs.map(c=>c.name));
+  const births=new Set([...newNames].filter(n=>!prevNames.has(n)));
+  const svg=d3.select('#field');
+  svg.selectAll('*').remove();
+  const W=svg.node().clientWidth,H=svg.node().clientHeight;
+  const cx=W/2,cy=H/2;
+  const g=svg.append('g').attr('class','field-g');
+  svgZoom=d3.zoom().scaleExtent([.08,6]).on('zoom',ev=>g.attr('transform',ev.transform));
+  svg.call(svgZoom);
+  // Click on empty canvas: clear genesis overlay and inspector selection
+  svg.on('click',()=>{
+    selectedNode=null;
+    d3.select('.field-g').selectAll('.genesis-layer').remove();
+    document.getElementById('inspector').innerHTML=
+      '<p class="inspector-empty">Click a node to inspect it.</p>';
+  });
+
+  // Arrowheads — refX accounts for max node radius so arrows stop at node boundary
+  const defs=svg.append('defs');
+  ['BOTH','TRUE','FALSE','NEITHER'].forEach(s=>{
+    defs.append('marker').attr('id','arr-'+s).attr('markerWidth',6).attr('markerHeight',6)
+      .attr('refX',28).attr('refY',3).attr('orient','auto')
+      .append('path').attr('d','M0,0 L0,6 L6,3 z').attr('fill',SC[s]).attr('opacity',.6);
+  });
+
+  // Radial rings (visual guide when in radial mode)
+  if(layoutMode==='radial'){
+    const rG=g.append('g').attr('transform',`translate(${cx},${cy})`);
+    [[90,'NULL_00'],[180,'UMBRA_0'],[290,'UNIT_1'],[390,'APPARENT']].forEach(([r,lbl])=>{
+      rG.append('circle').attr('class','layer-ring').attr('r',r)
+        .attr('stroke',lbl==='APPARENT'?'#e8ecf2':lbl==='UNIT_1'?'#4af0c4':'#3a4060').attr('stroke-width',1);
+      rG.append('text').attr('class','ring-label').attr('x',r+4).attr('y',-4).text(lbl);
+    });
+  }
+
+  // Build nodes
+  const nIdx={};
+  const nodes=cs.map(c=>{
+    const saved=nodePos[c.name];
+    let x,y;
+    if(saved){x=saved.x;y=saved.y;}
+    else if(layoutMode==='radial'){
+      // Spread initial positions on correct ring
+      const r=radialR(c);
+      const ang=Math.random()*Math.PI*2;
+      x=cx+r*Math.cos(ang); y=cy+r*Math.sin(ang);
+    } else {
+      x=cx+(Math.random()-.5)*200; y=cy+(Math.random()-.5)*200;
+    }
+    return {id:c.name,data:c,x,y};
+  });
+  nodes.forEach(n=>{nIdx[n.id]=n;});
+  const links=es.filter(e=>nIdx[e.src]&&nIdx[e.tgt]).map(e=>({source:nIdx[e.src],target:nIdx[e.tgt],data:e}));
+
+  // Simulation
+  if(simulation){
+    // Save current positions before stopping — ensures nodePos is always up to date
+    // even when end event hasn't fired yet (e.g. during fast timeline scrubbing)
+    simulation.nodes().forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
+    simulation.stop();
+  }
+  simulation=d3.forceSimulation(nodes)
+    .force('link',d3.forceLink(links).id(d=>d.id)
+      .distance(d=>d.data.state==='BOTH'?55:d.data.state==='NEITHER'?90:72).strength(.35))
+    .force('charge',d3.forceManyBody().strength(layoutMode==='radial'?-60:-170))
+    .force('collision',d3.forceCollide().radius(d=>nodeR(d.data)+9));
+
+  if(layoutMode==='radial'){
+    simulation.force('radial',d3.forceRadial(d=>radialR(d.data),cx,cy).strength(.75));
+    simulation.force('center',null);
+  } else {
+    simulation.force('center',d3.forceCenter(cx,cy));
+    simulation.force('radial',null);
+  }
+
+  if(frozen) simulation.stop();
+
+  // Edges
+  const eG=g.append('g');
+  const eSel=eG.selectAll('line').data(links).join('line')
+    .attr('class',d=>`edge edge-${d.data.state} eline`)
+    .attr('stroke-width',d=>d.data.state==='BOTH'?2:.9)
+    .attr('marker-end',d=>`url(#arr-${d.data.state})`);
+
+  // Nodes
+  const nG=g.append('g');
+  const nSel=nG.selectAll('g').data(nodes).join('g')
+    .attr('class','node-g').style('cursor','pointer')
+    .call(d3.drag()
+      .on('start',(ev,d)=>{if(!ev.active&&!frozen)simulation.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;})
+      .on('drag',(ev,d)=>{d.fx=ev.x;d.fy=ev.y;})
+      .on('end',(ev,d)=>{if(!ev.active&&!frozen)simulation.alphaTarget(0);d.fx=null;d.fy=null;}))
+    .on('mousemove',(ev,d)=>showTT(ev,d.data,domState(d.data.name,es)))
+    .on('mouseleave',()=>hideTT())
+    .on('click',(ev,d)=>{
+      ev.stopPropagation();
+      hideTT();
+      selectedNode=d.data.name;
+      inspect(d.data,es);
+      // Snapshot live positions before drawing — sim may still be running
+      if(simulation) simulation.nodes().forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
+      drawGenesisEdges();
+    });
+
+  nSel.each(function(d){
+    const el=d3.select(this),r=nodeR(d.data);
+    const dc=domState(d.data.name,es);
+    const col=d.data.layer===3?SC.APPARENT:(SC[dc]||'#5a6072');
+    const isSys=d.data.name==='SYSTEM',isZp=isZP(d.data.name),isCf=isConflict(d.data.name);
+    const isBirth=births.has(d.data.name);
+
+    // Birth glow ring
+    if(isBirth&&states.length>1){
+      el.append('circle').attr('class','birth-ring')
+        .attr('r',r+6).attr('fill','none').attr('stroke','#4af0c4').attr('stroke-width',2).attr('opacity',.9);
+    }
+
+    if(isSys){
+      el.append('polygon').attr('points',`0,${-r} ${r*.7},0 0,${r} ${-r*.7},0`)
+        .attr('class','node-shape')
+        .attr('fill','#0c0e12').attr('stroke','#2e3340').attr('stroke-width',1).attr('stroke-dasharray','3 2');
+    } else if(d.data.layer===3){
+      el.append('polygon').attr('points',starPts(0,0,r,r*.45,5))
+        .attr('class','node-shape')
+        .attr('fill',col).attr('fill-opacity',.18).attr('stroke',col).attr('stroke-width',1.5);
+    } else if(d.data.layer===2){
+      el.append('polygon').attr('points',hexPts(0,0,r))
+        .attr('class','node-shape')
+        .attr('fill',col).attr('fill-opacity',.18).attr('stroke',col).attr('stroke-width',1);
+    } else {
+      el.append('circle').attr('r',r).attr('class','node-shape')
+        .attr('fill',col).attr('fill-opacity',.15).attr('stroke',col).attr('stroke-width',.8);
+    }
+    if(isZp) el.append('circle').attr('class','zero-point-ring').attr('r',r+5);
+    if(isCf){
+      el.append('text').attr('class','conflict-mark').attr('fill','#f0a832').attr('opacity',.85)
+        .attr('font-size',r*.95).text('⊗');
+    }
+    const lbl=isSys?'SYSTEM':isCf?`[cf@${d.data.name.split('@')[1]?.slice(0,4)||'?'}]`:
+              (d.data.name.length>22?d.data.name.slice(0,20)+'…':d.data.name);
+    el.append('text').attr('class','node-label').attr('y',r+11).attr('fill',isSys?'#3a4050':null).text(lbl);
+    if(!isSys&&d.data.lagrange){
+      el.append('text').attr('class','lagrange-badge').attr('x',r-2).attr('y',-r+4)
+        .attr('fill',LC[d.data.lagrange]||'#5c6475').text(d.data.lagrange);
+    }
+    if(!isSys&&d.data.umbragiac_score>.3){
+      const p=Math.min(d.data.umbragiac_score/5,1);
+      el.append('circle').attr('r',r+3+p*8).attr('fill','none')
+        .attr('stroke',SC.BOTH).attr('stroke-width',.5).attr('stroke-opacity',p*.5).attr('stroke-dasharray','2 3');
+    }
+
+    // ── PROOF FIELD OVERLAY (DeOS: Proof = Kind:Construct) ───────────────
+    // A proof is not passive memory — it is a construct that participates
+    // directly in transformation and execution (DeOS Compiler Guide, p.39).
+    // Overlay makes proof activity visible without adding separate nodes:
+    //   · Outer halo radius: proportional to proof_chain depth
+    //   · Halo color: dominant relation of the last 3 proof objects
+    //   · Border stroke width: scales with proof count (≤4px)
+    if(proofOverlay&&!isSys){
+      const proofs=d.data.proof_chain||[];
+      const depth=proofs.length;
+      if(depth>0){
+        // Dominant relation of last 3 proofs
+        const recent=proofs.slice(-3);
+        const relCount={};
+        recent.forEach(p=>{relCount[p.relation]=(relCount[p.relation]||0)+1;});
+        const domRel=Object.entries(relCount).sort((a,b)=>b[1]-a[1])[0][0];
+        const pc2=PC[domRel]||'#5c6475';
+        // Halo: radius grows with depth (capped at r+24)
+        const hr=Math.min(r+6+depth*1.2,r+24);
+        el.append('circle')
+          .attr('r',hr)
+          .attr('fill','none')
+          .attr('stroke',pc2)
+          .attr('stroke-width',1.5)
+          .attr('stroke-opacity',.55)
+          .attr('stroke-dasharray',domRel==='CONCORDANCE'?'none':
+                                   domRel==='CONFLICT'?'2 2':
+                                   domRel==='COLLAPSE'?'5 2':
+                                   domRel==='ERODE'?'1 3':'3 3');
+        // Border thickening on main shape — proof activity as structural weight
+        const bw=Math.min(1+depth*0.18,4);
+        el.select('.node-shape').attr('stroke-width',bw);
+        // Depth count badge — top-left
+        el.append('text')
+          .attr('x',-r+1).attr('y',-r+3)
+          .attr('font-family','IBM Plex Mono,monospace')
+          .attr('font-size',6).attr('fill',pc2).attr('opacity',.8)
+          .attr('pointer-events','none')
+          .text(`π${depth}`);
+      }
+    }
+  });
+
+  simulation.on('tick',()=>{
+    eSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
+        .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+    nSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+  });
+  simulation.on('end',()=>{
+    // Persist positions for next frame
+    nodes.forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
+    applyFilters();
+    drawGenesisEdges();
+  });
+  setTimeout(applyFilters,500);
+
+  // Update prevNames for next frame
+  prevNames=newNames;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INSPECTOR
+// ═══════════════════════════════════════════════════════════════
+// Mirror of ConcordancyField.compute_existence_mode() from the Python core.
+// Derives the [Ω]/[Ꮠ] mode of a construct from the structure of its proof_chain.
+// TMC, p.27: a construct's mode is orthogonal to its anchoring weight Vc.
+//   [Ω] = [0⁰/0⁰] = 1   when read as radiant centre (anchoring)
+//   [Ꮠ] = [0⁰/0⁰] = 0   when read as recursive curvature (oscillation)
+const ZP_NAMES = new Set(['Z0::IDENTITY','Z1::ORIGIN','Z2::CONCORDANCY',
+                          'Z3::RECURSION','Z4::APPARENCY']);
+const OMEGA_RELS      = new Set(['CONCORDANCE','COLLAPSE','PERCEIVE']);
+const LEMNISCATE_RELS = new Set(['CONFLICT','INTENSIFY','ERODE']);
+function computeExistenceMode(c){
+  if(ZP_NAMES.has(c.name)) return 'OMEGA';
+  const proofs = c.proof_chain || [];
+  if(!proofs.length) return 'NEUTRAL';
+  const recent = proofs.slice(-5);
+  let omega=0, lemn=0;
+  recent.forEach(p=>{
+    if(OMEGA_RELS.has(p.relation))      omega++;
+    else if(LEMNISCATE_RELS.has(p.relation)) lemn++;
+  });
+  if(omega > lemn) return 'OMEGA';
+  if(lemn > omega) return 'LEMNISCATE';
+  return 'NEUTRAL';
+}
+const MODE_COLOR = {OMEGA:'#4af0c4', LEMNISCATE:'#f0a832', NEUTRAL:'#5a6072'};
+const MODE_LABEL = {
+  OMEGA:      'densifying toward Apparency',
+  LEMNISCATE: 'oscillating in recursion',
+  NEUTRAL:    'no proof history yet',
+};
+
+// Mirror of ConcordancyField.compute_anchoring_weight() from the Python core.
+// Understanding_DeOS p.65 — Vc = f(τ, σth, αm) — ontological gravity.
+//   τ    — born_at age (clock ticks), saturates at 50
+//   σth  — base ∈ [0.1, 1.0] from umbragiac_score; ERODE proofs increase it
+//   αm   — proof_chain length, saturates at 10
+//   Collapse rule: any dimension = 0 → Vc = 0
+//   ZP always returns 1.0 (primordially anchored).
+function computeAnchoringWeight(c, state){
+  if(ZP_NAMES.has(c.name)) return 1.0;
+
+  const clockEra    = state?.clock?.era    ?? 0;
+  const clockOffset = state?.clock?.offset ?? 0;
+  const bornEra     = c.born_at?.[0] ?? 0;
+  const bornOffset  = c.born_at?.[1] ?? 0;
+
+  // age in clock ticks — mirrors InternalClock.age_since()
+  // ERA_CAPACITY is 10_000 (one era = 10_000 offsets); cross-era ages compose accordingly.
+  const ERA_CAPACITY = 10000;
+  const age = Math.max(0,
+    (clockEra - bornEra) * ERA_CAPACITY + (clockOffset - bornOffset)
+  );
+  const tau = Math.min(1.0, age / 50.0);
+
+  const proofs = c.proof_chain || [];
+  const erodeCount = proofs.filter(p => p.relation === 'ERODE').length;
+  const umbragiac  = c.umbragiac_score || 0;
+  const baseSigma  = Math.max(0.1, 1.0 - Math.min(umbragiac / 5.0, 0.9));
+  const sigmaTh    = Math.min(1.0, baseSigma + erodeCount * 0.12);
+
+  const alphaM = Math.min(1.0, proofs.length / 10.0);
+
+  if(tau === 0.0 || sigmaTh === 0.0 || alphaM === 0.0) return 0.0;
+  return Math.round(Math.pow(tau * sigmaTh * alphaM, 1.0/3.0) * 10000) / 10000;
+}
+
+// Mirror of ConcordancyField.compute_coherence() from the Python core.
+// WALL E — coherence describes HOW a construct exists in the field, never WHETHER.
+// Mean of edge weights modulated by clock tension. ZP → 1.0, orphan → 0.0.
+// Presented numerically only — visual saturation/glow on nodes is deferred design work.
+function computeCoherence(c, state, allEdges){
+  if(ZP_NAMES.has(c.name)) return 1.0;
+  const myEdges = (allEdges || []).filter(e => e.src === c.name || e.tgt === c.name);
+  if(!myEdges.length) return 0.0;
+
+  const clockEra    = state?.clock?.era    ?? 0;
+  const clockOffset = state?.clock?.offset ?? 0;
+  const ERA_CAPACITY = 10000;
+  const DECAY = 0.08;
+
+  // tension(born) = exp(-decay * max(0, age_in_ticks))
+  const tension = (born) => {
+    const bornEra    = born?.[0] ?? 0;
+    const bornOffset = born?.[1] ?? 0;
+    const delta = Math.max(0,
+      (clockEra - bornEra) * ERA_CAPACITY + (clockOffset - bornOffset)
+    );
+    return Math.exp(-DECAY * delta);
+  };
+
+  let weightedSum = 0;
+  for(const e of myEdges){
+    weightedSum += (e.weight || 0) * tension(e.born_at);
+  }
+  const coherence = weightedSum / myEdges.length;
+  return Math.round(Math.min(1.0, Math.max(0.0, coherence)) * 10000) / 10000;
+}
+
+function inspect(c,allEdges){
+  const el=document.getElementById('inspector');
+  const dc=domState(c.name,allEdges);
+  const ln=LN[c.layer]||'?';
+  const col=c.layer===3?SC.APPARENT:(SC[dc]||'#5c6475');
+  const isSys=c.name==='SYSTEM',isCf=isConflict(c.name);
+  const lc={NULL_00:'#5a6072',UMBRA_0:'#4a5080',UNIT_1:'#4af0c4',APPARENT:'#e8ecf2'}[ln]||'#5c6475';
+  let h=`<div class="inspect-field"><div class="inspect-key">Name</div>
+    <div class="inspect-val" style="color:${col};word-break:break-all;font-family:var(--font-mono)">${esc(c.name)}</div></div>`;
+  if(isSys) h+=`<div class="inspect-field"><div class="inspect-val" style="color:var(--text-dim);font-size:10px">◈ Infrastructure — perception channel. Excluded from ∀C,∃(Z,L).</div></div>`;
+  if(isCf)  h+=`<div class="inspect-field"><div class="inspect-val" style="color:#f0a832;font-size:10px">⊗ Conflict construct — first-class proof object (L2·Z1::ORIGIN). Irresolvability materialized.</div></div>`;
+  h+=`<div class="inspect-field"><div class="inspect-key">Layer</div>
+    <div class="inspect-val"><span class="layer-badge" style="background:${lc}22;color:${lc};border:1px solid ${lc}44">${ln}</span></div></div>
+    <div class="inspect-field"><div class="inspect-key">Dominant State</div><div class="inspect-val" style="color:${col}">${dc}</div></div>
+    <div class="inspect-field"><div class="inspect-key">Witness (genesis · immutable)</div>
+    <div class="inspect-val" style="color:var(--text-dim);font-family:var(--font-mono)">${c.witness||'—'}</div></div>
+    <div class="inspect-field"><div class="inspect-key">Identity (mutable · runtime)</div>
+    <div class="inspect-val" style="color:var(--text-dim);font-family:var(--font-mono)">${
+      c.identity||c.identity_hash
+        ? (c.identity||c.identity_hash)
+        : '<span style="color:var(--text-dim);font-style:italic;font-size:9px">derived at runtime — not in snapshot.<br>See proof_chain for transformation history.</span>'
+    }</div></div>
+    <div class="inspect-field"><div class="inspect-key">Version · Energy</div>
+    <div class="inspect-val">v${c.version||0} · u=${(c.umbragiac_score||0).toFixed(3)}</div></div>`;
+  if(c.lagrange){const lcc=LC[c.lagrange]||'#5c6475';h+=`<div class="inspect-field"><div class="inspect-key">Lagrangian Point</div><div class="inspect-val">
+    <span class="lagrange-tag" style="color:${lcc};border-color:${lcc}44">${c.lagrange}</span>
+    <div style="color:var(--text-dim);font-size:10px;margin-top:3px">${LD[c.lagrange]||''}</div>
+  </div></div>`;}
+  // Existence Mode — TMC p.27 [Ω]/[Ꮠ] duality, derived from proof_chain
+  const mode = computeExistenceMode(c);
+  const mc   = MODE_COLOR[mode];
+  const ms   = mode==='OMEGA' ? '[Ω]' : mode==='LEMNISCATE' ? '[Ꮠ]' : '·';
+  h+=`<div class="inspect-field"><div class="inspect-key">Existence Mode</div>
+    <div class="inspect-val">
+      <span style="color:${mc};font-family:var(--font-mono);font-weight:600;letter-spacing:.06em">${ms} ${mode}</span>
+      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">${MODE_LABEL[mode]}</div>
+    </div></div>`;
+
+  // Anchoring Weight Vc — Understanding_DeOS p.65, Vc = f(τ, σth, αm)
+  // Bar gradient transitions: red (fragile) → amber (intermediate) → teal (anchored)
+  const vc = computeAnchoringWeight(c, states[curIdx]);
+  const vcPct = (vc * 100).toFixed(1);
+  // Color tint reflects the value: low = red, mid = amber, high = teal (matches accent)
+  const vcColor = vc < 0.25 ? '#f05050' : vc < 0.6 ? '#f0a832' : '#4af0c4';
+  h+=`<div class="inspect-field"><div class="inspect-key">Anchoring Weight  Vc = f(τ, σth, αm)</div>
+    <div class="inspect-val">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span style="color:${vcColor};font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums">Vc = ${vc.toFixed(4)}</span>
+        <span style="color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums">${vcPct}%</span>
+      </div>
+      <div style="height:4px;background:var(--bg-2);border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${vcPct}%;background:linear-gradient(90deg,#f05050 0%,#f0a832 35%,#4af0c4 70%);transition:width var(--dur-slow) var(--ease)"></div>
+      </div>
+      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">ontological gravity — capacity to persist as real</div>
+    </div></div>`;
+
+  // Coherence — WALL E, field alignment (numerical only, REGLA DE ORO respected)
+  // Visual saturation/glow on nodes is deferred design work.
+  const coh = computeCoherence(c, states[curIdx], allEdges);
+  const cohPct = (coh * 100).toFixed(1);
+  h+=`<div class="inspect-field"><div class="inspect-key">Coherence  (field alignment)</div>
+    <div class="inspect-val">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:var(--text);font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums">${coh.toFixed(4)}</span>
+        <span style="color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums">${cohPct}%</span>
+      </div>
+      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">describes HOW the construct exists, never WHETHER</div>
+    </div></div>`;
+
+  const proofs=c.proof_chain||[];
+  if(proofs.length){
+    h+=`<div class="inspect-field"><div class="inspect-key">Proof Chain (${proofs.length} — irreversible)</div><div class="proof-chain">`;
+    proofs.slice(-8).forEach(p=>{const rc=PC[p.relation]||'var(--text-dim)';
+      // tensate_role tag — only present on lemniscate triplet proofs (Ꮠ = 2Ꮙ)
+      const roleTag = p.tensate_role
+        ? ` <span style="color:var(--text-dim);font-size:9px;font-weight:400;letter-spacing:.06em">· ${p.tensate_role}</span>`
+        : '';
+      h+=`<div class="proof-entry"><div class="proof-relation" style="color:${rc}">${p.relation}${roleTag}</div>
+      <div class="proof-meta">anchor: ${p.anchor}</div>
+      <div class="proof-meta">lagrange: ${p.lagrange} · ${LD[p.lagrange]||''}</div>
+      <div class="proof-meta">w: ${p.witness} · T=[${p.time}]</div></div>`;});
+    if(proofs.length>8)h+=`<div style="color:var(--text-dim);font-size:10px;margin-top:3px">…and ${proofs.length-8} earlier proofs</div>`;
+    h+=`</div></div>`;}
+  const conn=allEdges.filter(e=>e.src===c.name||e.tgt===c.name);
+  if(conn.length){
+    h+=`<div class="inspect-field"><div class="inspect-key">Edges (${conn.length})</div>`;
+    conn.slice(0,8).forEach(e=>{
+      const sc2=SC[e.state]||'var(--text-dim)',other=e.src===c.name?e.tgt:e.src,dir=e.src===c.name?'→':'←';
+      const elc=e.lagrange?(LC[e.lagrange]||'var(--text-dim)'):null;
+      h+=`<div class="edge-entry"><div style="color:${sc2}">${dir} <span style="color:var(--text-bright)">${esc(other.slice(0,30))}</span></div>
+      <div style="color:var(--text-dim);font-size:9px">${e.rel}·${e.state}·w=${e.weight.toFixed(2)}${elc?` · <span style="color:${elc}">${e.lagrange}</span>`:''}</div></div>`;});
+    if(conn.length>8)h+=`<div style="color:var(--text-dim);font-size:10px;margin-top:4px">…and ${conn.length-8} more</div>`;
+    h+=`</div>`;}
+  // ── GENESIS OPERATION DIAGRAM ────────────────────────────────────────────
+  // Show the [x] :: [y] → [z] operation that produced this construct,
+  // sourced from ops_log. Makes causal process visible in the inspector.
+  if(states[curIdx]){
+    const opsLog=(states[curIdx].ops_log)||[];
+    const op=opsLog.find(o=>o.z===c.name);
+    if(op){
+      const isConf=(op.state==='CONFLICT');
+      const opCol=isConf?'#f0a832':'#4af0c4';
+      const symb=isConf?'⊗':'::';
+      const px=esc((op.x||'').slice(0,30));
+      const py=esc((op.y||'').slice(0,30));
+      const pz=esc((op.z||'').slice(0,30));
+      h+=`<div class="inspect-field">
+        <div class="inspect-key">Genesis · cycle ${op.cycle}</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;
+          padding:9px 11px;margin-top:2px;font-family:var(--font-mono);font-size:10px;
+          line-height:2.0;letter-spacing:.02em;">
+          <div><span style="color:var(--text-dim)">[ </span><span style="color:var(--text-bright)">${px}</span><span style="color:var(--text-dim)"> ]</span></div>
+          <div style="padding-left:10px;color:${opCol};font-weight:700">${symb}</div>
+          <div><span style="color:var(--text-dim)">[ </span><span style="color:var(--text-bright)">${py}</span><span style="color:var(--text-dim)"> ]</span></div>
+          <div style="padding-left:10px;color:var(--text-dim)">↓</div>
+          <div><span style="color:${opCol};font-weight:700">[ </span><span style="color:${opCol};font-weight:700">${pz}</span><span style="color:${opCol};font-weight:700"> ]</span>
+            ${op.depth!=null?`<span style="color:var(--text-dim);font-size:9px;margin-left:6px">depth=${op.depth}</span>`:''}
+            ${op.weight!=null?`<span style="color:var(--text-dim);font-size:9px;margin-left:4px">w=${op.weight}</span>`:''}
+          </div>
+        </div>
+      </div>`;}
+  }
+
+  el.innerHTML=h;
+}
+</script>
+
+</body>
+</html>
