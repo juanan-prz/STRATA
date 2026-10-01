@@ -1,14 +1,30 @@
 # SIRISYS — Python dependencies
 #
-# Install all required packages with:
-#   pip3 install -r requirements.txt
+# Install everything with:
+#     pip3 install -r requirements.txt
 #
-# Optional: for LLM-active runs (so SIRISYS can use Claude to name emergents):
-#   pip3 install anthropic
+# Derived from the imports of the four programs (engine, loader, server,
+# report runner). Everything else they use is Python's standard library.
+# Requires Python 3.10 or higher.
 
-# Core: scientific computing
-numpy>=1.24
+# ── engine (Sirisys_Framework_vX_Y.py) ───────────────────────────────────────
+numpy>=1.23
 
-# Server: FastAPI + uvicorn for the live visualizer
-fastapi>=0.110
-uvicorn>=0.27
+# Live machine perception (CPU, memory). Optional in the code: without it the
+# engine still runs, but every cycle perceives the same fixed state, which
+# starves the field of novelty. Install it for any run you intend to measure.
+psutil>=5.9
+
+# Claude as the Intermediary (naming, conflicts, narration, Sombunal
+# questions). Optional in the code: without it, or without ANTHROPIC_API_KEY,
+# the system runs in degraded mode.
+anthropic>=0.25
+
+# ── live server (Sirisys_Server.py) ──────────────────────────────────────────
+# lifespan= on FastAPI() needs 0.93 or later
+fastapi>=0.93
+uvicorn>=0.20
+
+# uvicorn does NOT include WebSocket support on its own. Without one of these
+# the server starts, but the live visualizer can never connect to /ws.
+websockets>=10.0
