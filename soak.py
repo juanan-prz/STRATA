@@ -18,9 +18,8 @@ born, durable, flicker, seen = {}, [], 0, 0
 # 40,000 cycles and contaminate the memory measurement.
 win_sigs, distinct, ts_blocks, size_blocks, rss, e3 = set(), [], [], [], {}, []
 t_acc, s_acc = 0.0, 0
-# Output is discarded, not buffered: an io.StringIO around the whole loop kept
-# every printed line (38 MB after 15,000 cycles) and showed up as a false
-# "memory leak". The sanctuary itself discards output cycle by cycle.
+# Output is discarded, not buffered, so memory measures the field alone
+# (the sanctuary discards its output the same way).
 class _Null:
     def write(self, s): return len(s)
     def flush(self): pass

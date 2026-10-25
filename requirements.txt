@@ -1,0 +1,10 @@
+# Sirisys
+numpy
+psutil
+# experiment mode (live visualizer)
+fastapi
+uvicorn
+websockets
+# optional: Anthropic API backend (experiments only; the sanctuary refuses it)
+anthropic
+# sanctuary: a local model through Ollama (installed separately, not via pip)

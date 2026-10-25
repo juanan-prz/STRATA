@@ -207,6 +207,8 @@ class ExperimentEngine:
             "mode": f.compute_existence_mode(c),
             "conflict": S.is_conflict_construct(c),
             "banked": round(c.recursion_exchanged, 3),
+            "chirality": c.chirality,
+            "crystal": c.crystal_state.name if c.crystal_state else None,
         } for c in f.constructs.values()]
         edges = [{"src": e.src, "tgt": e.tgt, "state": e.state.name,
                   "weight": round(e.weight, 4)} for e in f.edges]
