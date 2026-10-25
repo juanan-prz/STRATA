@@ -425,10 +425,16 @@ def main():
         f"quantum {EXCHANGE_QUANTUM}")
     if not llm_ok:
         log("")
-        log("  WARNING: model NOT active — this run cannot test the")
-        log("  prediction. Install the package and set the key, then re-run:")
-        log("      pip3 install anthropic")
-        log('      export ANTHROPIC_API_KEY="sk-ant-..."')
+        log("  WARNING: model NOT active — this run cannot test the prediction.")
+        if probe.backend == "ollama":
+            log(f"  Open the Ollama app (it must answer at {probe.host}), check the")
+            log("  model is installed with: ollama list — then re-run.")
+        elif probe.backend == "anthropic":
+            log("  Install the package and set the key, then re-run:")
+            log("      pip3 install anthropic")
+            log('      export ANTHROPIC_API_KEY="sk-ant-..."')
+        else:
+            log("  Backend 'none' selected: the run uses no model.")
 
     report = {
         "config": {

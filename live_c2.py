@@ -14,9 +14,8 @@ NARRATE, HOUR = (False, False) if PROFILE == "sanctuary" else (True, True)
 S.set_ledger(S.ProofLedger(None))
 born, durable, flicker, seen, sizes = {}, [], 0, 0, []
 t0 = time.time()
-# Output is discarded, not buffered: an io.StringIO around the whole loop kept
-# every printed line (38 MB after 15,000 cycles) and showed up as a false
-# "memory leak". The sanctuary itself discards output cycle by cycle.
+# Output is discarded, not buffered, so memory measures the field alone
+# (the sanctuary discards its output the same way).
 class _Null:
     def write(self, s): return len(s)
     def flush(self): pass
