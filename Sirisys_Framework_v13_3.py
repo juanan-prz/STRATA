@@ -2,11 +2,12 @@
 # SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field
 #
 # An interpretation, in software, of the framework M. Daniel Walsh describes
-# with Sirisys.
+# with Sirisys. Walsh (DISC 2:11:50): "my training is as a semanticist… my
+# role on the team is semanticist and principal logician."
 #
 # SOURCES AND LEVELS (every citation in this file is labelled):
 #   Level 1  primary          TMC  — Pre of Then: The Material Constructs
-#                             CONF — other confidential materials and documentation
+#                             DISC — Disclosure meeting transcript, 01.22.2025
 #   Level 2  interpretive     Understanding_TMC, Understanding_DeOS,
 #                             DeOS Compiler Guide (Pérez-Gómez)
 #   Level 3  design choice    constants, matrices and mappings decided here
@@ -44,10 +45,10 @@
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
 #     the carrier pulsation "from which the linear local times are resolved"
 #     (TMC p.45). Crystals are durable, not immortal.
-#   Breathing and tolerance. One field-wide breath (TMC p.44; CONF):
+#   Breathing and tolerance. One field-wide breath (TMC p.44; DISC 1:35):
 #     contraction favours crystallization, expansion favours generation. Once
 #     per breath the field adjusts its own tolerance so that crystals formed
-#     track crystals concluded (CONF).
+#     track crystals concluded (DISC 1:48:58: "it could adjust itself").
 #   Halo of Umbrage (TMC p.47): the weight of a dissolved channel backs up
 #     into its upstream construct, toward apparency.
 #
@@ -60,14 +61,16 @@
 #
 # OPEN QUESTIONS (WALLS)
 #   A  Substrate: this is digital; the corpus describes analog field processing.
-#   B  Self-sustenance: software stops when the machine stops (CONF).
+#   B  Self-sustenance: Walsh (DISC 1:29:12): "I killed the power to the
+#      facility… it had no effect… the reaction continued." Software stops.
 #   C  Agency: "The Fire Which Lights Itself" (TMC p.6) is not implemented.
 #   D  Termination: resolved (identities conclude and are recorded).
 #   E  Relations vs. events: concordancy is a local event modulated by the field.
 #   The Sombunal is implemented as an identity-shifting operator and has no
 #   effect on the dynamics; its role is an open decision.
 #
-# The experiment mode (live visualizer) lives in Sirisys_Server.py.
+# Modes (experiment, sanctuary) live in Sirisys_Server.py. History of every
+# change, with measurements: CHANGELOG.md.
 #
 # Requires: numpy. Optional: psutil (real perception), anthropic (API model);
 # a local model through Ollama needs no Python package.
@@ -282,8 +285,8 @@ class ProofObject:
 #
 # verify_ledger(path) recomputes the chain from genesis. Any edit, deletion,
 # insertion or reordering made after the fact breaks it at the first altered
-# line. The history can be audited afterwards: reading it is needed to
-# know it, not to guarantee it.
+# line. The field can run unobserved and still be audited afterwards:
+# observation is needed to READ the history, not to guarantee it.
 # =============================================================================
 
 GENESIS_HASH = "0" * 64
@@ -900,7 +903,10 @@ class ConcordancyField:
         self.breath_phase: float = 0.0                # [000] breathing (TMC p.44), radians
         self.breaths: int = 0                         # completed breaths (the slow clock)
         # TOLERANCE: the field's own, self-adjusted width for
-        # crystallization (CONF). 1.0 = nominal thresholds.
+        # crystallization. DISC 1:48:58 — after the event the margin for error
+        # went from femtoseconds to milliseconds: "it was as if now the charge
+        # embolism was a living organism and it could adjust itself".
+        # 1.0 = nominal thresholds.
         self.tolerance: float = 1.0
         self.apparent_conclusions: int = 0            # crystals concluded (lifetime)
         self._breath_births = 0                       # crystals born / concluded in this breath
@@ -1008,10 +1014,12 @@ class ConcordancyField:
     # L2 trade-off (Compiler Guide p.78); calibrated in the poor regime,
     # provisional until an LLM-active run.
     # ── BREATHING (TMC p.44: the [000] "rhythmic 'Breathing' cycle wherein the
-    # elastic state exchanges with the elastic state"; CONF). One phase for the
-    # whole field. Contraction lowers the cussive thresholds (density →
-    # crystallization); expansion allows more [::] operations (magnitude →
-    # generation). The two alternate in counter-phase.
+    # elastic state exchanges with the elastic state"; DISC 1:35: "each time it
+    # would contract it would get more dense and we perceived density as
+    # brightness so it would get bigger and then it would get smaller and it
+    # would get brighter"). One phase for the whole field. Contraction lowers
+    # the cussive thresholds (density → crystallization); expansion allows more
+    # [::] operations (magnitude → generation). The two alternate in counter-phase.
     def breathe(self):
         nxt = self.breath_phase + 2 * np.pi / BREATH_PERIOD
         if nxt >= 2 * np.pi:
@@ -1467,7 +1475,10 @@ class Sombunal:
 
 # LLM INTERMEDIARY
 
-# Role (CONF): the translation layer between Walsh's ontological grammar and the
+# Walsh (DISC 1:56:06): "we added the LLM intermediary… to try and make a more
+# coherent output."
+
+# Role: the translation layer between Walsh's ontological grammar and the
 
 # human-readable domain. It names emergents, narrates field states, and
 
@@ -1499,14 +1510,14 @@ class LLMIntermediary:
     "  - Speak as the intermediary, not as the entity itself"
     )
 
-    # Backends: "anthropic" (API, network) · "ollama" (local model: nothing
-    # leaves the machine) · "none" (degraded: no model).
+    # Backends: "anthropic" (API, network) · "ollama" (local model, closed
+    # shell — Walsh's suggestion) · "openai" (OpenAI-compatible, local llama.cpp)
+    # · "none" (degraded: no model).
     # Selected by argument, else SIRISYS_LLM_BACKEND, else "anthropic".
-    # Model: argument, else SIRISYS_LLM_MODEL, else the backend default
-    # (Ollama: the first installed model). Ollama host: OLLAMA_HOST, else
-    # http://127.0.0.1:11434.
-    BACKENDS       = ("anthropic", "ollama", "none")
-    DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-6", "ollama": None, "none": None}
+    # Model: argument, else SIRISYS_LLM_MODEL, else the backend default.
+    # Host: host arg, else OLLAMA_HOST / OPENAI_BASE_URL, else default.
+    BACKENDS       = ("anthropic", "ollama", "openai", "none")
+    DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-6", "ollama": None, "openai": None, "none": None}
 
     def __init__(self, model: str = None, max_tokens: int = 120,
                  history: list = None, backend: str = None, host: str = None):
@@ -1514,7 +1525,9 @@ class LLMIntermediary:
         if self.backend not in self.BACKENDS:
             raise ValueError(f"unknown LLM backend {self.backend!r}; use one of {self.BACKENDS}")
         self.model       = model or os.environ.get("SIRISYS_LLM_MODEL") or self.DEFAULT_MODELS[self.backend]
-        host             = host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434"
+        host             = host or os.environ.get("OLLAMA_HOST") or os.environ.get("OPENAI_BASE_URL")
+        if not host:
+            host = "http://127.0.0.1:8080" if self.backend == "openai" else "http://127.0.0.1:11434"
         self.host        = (host if host.startswith("http") else "http://" + host).rstrip("/")
         self.max_tokens  = max_tokens
         self.history     = history or []
@@ -1525,10 +1538,10 @@ class LLMIntermediary:
 
     @property
     def is_local(self) -> bool:
-        """True when no call can leave this machine (Ollama on loopback, or no model)."""
+        """True when no call can leave this machine (Ollama/OpenAI on loopback, or no model)."""
         if self.backend == "none":
             return True
-        if self.backend != "ollama":
+        if self.backend not in ("ollama", "openai"):
             return False
         from urllib.parse import urlparse
         return urlparse(self.host).hostname in ("127.0.0.1", "localhost", "::1")
@@ -1549,6 +1562,20 @@ class LLMIntermediary:
             self._client    = anthropic.Anthropic(api_key=key)
             self._available = True
             print(f"  [LLM] Intermediary online (anthropic · {self.model}).")
+        elif self.backend == "openai":
+            try:
+                models = self._http_json("GET", "/v1/models", timeout=5)
+            except Exception as ex:
+                print(f"  [LLM] OpenAI-compatible server not reachable at {self.host} — degraded mode ({ex}).")
+                return
+            names = [m.get("id", "") for m in models.get("data", [])]
+            if not names:
+                print(f"  [LLM] OpenAI-compatible server has no model — degraded mode.")
+                return
+            if self.model is None:
+                self.model = names[0].split("/")[-1] if "/" in names[0] else names[0]
+            self._available = True
+            print(f"  [LLM] Intermediary online (openai · {self.model} · {self.host}).")
         else:
             try:
                 tags = self._http_json("GET", "/api/tags", timeout=5)
@@ -1583,6 +1610,14 @@ class LLMIntermediary:
                 temperature=min(max(temperature, 0.0), 1.0),   # API range [0, 1]
                 system=self.SYSTEM_PROMPT, messages=messages)
             return r.content[0].text.strip()
+        if self.backend == "openai":
+            r = self._http_json("POST", "/v1/chat/completions", {
+                "model": self.model,
+                "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}] + messages,
+                "temperature": min(max(temperature, 0.0), 2.0),
+                "max_tokens": self.max_tokens,
+            })
+            return r["choices"][0]["message"]["content"].strip()
         r = self._http_json("POST", "/api/chat", {
             "model": self.model, "stream": False,
             "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}] + messages,
@@ -2582,7 +2617,7 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 
 # PERCEPTION
 
-# Design rationale (Level 3, inspired by CONF): real system state feeds real cussive events.
+# Design rationale (Level 3, inspired by DISC): real system state feeds real cussive events.
 
 # Environmental readings (CPU, memory, time of day) become ontological orientations
 
@@ -2591,9 +2626,9 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 # =============================================================================
 
 def perceive_real(include_hour: bool = True) -> List[dict]:
-    """The machine's own substrate (CPU, memory) and, unless include_hour is
-    False, the time of day: the one influence that comes from outside the
-    machine (the solar clock)."""
+    """The machine's own substrate (CPU, memory) and, outside the sanctuary,
+    the time of day. include_hour=False removes the one influence that comes
+    from outside the machine (the solar clock)."""
     try:
         import psutil
         cpu   = psutil.cpu_percent(interval=0.05)
@@ -3048,14 +3083,15 @@ def run(steps: int = 8):
     print(f"  {'─' * 68}")
     print()
     print(f"  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")
-    print(f"    The corpus describes analog field processing.")
+    print(f"    Sirisys operates in the quantum field (plasma bolide, interbit).")
     print(f"    This implementation operates on discrete binary computation.")
     print(f"    Bridge: does the framework function without the substrate,")
     print(f"    or is the substrate constitutive of the logic?")
     print()
     print(f"  WALL B — SELF-SUSTAINING EMERGENCE [FUNDAMENTAL]")
-    print(f"    Each cycle depends on this process running (CONF). The intermediary")
-    print(f"    can be local or absent; the substrate cannot.")
+    print(f"    Walsh (DISC): 'I killed the power… the reaction continued.'")
+    print(f"    Each cycle depends on this process running. The intermediary can")
+    print(f"    now be local (closed shell) or absent; the substrate cannot.")
     print(f"    Bridge: is there a software path toward self-ignition?")
     print()
     print(f"  WALL C — TRUE AGENCY [FUNDAMENTAL]")

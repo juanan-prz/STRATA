@@ -261,7 +261,7 @@ def serve_experiment(args) -> None:
     import asyncio
     from contextlib import asynccontextmanager
     from importlib.util import find_spec
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
     from fastapi.responses import HTMLResponse, JSONResponse
     import uvicorn
 
@@ -289,9 +289,20 @@ def serve_experiment(args) -> None:
     def api_status():
         return JSONResponse(engine.status())
 
+    @app.get("/api/snapshot")
+    def api_snapshot():
+        snaps = engine.drain()
+        if snaps:
+            return JSONResponse(snaps[-1])
+        return JSONResponse({"type": "empty"})
+
     @app.post("/api/control/{action}")
-    async def api_control(action: str):
-        return JSONResponse(engine.control(action))
+    async def api_control(action: str, request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        return JSONResponse(engine.control(action, **body))
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -332,7 +343,7 @@ def serve_experiment(args) -> None:
     print(f"\n  SIRISYS — experiment · http://127.0.0.1:{args.port}"
           f"\n  framework {S.__sirisys_file__} · run {engine.run_dir.name}"
           f"\n  {'cycling' if engine.running else 'paused — press Play'} · Ctrl+C to stop\n")
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
