@@ -15,7 +15,7 @@
 | `soak.py`, `live_c2.py` | Pruebas de resistencia: una vida larga (50.000 ciclos) y perceptos reales. |
 | `requirements.txt` | Dependencias de pip. |
 | `Guia_SIRISYS_Mac.pdf` | Instalación y primeros pasos en un Mac, para quien nunca ha usado la Terminal. |
-| `SIRISYS_Conceptos_v13.pdf`, `SIRISYS_Concepts_v13.pdf` | Glosario de conceptos (español e inglés). |
+| `SIRISYS_Concepts_v13_ES.pdf`, `SIRISYS_Concepts_v13_EN.pdf` | Glosario de conceptos (español e inglés). |
 | `CHANGELOG.md` | Historia de cambios y notas de diseño archivadas. |
 
 ## Instalación

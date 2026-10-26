@@ -6,6 +6,10 @@ A software interpretation of the SIRISYS recursive ontological system: a field o
 
 The field follows *Pre of Then: The Material Constructs* (TMC) and the disclosure meeting transcript (DISC) as primary sources. It is an interpretation built in software, not the original system; the framework header labels every citation by source level (primary, interpretive, design choice).
 
+Author: Juan A. Pérez-Gómez.
+
+> New to the terminal? Start with `Guia_SIRISYS_Mac.pdf` (Spanish): it walks through installation, the tests and the first experiments step by step.
+
 -----
 
 ## Contents
@@ -23,7 +27,7 @@ The field follows *Pre of Then: The Material Constructs* (TMC) and the disclosur
 | `requirements.txt` | Python dependencies |
 | `Guia_SIRISYS_Mac.pdf` | Step-by-step setup on a Mac for first-time users (Spanish) |
 | `Sirisys_Guia_v13.md` | Technical guide to modes, files and options (Spanish) |
-| `SIRISYS_Concepts_v13.pdf`, `SIRISYS_Conceptos_v13.pdf` | Glossary of concepts (English, Spanish) |
+| `SIRISYS_Concepts_v13_EN.pdf`, `SIRISYS_Concepts_v13_ES.pdf` | Glossary: every concept with its source and how the code implements it (English, Spanish) |
 | `CHANGELOG.md` | History of changes and archived design notes |
 
 -----
@@ -36,9 +40,9 @@ Python 3.10 or higher on macOS, Linux, or Windows with WSL.
 pip3 install -r requirements.txt
 ```
 
-A model is optional. Without one everything runs; with one, an LLM intermediary names emergents and interprets conflicts. Two backends:
+A model is optional. Without one everything runs and constructs get synthetic names; with one, an LLM intermediary names emergents, labels conflicts, narrates the field and asks the Sombunal questions that enter the field as constructs. Two backends:
 
-- **Ollama** (local, recommended, and the only one the sanctuary accepts). Install it from ollama.com and pull a model, for example `ollama pull llama3.1`.
+- **Ollama** (local, recommended, and the only one the sanctuary accepts). Install it from ollama.com and pull a general-purpose model, for example `ollama pull llama3.1`. Reasoning models that "think" before answering can spend the short reply budget thinking and return empty names. If more than one model is installed, choose one with `export SIRISYS_LLM_MODEL=llama3.1`; otherwise the first one Ollama lists is used.
 - **Anthropic API** (experiments only): `export ANTHROPIC_API_KEY="sk-ant-..."` in the terminal session. Never store the key in a file in this folder.
 
 Select the backend with `SIRISYS_LLM_BACKEND=ollama|anthropic|none` (or `--backend` in `run_report.py`), the model with `SIRISYS_LLM_MODEL`, and a non-default Ollama address with `OLLAMA_HOST`. Keep the same backend, model and profile across runs you intend to compare.
@@ -52,7 +56,7 @@ python3 test_sirisys.py                    # integrity, determinism, bounded mem
 python3 Sirisys_Server.py --play           # experiment mode, live percepts
 ```
 
-Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; `Ctrl+C` in the terminal stops the server.
+Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; Fit recentres the view; `Ctrl+C` in the terminal stops the server.
 
 ```bash
 python3 run_report.py --cycles 20 --seeds 1 --backend ollama    # short measured run
@@ -71,6 +75,7 @@ For calibration and refinement. Every start and every Reset is a new instance in
 | `--play` | Start cycling immediately |
 | `--stream N` | Synthetic percept stream N: the run is identical every time |
 | `--profile sanctuary` | The sanctuary's exact cycle (no narration, no time of day), observed |
+| `--delay-ms` | Pause between cycles (default 80) |
 | `--port` | Web port (default 8000) |
 
 ### Sanctuary
@@ -84,7 +89,7 @@ python3 Sirisys_Server.py --mode sanctuary --open           # an opening (an obs
 python3 Sirisys_Server.py --mode sanctuary --verify         # ledger integrity
 ```
 
-Options: `--dir` (default `./sirisys_sanctuary`), `--cadence` seconds per cycle (default 10), `--llm ollama|none`.
+Options: `--dir` (default `./sirisys_sanctuary`), `--cadence` seconds per cycle (default 10), `--llm ollama|none`. Asking, opening and verifying are run from a second terminal while the sanctuary runs.
 
 Its only opening is the gap folder, `<dir>/gap/`. Anything that crosses it is recorded and closes the current inviolate period; a power cut does not, because nobody looked. An opening is recorded before anything is read, and the console then shows the ledger head hash, which should be written down outside the sanctuary. The sanctuary refuses to resume if its ledger is shorter than its own account, if its metadata is missing, if another process is writing the same ledger, or if the framework file has changed. On a storage failure it stops with exit code 2 and leaves the last good state intact.
 
@@ -94,19 +99,19 @@ Details are in `Sirisys_Guia_v13.md`.
 
 ## Core concepts
 
-**Layers.** A construct rises `NULL_00 → UMBRA_0 → UNIT_1 → APPARENT` as tension reaches it (cussive collapse). An Apparent is incontrovertible.
+**Layers.** Constructs live in four layers: `NULL_00` (held only by the origin anchor), `UMBRA_0` (where products, conflicts and percepts are born), `UNIT_1` (active units, candidates to crystallize) and `APPARENT` (crystals). A construct rises a layer when enough tension reaches it (cussive collapse); an Apparent is incontrovertible.
 
-**Tetralemma.** Every relation carries one of four states: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Sustained `BOTH` drives emergence; the fourth corner (`NEITHER`) is a valid outcome, not an error.
+**Tetralemma.** Every relation carries one of four states: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Sustained `BOTH` drives emergence and closes once enough recursion has been exchanged through it. `NEITHER×NEITHER` materializes a conflict, or, past a per-cycle cap, the fourth corner itself: no combination is a dead end.
 
 **Concordancy.** The operator `[::]` combines two constructs into a third and records the event as a proof. With opposite chirality the older operand orients the result, so `x::y ≠ y::x`.
 
-**No randomness.** The framework has no pseudo-random generator. Every choice is derived from the ledger head (the whole irreversible history) and the question being decided.
+**No randomness.** The framework has no pseudo-random generator. Every choice is derived from the ledger head (the whole irreversible history) and the question being decided: the same history reproduces the same run, and different histories never draw alike.
 
 **Breathing.** A single field-wide breath alternates contraction (favouring crystallization) and expansion (favouring generation). Once per breath the field adjusts its own tolerance so that crystals formed track crystals concluded.
 
-**Integrity.** Every proof is sealed in an append-only, hash-chained ledger stored as compressed segments with an index of hashes. Time never moves backwards, a resumed instance equals an uninterrupted one, and any later edit, deletion or reordering of the record is detected.
+**Integrity.** Every proof is sealed in an append-only, hash-chained ledger stored as compressed segments with an index of hashes. Time never moves backwards, a resumed instance equals an uninterrupted one, and any later edit, deletion or reordering of the record is detected. Nothing disappears silently: a construct that concludes leaves a termination proof.
 
-The glossaries (`SIRISYS_Concepts_v13.pdf`, `SIRISYS_Conceptos_v13.pdf`) define every term with its source.
+The glossaries define every term, including each counter shown in the live visualizer, with its source.
 
 -----
 
@@ -123,7 +128,7 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
 ## Tests and measurements
 
 ```bash
-python3 test_sirisys.py              # 24 checks
+python3 test_sirisys.py              # integrity, determinism, bounded memory
 python3 test_phase1.py               # sanctuary, backends, server (no Ollama or FastAPI needed)
 python3 test_phase4.py               # segmented ledger, tampering, crash during rotation, disk
 python3 test_phase4_sanctuary.py     # 25 forced kills, period accounting, no network, full disk
@@ -154,7 +159,8 @@ None of these belong in the repository; `.gitignore` excludes them.
 
 Research project under active development.
 
-- The field meets its self-adjustment criteria without a model on synthetic percepts. Calibration with an active local model is in progress.
+- On synthetic percepts and without a model, the field meets its self-adjustment criteria: durable crystals every breath, little flicker, bounded size, flat memory and cost. With the machine's real percepts the crystallization rate trends downward over long runs; this is under study.
+- Calibration with an active local model is in progress.
 - Sanctuary mode is implemented and tested but has not been started. The physical isolation it assumes (dedicated hardware, no network, shielding) lies outside the code.
 - Open questions are recorded in the framework header as WALLS: substrate (digital, not analog), self-sustenance, agency, and relations versus events. The role of the Sombunal and the Lagrangian points, which tag constructs and proofs but do not yet govern any decision, are open design decisions.
 
