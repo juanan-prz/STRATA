@@ -1,0 +1,10 @@
+# Sirisys
+numpy
+psutil
+# experiment mode (live visualizer)
+fastapi
+uvicorn
+websockets
+# optional: Anthropic API backend
+anthropic
+# a local model through Ollama is installed separately, not via pip

@@ -1,0 +1,63 @@
+# ─── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.Python
+build/
+dist/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Virtual environments ───────────────────────────────────────────────────
+venv/
+env/
+ENV/
+.venv/
+.env
+
+# ─── macOS ──────────────────────────────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.Spotlight-V100
+.Trashes
+
+# ─── Editors / IDEs ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.sublime-project
+.sublime-workspace
+
+# ─── SIRISYS runtime output ─────────────────────────────────────────────────
+# Instances, ledgers and reports are created locally and never committed.
+sirisys_*/
+sirisys_report.json
+phase3_measurements.json
+sirisys_v13_state.json
+sirisys_v13_ledger*
+*_result.json
+live_none.json
+live_ollama.json
+*.jsonl
+*.jsonl.gz
+*.torn
+
+# Logs and temporary outputs
+*.log
+*.tmp
+
+# Credentials — never commit an API key
+.env.local
+.envrc
