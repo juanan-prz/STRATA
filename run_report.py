@@ -50,6 +50,7 @@ import time
 import traceback
 from collections import Counter, defaultdict
 from pathlib import Path
+import field_topology  # read-only topology (pure Python, no networkx)
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "sirisys_report.json"
@@ -234,7 +235,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         ss = S.new_session(llm=llm)
     clock, field, conc, cuss = ss.clock, ss.field, ss.concordancy, ss.cussive
 
-    trace, percepts, promoted, errors = [], Counter(), [], []
+    trace, percepts, promoted, errors, topo_trace = [], Counter(), [], [], []
     born_names, total_closures = [], 0
     prev = set(field.constructs)
     birth, lifespans = {n: 0 for n in prev}, []
@@ -283,6 +284,9 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
+        # Topology once per breath (read-only, no seal, no mutation)
+        if cyc % S.BREATH_PERIOD == 0:
+            topo_trace.append(field_topology.field_topology(field))
         if m["new_apparents"] > 0:
             promoted += [str(a) for a in field.apparents_since(field.apparents_total - m["new_apparents"])]
 
@@ -294,6 +298,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     return {
         "seed": seed,
         "trace": trace,
+        "topology_trace": topo_trace,
         "errors": errors,
         "seconds": round(time.time() - t0, 1),
         "llm": {
