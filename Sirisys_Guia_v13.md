@@ -8,9 +8,10 @@
 | `Sirisys_Server.py` | Arranca el modo experimento y sirve el campo al visualizador en vivo. |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework. |
 | `run_report.py` | Ejecuciones instrumentadas y el informe `sirisys_report.json`. |
+| `field_topology.py` | Topología del campo, de solo lectura. La registran `run_report.py` y `live_c2.py`. |
 | `Sirisys_Live_Visualizer.html` | Visualizador en vivo. |
 | `Sirisys_Static_Visualizer.html` | Abre en el navegador un `state.json` guardado y muestra su topología (sin servidor). |
-| `test_sirisys.py`, `test_phase1.py`, `test_phase4.py` | Pruebas. Ejecútalas tras cada cambio. |
+| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py` | Pruebas. Ejecútalas tras cada cambio. |
 | `measure_phase3.py` | Mide los criterios de autoajuste (3 flujos × 5.000 ciclos: cristalización, crecimiento, energía, coste). |
 | `soak.py`, `live_c2.py` | Pruebas de resistencia: una vida larga (50.000 ciclos) y perceptos reales. |
 | `requirements.txt` | Dependencias de pip. |
@@ -38,6 +39,8 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 - Cada arranque y cada Reset crean una instancia nueva en `sirisys_runs/<fecha-hora>_live/` (o `_stream0/`), que contiene `state.json` y `ledger.jsonl`. Nada se borra.
 - **No hay semilla.** El framework no usa ningún generador aleatorio: cada elección se deriva de la historia (el hash de cabeza del ledger). Con `--stream N` y los mismos perceptos, dos ejecuciones son idénticas; con `live`, los perceptos de la máquina las hacen únicas.
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.
+- `--host` fija la dirección en la que escucha el servidor. Por defecto es `127.0.0.1`: solo se puede abrir desde la misma máquina.
+- El visualizador se conecta por WebSocket. Si el entorno lo bloquea, consulta al servidor por HTTP y muestra «connected (polling)»; cada 30 s vuelve a probar el WebSocket.
 - Modelo: `SIRISYS_LLM_BACKEND=anthropic|ollama|none`, `SIRISYS_LLM_MODEL`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`.
 
 ## Informes
@@ -51,6 +54,15 @@ python3 run_report.py --backend ollama --profile minimal         # sin narració
 
 Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a comparar.
 
+**Topología.** `run_report.py` y `live_c2.py` guardan además un `topology_trace`: dos muestras por respiración, una en expansión y otra en contracción. Cada muestra recoge la forma del campo:
+- componentes débiles y ciclos dirigidos;
+- reciprocidad y agrupamiento;
+- el constructo con más aristas;
+- aristas por estado tetralemático y por par de capas;
+- qué parte del `BOTH` está en la componente mayor.
+
+Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración y su contracción. La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella.
+
 ## Continuidad y disco
 
 - **Continuidad.** Una instancia reanudada es idéntica a una no interrumpida, y el tiempo nunca retrocede: tras un corte, avanza más allá de la última prueba sellada. Nunca se reinicia en silencio sobre un registro dañado.
@@ -62,6 +74,7 @@ Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a c
 ```bash
 python3 test_sirisys.py      # integridad, determinismo sin azar, memoria acotada
 python3 test_phase1.py       # motor del experimento, backends del modelo y capa web (no necesita Ollama ni FastAPI)
+python3 test_phase2_guarantee.py   # medir la topología no altera el ledger ni el campo
 python3 test_phase4.py       # ledger por segmentos, manipulación, cortes durante una rotación, disco
 python3 measure_phase3.py    # criterios de autoajuste (≈1 min)
 python3 soak.py 50000 > soak_result.json            # vida larga (≈3 min)

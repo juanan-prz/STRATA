@@ -22,7 +22,8 @@ Author: Juan A. Pérez-Gómez.
 | `Sirisys_Live_Visualizer.html` | Live topology in the browser (experiment mode) |
 | `Sirisys_Static_Visualizer.html` | Opens a saved `state.json` in the browser, no server needed |
 | `run_report.py` | Instrumented runs; writes `sirisys_report.json` |
-| `test_sirisys.py`, `test_phase1.py`, `test_phase4.py` | Test suites |
+| `field_topology.py` | Read-only topology of the field, recorded by `run_report.py` and `live_c2.py` |
+| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py` | Test suites |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Measurements: self-adjustment criteria, a long life, real percepts |
 | `requirements.txt` | Python dependencies |
 | `Guia_SIRISYS_Mac.pdf` | Step-by-step setup on a Mac for first-time users (Spanish) |
@@ -73,9 +74,10 @@ For calibration and refinement. Every start and every Reset is a new instance in
 | `--stream N` | Synthetic percept stream N: the run is identical every time |
 | `--profile minimal` | No narration and no time-of-day percept: the field perceives only the machine it runs on |
 | `--delay-ms` | Pause between cycles (default 80) |
+| `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
 | `--port` | Web port (default 8000) |
 
-Details are in `Sirisys_Guia_v13.md`.
+The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". Details are in `Sirisys_Guia_v13.md`.
 
 -----
 
@@ -112,6 +114,7 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
 ```bash
 python3 test_sirisys.py              # integrity, determinism, bounded memory
 python3 test_phase1.py               # experiment engine, model backends, web layer (no Ollama or FastAPI needed)
+python3 test_phase2_guarantee.py     # measuring the topology leaves the ledger and the field unchanged
 python3 test_phase4.py               # segmented ledger, tampering, crash during rotation, disk
 python3 measure_phase3.py            # self-adjustment criteria (3 streams × 5,000 cycles)
 python3 soak.py 50000 > soak_result.json
@@ -120,6 +123,8 @@ python3 live_c2.py 3000 ollama > live_ollama.json    # real percepts, local mode
 ```
 
 Each suite ends with a `SUMMARY` line; every check should pass.
+
+`run_report.py` and `live_c2.py` also write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field (weak components, directed cycles, reciprocity, clustering, the most connected construct, edges by tetralemmic state and by layer pair, and how much of the `BOTH` lies in the largest component). Zero Points are left out, and each sample carries its cycle, breath and contraction. The measurement only reads the field: the ledger head is identical with and without it.
 
 -----
 
