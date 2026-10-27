@@ -24,9 +24,9 @@ with contextlib.redirect_stdout(_Null()):
     for c in range(N):
         S.run_cycle(ss, c, narrate=NARRATE, include_hour=HOUR)
         f = ss.field; sizes.append(len(f.constructs))
-        # Topology once per breath (read-only, no seal, no mutation)
-        if c % S.BREATH_PERIOD == 0:
-            topo_trace.append(field_topology.field_topology(f))
+        # Topology once per half-breath (read-only, no seal, no mutation)
+        if c % (S.BREATH_PERIOD // 2) == 0:
+            topo_trace.append(field_topology.field_topology(f, cycle=c, zero_points=set(S.ZERO_POINTS.keys())))
         for n in f.apparents_since(seen):
             born[n] = c
         seen = f.apparents_total

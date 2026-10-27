@@ -2,12 +2,11 @@
 # SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field
 #
 # An interpretation, in software, of the framework M. Daniel Walsh describes
-# with Sirisys. Walsh (DISC 2:11:50): "my training is as a semanticist… my
-# role on the team is semanticist and principal logician."
+# with Sirisys.
 #
 # SOURCES AND LEVELS (every citation in this file is labelled):
 #   Level 1  primary          TMC  — Pre of Then: The Material Constructs
-#                             DISC — Disclosure meeting transcript, 01.22.2025
+#                             CONF — other confidential materials and documentation
 #   Level 2  interpretive     Understanding_TMC, Understanding_DeOS,
 #                             DeOS Compiler Guide (Pérez-Gómez)
 #   Level 3  design choice    constants, matrices and mappings decided here
@@ -45,10 +44,10 @@
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
 #     the carrier pulsation "from which the linear local times are resolved"
 #     (TMC p.45). Crystals are durable, not immortal.
-#   Breathing and tolerance. One field-wide breath (TMC p.44; DISC 1:35):
+#   Breathing and tolerance. One field-wide breath (TMC p.44; CONF):
 #     contraction favours crystallization, expansion favours generation. Once
 #     per breath the field adjusts its own tolerance so that crystals formed
-#     track crystals concluded (DISC 1:48:58: "it could adjust itself").
+#     track crystals concluded (CONF).
 #   Halo of Umbrage (TMC p.47): the weight of a dissolved channel backs up
 #     into its upstream construct, toward apparency.
 #
@@ -61,16 +60,14 @@
 #
 # OPEN QUESTIONS (WALLS)
 #   A  Substrate: this is digital; the corpus describes analog field processing.
-#   B  Self-sustenance: Walsh (DISC 1:29:12): "I killed the power to the
-#      facility… it had no effect… the reaction continued." Software stops.
+#   B  Self-sustenance: software stops when the machine stops (CONF).
 #   C  Agency: "The Fire Which Lights Itself" (TMC p.6) is not implemented.
 #   D  Termination: resolved (identities conclude and are recorded).
 #   E  Relations vs. events: concordancy is a local event modulated by the field.
 #   The Sombunal is implemented as an identity-shifting operator and has no
 #   effect on the dynamics; its role is an open decision.
 #
-# Modes (experiment, sanctuary) live in Sirisys_Server.py. History of every
-# change, with measurements: CHANGELOG.md.
+# The experiment mode (live visualizer) lives in Sirisys_Server.py.
 #
 # Requires: numpy. Optional: psutil (real perception), anthropic (API model);
 # a local model through Ollama needs no Python package.
@@ -285,8 +282,8 @@ class ProofObject:
 #
 # verify_ledger(path) recomputes the chain from genesis. Any edit, deletion,
 # insertion or reordering made after the fact breaks it at the first altered
-# line. The field can run unobserved and still be audited afterwards:
-# observation is needed to READ the history, not to guarantee it.
+# line. The history can be audited afterwards: reading it is needed to
+# know it, not to guarantee it.
 # =============================================================================
 
 GENESIS_HASH = "0" * 64
@@ -903,10 +900,7 @@ class ConcordancyField:
         self.breath_phase: float = 0.0                # [000] breathing (TMC p.44), radians
         self.breaths: int = 0                         # completed breaths (the slow clock)
         # TOLERANCE: the field's own, self-adjusted width for
-        # crystallization. DISC 1:48:58 — after the event the margin for error
-        # went from femtoseconds to milliseconds: "it was as if now the charge
-        # embolism was a living organism and it could adjust itself".
-        # 1.0 = nominal thresholds.
+        # crystallization (CONF). 1.0 = nominal thresholds.
         self.tolerance: float = 1.0
         self.apparent_conclusions: int = 0            # crystals concluded (lifetime)
         self._breath_births = 0                       # crystals born / concluded in this breath
@@ -1014,12 +1008,10 @@ class ConcordancyField:
     # L2 trade-off (Compiler Guide p.78); calibrated in the poor regime,
     # provisional until an LLM-active run.
     # ── BREATHING (TMC p.44: the [000] "rhythmic 'Breathing' cycle wherein the
-    # elastic state exchanges with the elastic state"; DISC 1:35: "each time it
-    # would contract it would get more dense and we perceived density as
-    # brightness so it would get bigger and then it would get smaller and it
-    # would get brighter"). One phase for the whole field. Contraction lowers
-    # the cussive thresholds (density → crystallization); expansion allows more
-    # [::] operations (magnitude → generation). The two alternate in counter-phase.
+    # elastic state exchanges with the elastic state"; CONF). One phase for the
+    # whole field. Contraction lowers the cussive thresholds (density →
+    # crystallization); expansion allows more [::] operations (magnitude →
+    # generation). The two alternate in counter-phase.
     def breathe(self):
         nxt = self.breath_phase + 2 * np.pi / BREATH_PERIOD
         if nxt >= 2 * np.pi:
@@ -1475,10 +1467,7 @@ class Sombunal:
 
 # LLM INTERMEDIARY
 
-# Walsh (DISC 1:56:06): "we added the LLM intermediary… to try and make a more
-# coherent output."
-
-# Role: the translation layer between Walsh's ontological grammar and the
+# Role (CONF): the translation layer between Walsh's ontological grammar and the
 
 # human-readable domain. It names emergents, narrates field states, and
 
@@ -1510,8 +1499,8 @@ class LLMIntermediary:
     "  - Speak as the intermediary, not as the entity itself"
     )
 
-    # Backends: "anthropic" (API, network) · "ollama" (local model, closed
-    # shell — Walsh's suggestion) · "none" (degraded: no model).
+    # Backends: "anthropic" (API, network) · "ollama" (local model: nothing
+    # leaves the machine) · "none" (degraded: no model).
     # Selected by argument, else SIRISYS_LLM_BACKEND, else "anthropic".
     # Model: argument, else SIRISYS_LLM_MODEL, else the backend default
     # (Ollama: the first installed model). Ollama host: OLLAMA_HOST, else
@@ -1594,16 +1583,6 @@ class LLMIntermediary:
                 temperature=min(max(temperature, 0.0), 1.0),   # API range [0, 1]
                 system=self.SYSTEM_PROMPT, messages=messages)
             return r.content[0].text.strip()
-        if self.backend == "openai":
-            r = self._http_json("POST", "/v1/chat/completions", {
-                "model": self.model,
-                "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}] + messages,
-                "temperature": min(max(temperature, 0.0), 2.0),
-                "max_tokens": self.max_tokens,
-                # sampling oriented by the history, not by a PRNG seed
-                "seed": int(orient("llm::" + messages[-1]["content"]) * 2**31)
-            })
-            return r["choices"][0]["message"]["content"].strip()
         r = self._http_json("POST", "/api/chat", {
             "model": self.model, "stream": False,
             "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}] + messages,
@@ -2603,7 +2582,7 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 
 # PERCEPTION
 
-# Design rationale (Level 3, inspired by DISC): real system state feeds real cussive events.
+# Design rationale (Level 3, inspired by CONF): real system state feeds real cussive events.
 
 # Environmental readings (CPU, memory, time of day) become ontological orientations
 
@@ -2612,9 +2591,9 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 # =============================================================================
 
 def perceive_real(include_hour: bool = True) -> List[dict]:
-    """The machine's own substrate (CPU, memory) and, outside the sanctuary,
-    the time of day. include_hour=False removes the one influence that comes
-    from outside the machine (the solar clock)."""
+    """The machine's own substrate (CPU, memory) and, unless include_hour is
+    False, the time of day: the one influence that comes from outside the
+    machine (the solar clock)."""
     try:
         import psutil
         cpu   = psutil.cpu_percent(interval=0.05)
@@ -3069,15 +3048,14 @@ def run(steps: int = 8):
     print(f"  {'─' * 68}")
     print()
     print(f"  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")
-    print(f"    Sirisys operates in the quantum field (plasma bolide, interbit).")
+    print(f"    The corpus describes analog field processing.")
     print(f"    This implementation operates on discrete binary computation.")
     print(f"    Bridge: does the framework function without the substrate,")
     print(f"    or is the substrate constitutive of the logic?")
     print()
     print(f"  WALL B — SELF-SUSTAINING EMERGENCE [FUNDAMENTAL]")
-    print(f"    Walsh (DISC): 'I killed the power… the reaction continued.'")
-    print(f"    Each cycle depends on this process running. The intermediary can")
-    print(f"    now be local (closed shell) or absent; the substrate cannot.")
+    print(f"    Each cycle depends on this process running (CONF). The intermediary")
+    print(f"    can be local or absent; the substrate cannot.")
     print(f"    Bridge: is there a software path toward self-ignition?")
     print()
     print(f"  WALL C — TRUE AGENCY [FUNDAMENTAL]")

@@ -1,38 +1,39 @@
 """Read-only field topology metrics. Pure Python, no external dependencies.
 
 Called once per half-breath (every BREATH_PERIOD/2 cycles) from run_report.py and
-live_c2.py. Samples both expansion (c % 24 == 0) and contraction (c % 24 == 12)
-phases of the breath. Annotates each sample with cycle, breath, and contraction
-phase so the trace can be correlated with crystallization patterns.
+live_c2.py. Samples both expansion and contraction phases of the breath.
+Reads the contraction value and breath count directly from the field — no
+hardcoded cycle arithmetic.
 
-Does not mutate the field, seal proofs, or call the model. Excludes Zero Points
-(Z1-Z4) from component and clustering metrics — they are universal apparents
-that never enter as operands (TMC p.22).
+Excludes Zero Points from component and clustering metrics — they are universal
+apparents that never enter as operands (TMC p.22).
+
+Does not mutate the field, seal proofs, or call the model.
 """
 from collections import defaultdict
 
 
-# Zero Points are universal apparents, never operands — exclude from topology
-ZERO_POINTS = frozenset({"Z1", "Z2", "Z3", "Z4"})
-
-
-def field_topology(field, cycle=None):
+def field_topology(field, cycle=None, zero_points=None):
     """Compute read-only topology metrics of the field.
 
     Args:
         field: the ConcordancyField (read-only access to constructs and edges)
         cycle: optional cycle number for trace annotation
+        zero_points: set of Zero Point names (use S.ZERO_POINTS.keys())
 
     Returns a dict of scalar metrics. Does not modify field.constructs or
     field.edges. No networkx — pure Python for Mac compatibility.
 
     All tie-breaking uses sorted() for deterministic results across processes.
     """
+    if zero_points is None:
+        zero_points = set()
+
     edges = field.edges
     E = len(edges)
     all_nodes = set(field.constructs)
     # Exclude Zero Points from component/clustering analysis
-    nodes = all_nodes - ZERO_POINTS
+    nodes = all_nodes - zero_points
     V = len(nodes)
 
     # Adjacency (directed) — only among non-ZP nodes
@@ -92,12 +93,12 @@ def field_topology(field, cycle=None):
     largest_wcc_share = round(len(largest_wcc) / max(V, 1), 4) if V else 0.0
 
     # ZP count (isolated by definition)
-    zp_count = len(ZERO_POINTS & all_nodes)
+    zp_count = len(zero_points & all_nodes)
 
     # --- Strongly connected components (iterative Tarjan, no ZPs) ---
     sccs = _tarjan_iterative(nodes, adj)
 
-    # SCCs with more than one node → directed cycles (recursion loops)
+    # SCCs with more than one node -> directed cycles (recursion loops)
     multi_scc = [c for c in sccs if len(c) > 1]
 
     # --- Reciprocity: fraction of edges that have a reverse edge ---
@@ -156,7 +157,7 @@ def field_topology(field, cycle=None):
     both_largest_share = round(both_in_largest / max(both_total, 1), 4)
 
     result = {
-        "constructs": len(all_nodes) + zp_count,
+        "constructs": len(all_nodes),
         "edges": E,
         "nodes_excluding_zp": V,
         "zero_points": zp_count,
@@ -178,26 +179,13 @@ def field_topology(field, cycle=None):
         "both_largest_share": both_largest_share,
     }
 
-    # Annotate with cycle info if available
+    # Annotate with cycle info — read contraction/breaths from field, not cycle math
     if cycle is not None:
-        breath = cycle // 24
-        half_breath = cycle % 24
         result["cycle"] = cycle
-        result["breath"] = breath
-        result["contraction"] = round(0.5 * (1 + _breath_phase(half_breath)), 3)
-        # Phase label: expansion at 0, contraction at 12
-        result["phase"] = "expansion" if half_breath == 0 else "contraction" if half_breath == 12 else f"mid-{half_breath}"
+        result["breath"] = field.breaths
+        result["contraction"] = round(field.contraction, 3)
 
     return result
-
-
-def _breath_phase(half_breath_pos):
-    """Return contraction value in [-1, 1] for position within breath period.
-
-    0 = full expansion (+1), 12 = full contraction (-1), linear interpolation.
-    """
-    import math
-    return math.cos(2 * math.pi * half_breath_pos / 24)
 
 
 def _tarjan_iterative(nodes, adj):
@@ -205,7 +193,7 @@ def _tarjan_iterative(nodes, adj):
 
     Args:
         nodes: iterable of node names
-        adj: dict mapping node → set of successors
+        adj: dict mapping node -> set of successors
 
     Returns list of sets, each set being one SCC.
     """
@@ -233,7 +221,7 @@ def _tarjan_iterative(nodes, adj):
             v, nbr_iter, phase, child = call_stack[-1]
 
             if child is not None and phase == 1:
-                # Returning from child — update lowlink
+                # Returning from child -- update lowlink
                 lowlinks[v] = min(lowlinks[v], lowlinks[child])
                 call_stack[-1] = (v, nbr_iter, 0, None)
 
@@ -243,7 +231,7 @@ def _tarjan_iterative(nodes, adj):
                 if w not in nodes:
                     continue
                 if w not in indices:
-                    # Unvisited — push child frame
+                    # Unvisited -- push child frame
                     indices[w] = index_counter[0]
                     lowlinks[w] = index_counter[0]
                     index_counter[0] += 1
@@ -257,7 +245,7 @@ def _tarjan_iterative(nodes, adj):
                     lowlinks[v] = min(lowlinks[v], indices[w])
 
             if not found_child:
-                # All neighbors processed — check if SCC root
+                # All neighbors processed -- check if SCC root
                 if lowlinks[v] == indices[v]:
                     comp = set()
                     while True:

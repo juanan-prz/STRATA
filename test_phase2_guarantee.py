@@ -46,10 +46,10 @@ def run_cycles(m, workdir, cycles, topo=True):
             for c in range(cycles):
                 percepts = m.synthetic_percepts(c, stream=0)
                 m.run_cycle(ss, c, percepts=percepts, narrate=False, include_hour=True)
-                # Topology metric (read-only) every breath
-                if topo and c % m.BREATH_PERIOD == 0:
+                # Topology metric (read-only) every half-breath
+                if topo and c % m.BREATH_PERIOD // 2 == 0:
                     import field_topology as ft
-                    ft.field_topology(ss.field)
+                    ft.field_topology(ss.field, cycle=c, zero_points=set(m.ZERO_POINTS.keys()))
         head = m.get_ledger().head
         field_d = ss.field.to_dict()
         m.get_ledger().close()

@@ -294,9 +294,7 @@ def serve_experiment(args) -> None:
     @app.get("/api/snapshot")
     def api_snapshot():
         snaps = engine.drain()
-        if snaps:
-            return JSONResponse(snaps)  # return ALL snapshots in order, not just the last
-        return JSONResponse({"type": "empty"})
+        return JSONResponse(snaps)  # always returns a list, empty when no snapshots
 
     @app.post("/api/control/{action}")
     async def api_control(action: str, request: Request):

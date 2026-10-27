@@ -284,12 +284,9 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
-        # Topology once per half-breath: expansion (c%24==0) and contraction (c%24==12)
-        if cyc % 12 == 0 and cyc % S.BREATH_PERIOD == 0:
-            topo = field_topology.field_topology(field, cycle=cyc)
-            topo_trace.append(topo)
-        elif cyc % 12 == 0:
-            topo = field_topology.field_topology(field, cycle=cyc)
+        # Topology once per half-breath
+        if cyc % (S.BREATH_PERIOD // 2) == 0:
+            topo = field_topology.field_topology(field, cycle=cyc, zero_points=set(S.ZERO_POINTS.keys()))
             topo_trace.append(topo)
         if m["new_apparents"] > 0:
             promoted += [str(a) for a in field.apparents_since(field.apparents_total - m["new_apparents"])]

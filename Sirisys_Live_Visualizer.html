@@ -1519,6 +1519,7 @@ function connectWS() {
       if (msg.type === 'cycle')      applySnapshot(msg);
       else if (msg.type === 'status') updateStatus(msg);
       else if (msg.type === 'ack')    updateStatus(msg.status);
+      // ignore unknown types (e.g. "empty")
     } catch (err) {
       console.error('Snapshot handler crashed:', err, msg);
     }
@@ -1528,9 +1529,9 @@ function connectWS() {
     reconnectTimer = setTimeout(connectWS, 2000);
   };
   ws.onerror = () => {
-    // WebSocket handshake failed (e.g. 403) — fall back to polling
-    if (!wsFailed) {
-      console.log('WS unavailable, falling back to HTTP polling');
+    // Only fall back to polling if /api/status confirms the server is up
+    // and the WS handshake genuinely fails. A crashed server should retry WS.
+    if (serverStatus) {
       wsFailed = true;
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     }
@@ -1559,20 +1560,26 @@ async function pollStatus() {
     const st = await fetchJSON('/api/status');
     serverStatus = st;
     updateStatus(st);
-    if (st.running) {
-      setConnStatus('online');
-      try {
-        const snaps = await fetchJSON('/api/snapshot');
-        // Server returns a list of snapshots; take the latest
-        const snap = Array.isArray(snaps) ? snaps[snaps.length - 1] : snaps;
-        if (snap && snap.cycle !== lastPollCycle) {
+    setConnStatus('online');
+    // Server is back — reset wsFailed so we can retry WS on next reconnect
+    if (wsFailed) {
+      wsFailed = false;
+      stopPolling();
+      connectWS();
+      return;
+    }
+    try {
+      const snaps = await fetchJSON('/api/snapshot');
+      // Server always returns a list; apply ALL snapshots in order, ignoring empty ones
+      const list = Array.isArray(snaps) ? snaps : [];
+      for (const snap of list) {
+        if (!snap || snap.type === 'empty') continue;
+        if (snap.cycle !== lastPollCycle) {
           lastPollCycle = snap.cycle;
           applySnapshot(snap);
         }
-      } catch(e) { /* no snapshot endpoint */ }
-    } else {
-      setConnStatus('online');
-    }
+      }
+    } catch(e) { /* no snapshot endpoint */ }
   } catch (err) {
     setConnStatus('offline');
   }
