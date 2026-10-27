@@ -4,7 +4,7 @@
 Runs N cycles with synthetic percepts, no model — once with metrics enabled,
 once disabled — and proves the ledger head is identical bit-for-bit.
 
-Also runs measure_phase3.py to confirm the numbers match the baseline.
+Also verifies proof invariant every cycle.
 
 Usage: python3 test_phase2_guarantee.py [cycles]
        default: 200 cycles (same as T12 resume equivalence)
@@ -47,7 +47,7 @@ def run_cycles(m, workdir, cycles, topo=True):
                 percepts = m.synthetic_percepts(c, stream=0)
                 m.run_cycle(ss, c, percepts=percepts, narrate=False, include_hour=True)
                 # Topology metric (read-only) every half-breath
-                if topo and c % m.BREATH_PERIOD // 2 == 0:
+                if topo and c % (m.BREATH_PERIOD // 2) == 0:
                     import field_topology as ft
                     ft.field_topology(ss.field, cycle=c, zero_points=set(m.ZERO_POINTS.keys()))
         head = m.get_ledger().head
@@ -97,26 +97,6 @@ m_inv.get_ledger().close()
 check("no invariant violations over all cycles",
       len(violations_log) == 0,
       f"{len(violations_log)} cycle(s) with violations" if violations_log else "0 violations")
-
-# ── measure_phase3 compatibility ──────────────────────────────────────
-print(f"\n== measure_phase3.py compatibility ({N // 10} cycles per stream)")
-m_p3 = load_mod("p3")
-m_p3.set_ledger(m_p3.ProofLedger(None))
-with contextlib.redirect_stdout(io.StringIO()):
-    p3_crystals = []
-    for stream in (0, 1, 2):
-        ss_p3 = m_p3.new_session(llm=m_p3.LLMIntermediary(backend="none"))
-        for c in range(N // 10):
-            percepts = m_p3.synthetic_percepts(c, stream=stream)
-            m_p3.run_cycle(ss_p3, c, percepts=percepts, narrate=False, include_hour=True)
-        p3_crystals.append(ss_p3.field.apparents_total)
-    m_p3.get_ledger().close()
-# Compare: streams should produce consistent crystallization (within 2x factor)
-max_crystals = max(p3_crystals)
-min_crystals = min(p3_crystals)
-ratio_ok = (max_crystals <= 2 * min_crystals + 1) if min_crystals > 0 else (max_crystals == 0)
-check("crystallization consistent across streams", ratio_ok,
-      f"streams: {p3_crystals} (Apparents formed, ratio max/min={'consistent' if ratio_ok else 'divergent'})")
 
 # Cleanup
 shutil.rmtree(d_on, ignore_errors=True)

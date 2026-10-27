@@ -1484,6 +1484,7 @@ let pollInterval   = 300;
 let lastPollCycle  = -1;
 let serverStatus   = null;
 let wsFailed       = false;       // true after WS connection fails → use polling
+let lastWsRetry    = 0;           // timestamp of last WS retry attempt (30s cooldown)
 
 function setConnStatus(state) {
   const dot = document.getElementById('conn-dot');
@@ -1510,6 +1511,8 @@ function connectWS() {
     transport = 'ws';
     setConnStatus('online');
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    // WS reconnected — stop any concurrent polling (dual transport race)
+    stopPolling();
   };
   ws.onmessage = ev => {
     let msg;
@@ -1533,6 +1536,7 @@ function connectWS() {
     // and the WS handshake genuinely fails. A crashed server should retry WS.
     if (serverStatus) {
       wsFailed = true;
+      lastWsRetry = Date.now();  // mark retry time for 30s cooldown
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     }
     startPolling();
@@ -1561,10 +1565,11 @@ async function pollStatus() {
     serverStatus = st;
     updateStatus(st);
     setConnStatus('online');
-    // Server is back — reset wsFailed so we can retry WS on next reconnect
-    if (wsFailed) {
-      wsFailed = false;
+    // Retry WebSocket after 30s cooldown (don't spam connect attempts)
+    if (wsFailed && Date.now() - lastWsRetry > 30000) {
+      lastWsRetry = Date.now();
       stopPolling();
+      wsFailed = false;
       connectWS();
       return;
     }
