@@ -1475,28 +1475,44 @@ function applySnapshot(snap) {
   if (snap.question)  appendLog(snap.cycle, 'Sombunal ?  ' + snap.question, 'sombunal');
 }
 
-let ws = null;
+// ─── Hybrid transport: WebSocket (preferred) → HTTP polling fallback ───
+let transport      = 'ws';        // 'ws' | 'poll'
+let ws             = null;
 let reconnectTimer = null;
+let pollingTimer   = null;
+let pollInterval   = 300;
+let lastPollCycle  = -1;
+let serverStatus   = null;
+let wsFailed       = false;       // true after WS connection fails → use polling
+let lastWsRetry    = 0;           // timestamp of last WS retry attempt (30s cooldown)
 
 function setConnStatus(state) {
   const dot = document.getElementById('conn-dot');
   const txt = document.getElementById('conn-text');
   dot.className = 'dot ' + state;
-  txt.textContent = ({
-    online:     'connected',
-    offline:    'disconnected - retrying',
-    connecting: 'connecting...',
-  })[state] || state;
+  const label = state === 'online'
+    ? (transport === 'ws' ? 'connected' : 'connected (polling)')
+    : ({ offline: 'disconnected - retrying', connecting: 'connecting...' })[state] || state;
+  txt.textContent = label;
 }
 
-function connect() {
+// ── WebSocket transport ──────────────────────────────────────────────────
+function connectWS() {
+  if (wsFailed) { startPolling(); return; }
   setConnStatus('connecting');
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(proto + '//' + location.host + '/ws');
+  try {
+    ws = new WebSocket(proto + '//' + location.host + '/ws');
+  } catch(e) {
+    wsFailed = true; startPolling(); return;
+  }
 
   ws.onopen = () => {
+    transport = 'ws';
     setConnStatus('online');
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    // WS reconnected — stop any concurrent polling (dual transport race)
+    stopPolling();
   };
   ws.onmessage = ev => {
     let msg;
@@ -1506,20 +1522,89 @@ function connect() {
       if (msg.type === 'cycle')      applySnapshot(msg);
       else if (msg.type === 'status') updateStatus(msg);
       else if (msg.type === 'ack')    updateStatus(msg.status);
+      // ignore unknown types (e.g. "empty")
     } catch (err) {
       console.error('Snapshot handler crashed:', err, msg);
     }
   };
   ws.onclose = () => {
     setConnStatus('offline');
-    reconnectTimer = setTimeout(connect, 2000);
+    reconnectTimer = setTimeout(connectWS, 2000);
   };
-  ws.onerror = () => { };
+  ws.onerror = () => {
+    // Only fall back to polling if /api/status confirms the server is up
+    // and the WS handshake genuinely fails. A crashed server should retry WS.
+    if (serverStatus) {
+      wsFailed = true;
+      lastWsRetry = Date.now();  // mark retry time for 30s cooldown
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    }
+    startPolling();
+  };
 }
 
+// ── HTTP polling transport ───────────────────────────────────────────────
+async function fetchJSON(path, opts) {
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+function startPolling() {
+  stopPolling();
+  transport = 'poll';
+  pollStatus();
+}
+
+function stopPolling() {
+  if (pollingTimer) { clearTimeout(pollingTimer); pollingTimer = null; }
+}
+
+async function pollStatus() {
+  try {
+    const st = await fetchJSON('/api/status');
+    serverStatus = st;
+    updateStatus(st);
+    setConnStatus('online');
+    // Retry WebSocket after 30s cooldown (don't spam connect attempts)
+    if (wsFailed && Date.now() - lastWsRetry > 30000) {
+      lastWsRetry = Date.now();
+      stopPolling();
+      wsFailed = false;
+      connectWS();
+      return;
+    }
+    try {
+      const snaps = await fetchJSON('/api/snapshot');
+      // Server always returns a list; apply ALL snapshots in order, ignoring empty ones
+      const list = Array.isArray(snaps) ? snaps : [];
+      for (const snap of list) {
+        if (!snap || snap.type === 'empty') continue;
+        if (snap.cycle !== lastPollCycle) {
+          lastPollCycle = snap.cycle;
+          applySnapshot(snap);
+        }
+      }
+    } catch(e) { /* no snapshot endpoint */ }
+  } catch (err) {
+    setConnStatus('offline');
+  }
+  const delay = serverStatus && serverStatus.running
+    ? pollInterval
+    : Math.min(pollInterval * 3, 2000);
+  pollingTimer = setTimeout(pollStatus, delay);
+}
+
+// ── Unified action dispatch ──────────────────────────────────────────────
 function sendAction(action, extra) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(Object.assign({ action }, extra || {})));
+  const body = Object.assign({ action }, extra || {});
+  if (transport === 'ws' && ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(body));
+  } else {
+    fetch(`/api/control/${action}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    }).catch(e => console.error('Control failed:', e));
   }
 }
 
@@ -1590,7 +1675,7 @@ document.getElementById('speed-slider').oninput = e => {
 };
 
 resizeCanvas();
-connect();
+connectWS();
 requestAnimationFrame(animatePulses);
 </script>
 

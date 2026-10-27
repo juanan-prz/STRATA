@@ -68,6 +68,8 @@ def parse_args(argv=None):
     ap.add_argument("--delay-ms", type=int, default=80, help="pause between cycles")
     ap.add_argument("--profile", choices=sorted(PROFILES), default="standard",
                     help="'minimal': no narration and no time-of-day percept")
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="bind address (default: 127.0.0.1 loopback only)")
     ap.add_argument("--port", type=int, default=8000)
     return ap.parse_args(argv)
 
@@ -261,7 +263,7 @@ def serve_experiment(args) -> None:
     import asyncio
     from contextlib import asynccontextmanager
     from importlib.util import find_spec
-    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
     from fastapi.responses import HTMLResponse, JSONResponse
     import uvicorn
 
@@ -289,9 +291,20 @@ def serve_experiment(args) -> None:
     def api_status():
         return JSONResponse(engine.status())
 
+    @app.get("/api/snapshot")
+    def api_snapshot():
+        snaps = engine.drain()
+        return JSONResponse(snaps)  # always returns a list, empty when no snapshots
+
     @app.post("/api/control/{action}")
-    async def api_control(action: str):
-        return JSONResponse(engine.control(action))
+    async def api_control(action: str, request: Request):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        # Remove 'action' from body to avoid "got multiple values for argument 'action'"
+        body.pop("action", None)
+        return JSONResponse(engine.control(action, **body))
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
@@ -332,7 +345,7 @@ def serve_experiment(args) -> None:
     print(f"\n  SIRISYS — experiment · http://127.0.0.1:{args.port}"
           f"\n  framework {S.__sirisys_file__} · run {engine.run_dir.name}"
           f"\n  {'cycling' if engine.running else 'paused — press Play'} · Ctrl+C to stop\n")
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

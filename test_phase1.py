@@ -124,7 +124,7 @@ if old_fw.exists():
 stub = Path(tempfile.mkdtemp())
 (stub / "fastapi").mkdir(); (stub / "websockets").mkdir(); (stub / "websockets" / "__init__.py").write_text("")
 (stub / "fastapi" / "__init__.py").write_text(
-    "class WebSocketDisconnect(Exception): pass\nclass WebSocket: pass\n"
+    "class WebSocketDisconnect(Exception): pass\nclass WebSocket: pass\nclass Request: pass\nclass FastAPI:\n def __init__(self,title=None,lifespan=None): self.routes={}; self.lifespan=lifespan\n"
     "class FastAPI:\n def __init__(self,title=None,lifespan=None): self.routes={}; self.lifespan=lifespan\n"
     " def _r(self,k):\n  def d(f): self.routes[k]=f; return f\n  return d\n"
     " def get(self,p,**k): return self._r(('GET',p))\n def post(self,p,**k): return self._r(('POST',p))\n"
@@ -143,7 +143,9 @@ with contextlib.redirect_stdout(io.StringIO()):
     srv.serve_experiment(srv.parse_args(['--delay-ms','0']))
 R = uvicorn.APP.routes
 async def go():
-    await R[('POST','/api/control/{{action}}')]('play')
+    class MockReq:
+        async def json(self): return dict()
+    await R[('POST','/api/control/{{action}}')]('play', MockReq())
     msgs = []
     class WS:
         n = 0
