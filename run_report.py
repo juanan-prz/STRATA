@@ -398,7 +398,7 @@ def main():
                     help="synthetic: reproducible stream per seed; live: this machine")
     ap.add_argument("--profile", choices=sorted(PROFILES), default="standard",
                     help="'minimal': no narration and no time-of-day percept")
-    ap.add_argument("--backend", choices=["anthropic", "ollama", "none"], default=None,
+    ap.add_argument("--backend", choices=["anthropic", "ollama", "openai", "none"], default=None,
                     help="LLM backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
     args = ap.parse_args()
 
@@ -438,6 +438,9 @@ def main():
             log("  Install the package and set the key, then re-run:")
             log("      pip3 install anthropic")
             log('      export ANTHROPIC_API_KEY="sk-ant-..."')
+        elif probe.backend == "openai":
+            log(f"  Ensure llama.cpp (or OpenAI-compatible server) is running at {probe.host}")
+            log("  and serving models on /v1/models — then re-run.")
         else:
             log("  Backend 'none' selected: the run uses no model.")
 

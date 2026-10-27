@@ -84,8 +84,14 @@ with contextlib.redirect_stdout(io.StringIO()):
 a._client = type("Cl", (), {"messages": FakeMessages()})(); a._available = True
 a.question_sombunal(0.3)
 check("anthropic temperature clamped to [0, 1] (was 1.10)", a._client.messages.kw["temperature"] == 1.0)
+# openai backend is now valid — should NOT raise ValueError
+# It may be available (llama.cpp running) or degraded (no server)
+with contextlib.redirect_stdout(io.StringIO()):
+    o = S.LLMIntermediary(backend="openai")
+check("openai backend accepted", o.backend == "openai")
+# unknown backend still refused
 try:
-    S.LLMIntermediary(backend="openai"); bad = False
+    S.LLMIntermediary(backend="nonexistent"); bad = False
 except ValueError:
     bad = True
 check("unknown backend refused", bad)

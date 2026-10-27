@@ -1528,6 +1528,9 @@ class LLMIntermediary:
         host             = host or os.environ.get("OLLAMA_HOST") or os.environ.get("OPENAI_BASE_URL")
         if not host:
             host = "http://127.0.0.1:8080" if self.backend == "openai" else "http://127.0.0.1:11434"
+        # Strip trailing /v1 (OPENAI_BASE_URL often includes it) to avoid /v1/v1/… duplication
+        if self.backend == "openai" and host.endswith("/v1"):
+            host = host[:-3]
         self.host        = (host if host.startswith("http") else "http://" + host).rstrip("/")
         self.max_tokens  = max_tokens
         self.history     = history or []
@@ -1616,6 +1619,8 @@ class LLMIntermediary:
                 "messages": [{"role": "system", "content": self.SYSTEM_PROMPT}] + messages,
                 "temperature": min(max(temperature, 0.0), 2.0),
                 "max_tokens": self.max_tokens,
+                # sampling oriented by the history, not by a PRNG seed
+                "seed": int(orient("llm::" + messages[-1]["content"]) * 2**31)
             })
             return r["choices"][0]["message"]["content"].strip()
         r = self._http_json("POST", "/api/chat", {

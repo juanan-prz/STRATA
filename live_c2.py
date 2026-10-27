@@ -1,5 +1,5 @@
 """Real percepts (this machine), measured over a long life.
-Usage: python3 live_c2.py [cycles] [backend: none|ollama|anthropic] [profile: standard|minimal]
+Usage: python3 live_c2.py [cycles] [backend: none|ollama|openai|anthropic] [profile: standard|minimal]
 Defaults: 3000 cycles, no model, standard profile."""
 import sys, io, json, time, contextlib
 from pathlib import Path
