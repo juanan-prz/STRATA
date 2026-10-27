@@ -236,6 +236,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     clock, field, conc, cuss = ss.clock, ss.field, ss.concordancy, ss.cussive
 
     trace, percepts, promoted, errors, topo_trace = [], Counter(), [], [], []
+    genealogy, zero_points = field_topology.Genealogy(), set(S.ZERO_POINTS.keys())
     born_names, total_closures = [], 0
     prev = set(field.constructs)
     birth, lifespans = {n: 0 for n in prev}, []
@@ -284,10 +285,11 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
-        # Topology once per half-breath
+        # Read-only: genealogy every cycle, topology once per half-breath
+        genealogy.update(conc, cyc, field)
         if cyc % (S.BREATH_PERIOD // 2) == 0:
-            topo = field_topology.field_topology(field, cycle=cyc, zero_points=set(S.ZERO_POINTS.keys()))
-            topo_trace.append(topo)
+            topo_trace.append(field_topology.field_topology(
+                field, cycle=cyc, zero_points=zero_points, genealogy=genealogy))
         if m["new_apparents"] > 0:
             promoted += [str(a) for a in field.apparents_since(field.apparents_total - m["new_apparents"])]
 

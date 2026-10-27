@@ -14,6 +14,7 @@ PROFILE = sys.argv[3] if len(sys.argv) > 3 else "standard"
 NARRATE, HOUR = (False, False) if PROFILE == "minimal" else (True, True)
 S.set_ledger(S.ProofLedger(None))
 born, durable, flicker, seen, sizes, topo_trace = {}, [], 0, 0, [], []
+genealogy, zero_points = field_topology.Genealogy(), set(S.ZERO_POINTS.keys())
 t0 = time.time()
 # Output is discarded, not buffered, so memory measures the field alone.
 class _Null:
@@ -24,9 +25,11 @@ with contextlib.redirect_stdout(_Null()):
     for c in range(N):
         S.run_cycle(ss, c, narrate=NARRATE, include_hour=HOUR)
         f = ss.field; sizes.append(len(f.constructs))
-        # Topology once per half-breath (read-only, no seal, no mutation)
+        # Read-only: genealogy every cycle, topology once per half-breath
+        genealogy.update(ss.concordancy, c, f)
         if c % (S.BREATH_PERIOD // 2) == 0:
-            topo_trace.append(field_topology.field_topology(f, cycle=c, zero_points=set(S.ZERO_POINTS.keys())))
+            topo_trace.append(field_topology.field_topology(
+                f, cycle=c, zero_points=zero_points, genealogy=genealogy))
         for n in f.apparents_since(seen):
             born[n] = c
         seen = f.apparents_total

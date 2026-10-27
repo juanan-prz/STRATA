@@ -59,7 +59,9 @@ Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a c
 - reciprocidad y agrupamiento;
 - el constructo con más aristas;
 - aristas por estado tetralemático y por par de capas;
-- qué parte del `BOTH` está en la componente mayor.
+- qué parte del `BOTH` está en la componente mayor;
+- la profundidad de cada conflicto, que el campo limita en el umbral Adsurdic;
+- la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, preguntas).
 
 Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración y su contracción. La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella.
 
@@ -74,7 +76,7 @@ Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración y s
 ```bash
 python3 test_sirisys.py      # integridad, determinismo sin azar, memoria acotada
 python3 test_phase1.py       # motor del experimento, backends del modelo y capa web (no necesita Ollama ni FastAPI)
-python3 test_phase2_guarantee.py   # medir la topología no altera el ledger ni el campo
+python3 test_phase2_guarantee.py   # medir topología y profundidad no altera el ledger ni el campo
 python3 test_phase4.py       # ledger por segmentos, manipulación, cortes durante una rotación, disco
 python3 measure_phase3.py    # criterios de autoajuste (≈1 min)
 python3 soak.py 50000 > soak_result.json            # vida larga (≈3 min)

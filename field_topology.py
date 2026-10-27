@@ -8,18 +8,29 @@ hardcoded cycle arithmetic.
 Excludes Zero Points from component and clustering metrics — they are universal
 apparents that never enter as operands (TMC p.22).
 
+Two depth measures:
+- conflict depth: for each conflict construct, the deepest conflict recursion
+  on its edges, the quantity the framework caps at the Adsurdic threshold
+  (TMC p.41);
+- genealogical depth (Genealogy): how many [::] generations separate a
+  construct from what the field did not produce itself (percepts, anchors,
+  questions), for "Depth implies recursive delay from origin"
+  (Understanding_TMC p.72).
+
 Does not mutate the field, seal proofs, or call the model.
 """
 from collections import defaultdict
 
 
-def field_topology(field, cycle=None, zero_points=None):
+def field_topology(field, cycle=None, zero_points=None, genealogy=None):
     """Compute read-only topology metrics of the field.
 
     Args:
         field: the ConcordancyField (read-only access to constructs and edges)
         cycle: optional cycle number for trace annotation
         zero_points: set of Zero Point names (use S.ZERO_POINTS.keys())
+        genealogy: optional Genealogy kept up to date every cycle; adds the
+            genealogical depth of the constructs by layer
 
     Returns a dict of scalar metrics. Does not modify field.constructs or
     field.edges. No networkx — pure Python for Mac compatibility.
@@ -156,6 +167,19 @@ def field_topology(field, cycle=None, zero_points=None):
     # Proportion of BOTH edges that live in the largest component
     both_largest_share = round(both_in_largest / max(both_total, 1), 4)
 
+    # --- Conflict depth (deepest conflict recursion on each conflict's edges) ---
+    edge_depth = defaultdict(int)
+    for e in edges:
+        d = getattr(e, "concordancy_depth", 0)
+        if d > edge_depth[e.src]:
+            edge_depth[e.src] = d
+        if d > edge_depth[e.tgt]:
+            edge_depth[e.tgt] = d
+    conflict_hist = defaultdict(int)
+    for n in sorted(nodes):
+        if getattr(field.constructs[n], "conflict", False):
+            conflict_hist[edge_depth[n]] += 1
+
     result = {
         "constructs": len(all_nodes),
         "edges": E,
@@ -177,7 +201,12 @@ def field_topology(field, cycle=None, zero_points=None):
         "both_total": both_total,
         "both_in_largest_wcc": both_in_largest,
         "both_largest_share": both_largest_share,
+        "conflict_constructs": sum(conflict_hist.values()),
+        "conflict_depth": {str(d): conflict_hist[d] for d in sorted(conflict_hist)},
     }
+
+    if genealogy is not None:
+        result["genealogy"] = genealogy.summary(field, nodes)
 
     # Annotate with cycle info — read contraction/breaths from field, not cycle math
     if cycle is not None:
@@ -186,6 +215,54 @@ def field_topology(field, cycle=None, zero_points=None):
         result["contraction"] = round(field.contraction, 3)
 
     return result
+
+
+class Genealogy:
+    """Genealogical depth of the field's constructs, read-only.
+
+    Depth 0 is anything the field did not produce by [::]: percepts, anchors,
+    questions. The product z of x::y (a concordancy or a conflict) has depth
+    1 + max(depth(x), depth(y)).
+
+    The parent -> product edges are pruned as they weaken, so depth cannot be
+    read from the edges at sampling time. Call update() after every cycle: it
+    reads that cycle's operations from ConcordancyOperator.ops_log(), which
+    records x, y and z for each one, and keeps depths only for the constructs
+    still in the field (a name that concludes and returns later starts afresh).
+    """
+
+    def __init__(self):
+        self.depth = {}
+
+    def update(self, concordancy, cycle, field):
+        """concordancy: the session's ConcordancyOperator (ss.concordancy)."""
+        ops_log = getattr(concordancy, "ops_log", None) or []   # a property: the live list
+        for op in ops_log:                      # read only; in execution order
+            if op.get("cycle") != cycle:
+                continue
+            x, y, z = op.get("x"), op.get("y"), op.get("z")
+            if z:
+                self.depth[z] = 1 + max(self.depth.get(x, 0), self.depth.get(y, 0))
+        live = field.constructs
+        self.depth = {n: d for n, d in self.depth.items() if n in live}
+
+    def summary(self, field, nodes):
+        """Depth by layer (n, mean, max) and overall histogram, over `nodes`."""
+        by_layer = defaultdict(list)
+        hist = defaultdict(int)
+        for n in sorted(nodes):
+            d = self.depth.get(n, 0)
+            by_layer[field.constructs[n].layer.name].append(d)
+            hist[d] += 1
+        layers = {}
+        for layer in sorted(by_layer):
+            ds = by_layer[layer]
+            produced = [d for d in ds if d > 0]     # leaves out percepts, anchors, questions
+            layers[layer] = {"n": len(ds), "mean": round(sum(ds) / len(ds), 3), "max": max(ds),
+                             "products": len(produced),
+                             "mean_products": round(sum(produced) / len(produced), 3) if produced else 0.0}
+        return {"by_layer": layers,
+                "histogram": {str(d): hist[d] for d in sorted(hist)}}
 
 
 def _tarjan_iterative(nodes, adj):
