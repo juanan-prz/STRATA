@@ -68,6 +68,8 @@ def parse_args(argv=None):
     ap.add_argument("--delay-ms", type=int, default=80, help="pause between cycles")
     ap.add_argument("--profile", choices=sorted(PROFILES), default="standard",
                     help="'minimal': no narration and no time-of-day percept")
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="bind address (default: 127.0.0.1 loopback only)")
     ap.add_argument("--port", type=int, default=8000)
     return ap.parse_args(argv)
 
@@ -293,7 +295,7 @@ def serve_experiment(args) -> None:
     def api_snapshot():
         snaps = engine.drain()
         if snaps:
-            return JSONResponse(snaps[-1])
+            return JSONResponse(snaps)  # return ALL snapshots in order, not just the last
         return JSONResponse({"type": "empty"})
 
     @app.post("/api/control/{action}")
@@ -302,6 +304,8 @@ def serve_experiment(args) -> None:
             body = await request.json()
         except Exception:
             body = {}
+        # Remove 'action' from body to avoid "got multiple values for argument 'action'"
+        body.pop("action", None)
         return JSONResponse(engine.control(action, **body))
 
     @app.websocket("/ws")
@@ -343,7 +347,7 @@ def serve_experiment(args) -> None:
     print(f"\n  SIRISYS — experiment · http://127.0.0.1:{args.port}"
           f"\n  framework {S.__sirisys_file__} · run {engine.run_dir.name}"
           f"\n  {'cycling' if engine.running else 'paused — press Play'} · Ctrl+C to stop\n")
-    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

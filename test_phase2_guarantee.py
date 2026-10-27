@@ -111,8 +111,12 @@ with contextlib.redirect_stdout(io.StringIO()):
             m_p3.run_cycle(ss_p3, c, percepts=percepts, narrate=False, include_hour=True)
         p3_crystals.append(ss_p3.field.apparents_total)
     m_p3.get_ledger().close()
-check("crystallization across streams", p3_crystals[0] >= 0,
-      f"streams: {p3_crystals} (Apparents formed)")
+# Compare: streams should produce consistent crystallization (within 2x factor)
+max_crystals = max(p3_crystals)
+min_crystals = min(p3_crystals)
+ratio_ok = (max_crystals <= 2 * min_crystals + 1) if min_crystals > 0 else (max_crystals == 0)
+check("crystallization consistent across streams", ratio_ok,
+      f"streams: {p3_crystals} (Apparents formed, ratio max/min={'consistent' if ratio_ok else 'divergent'})")
 
 # Cleanup
 shutil.rmtree(d_on, ignore_errors=True)

@@ -284,9 +284,13 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
-        # Topology once per breath (read-only, no seal, no mutation)
-        if cyc % S.BREATH_PERIOD == 0:
-            topo_trace.append(field_topology.field_topology(field))
+        # Topology once per half-breath: expansion (c%24==0) and contraction (c%24==12)
+        if cyc % 12 == 0 and cyc % S.BREATH_PERIOD == 0:
+            topo = field_topology.field_topology(field, cycle=cyc)
+            topo_trace.append(topo)
+        elif cyc % 12 == 0:
+            topo = field_topology.field_topology(field, cycle=cyc)
+            topo_trace.append(topo)
         if m["new_apparents"] > 0:
             promoted += [str(a) for a in field.apparents_since(field.apparents_total - m["new_apparents"])]
 
@@ -398,7 +402,7 @@ def main():
                     help="synthetic: reproducible stream per seed; live: this machine")
     ap.add_argument("--profile", choices=sorted(PROFILES), default="standard",
                     help="'minimal': no narration and no time-of-day percept")
-    ap.add_argument("--backend", choices=["anthropic", "ollama", "openai", "none"], default=None,
+    ap.add_argument("--backend", choices=["anthropic", "ollama", "none"], default=None,
                     help="LLM backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
     args = ap.parse_args()
 
@@ -438,9 +442,6 @@ def main():
             log("  Install the package and set the key, then re-run:")
             log("      pip3 install anthropic")
             log('      export ANTHROPIC_API_KEY="sk-ant-..."')
-        elif probe.backend == "openai":
-            log(f"  Ensure llama.cpp (or OpenAI-compatible server) is running at {probe.host}")
-            log("  and serving models on /v1/models — then re-run.")
         else:
             log("  Backend 'none' selected: the run uses no model.")
 

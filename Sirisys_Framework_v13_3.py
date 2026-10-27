@@ -1511,13 +1511,13 @@ class LLMIntermediary:
     )
 
     # Backends: "anthropic" (API, network) · "ollama" (local model, closed
-    # shell — Walsh's suggestion) · "openai" (OpenAI-compatible, local llama.cpp)
-    # · "none" (degraded: no model).
+    # shell — Walsh's suggestion) · "none" (degraded: no model).
     # Selected by argument, else SIRISYS_LLM_BACKEND, else "anthropic".
-    # Model: argument, else SIRISYS_LLM_MODEL, else the backend default.
-    # Host: host arg, else OLLAMA_HOST / OPENAI_BASE_URL, else default.
-    BACKENDS       = ("anthropic", "ollama", "openai", "none")
-    DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-6", "ollama": None, "openai": None, "none": None}
+    # Model: argument, else SIRISYS_LLM_MODEL, else the backend default
+    # (Ollama: the first installed model). Ollama host: OLLAMA_HOST, else
+    # http://127.0.0.1:11434.
+    BACKENDS       = ("anthropic", "ollama", "none")
+    DEFAULT_MODELS = {"anthropic": "claude-sonnet-4-6", "ollama": None, "none": None}
 
     def __init__(self, model: str = None, max_tokens: int = 120,
                  history: list = None, backend: str = None, host: str = None):
@@ -1525,12 +1525,7 @@ class LLMIntermediary:
         if self.backend not in self.BACKENDS:
             raise ValueError(f"unknown LLM backend {self.backend!r}; use one of {self.BACKENDS}")
         self.model       = model or os.environ.get("SIRISYS_LLM_MODEL") or self.DEFAULT_MODELS[self.backend]
-        host             = host or os.environ.get("OLLAMA_HOST") or os.environ.get("OPENAI_BASE_URL")
-        if not host:
-            host = "http://127.0.0.1:8080" if self.backend == "openai" else "http://127.0.0.1:11434"
-        # Strip trailing /v1 (OPENAI_BASE_URL often includes it) to avoid /v1/v1/… duplication
-        if self.backend == "openai" and host.endswith("/v1"):
-            host = host[:-3]
+        host             = host or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434"
         self.host        = (host if host.startswith("http") else "http://" + host).rstrip("/")
         self.max_tokens  = max_tokens
         self.history     = history or []
@@ -1541,10 +1536,10 @@ class LLMIntermediary:
 
     @property
     def is_local(self) -> bool:
-        """True when no call can leave this machine (Ollama/OpenAI on loopback, or no model)."""
+        """True when no call can leave this machine (Ollama on loopback, or no model)."""
         if self.backend == "none":
             return True
-        if self.backend not in ("ollama", "openai"):
+        if self.backend != "ollama":
             return False
         from urllib.parse import urlparse
         return urlparse(self.host).hostname in ("127.0.0.1", "localhost", "::1")
@@ -1565,20 +1560,6 @@ class LLMIntermediary:
             self._client    = anthropic.Anthropic(api_key=key)
             self._available = True
             print(f"  [LLM] Intermediary online (anthropic · {self.model}).")
-        elif self.backend == "openai":
-            try:
-                models = self._http_json("GET", "/v1/models", timeout=5)
-            except Exception as ex:
-                print(f"  [LLM] OpenAI-compatible server not reachable at {self.host} — degraded mode ({ex}).")
-                return
-            names = [m.get("id", "") for m in models.get("data", [])]
-            if not names:
-                print(f"  [LLM] OpenAI-compatible server has no model — degraded mode.")
-                return
-            if self.model is None:
-                self.model = names[0].split("/")[-1] if "/" in names[0] else names[0]
-            self._available = True
-            print(f"  [LLM] Intermediary online (openai · {self.model} · {self.host}).")
         else:
             try:
                 tags = self._http_json("GET", "/api/tags", timeout=5)
