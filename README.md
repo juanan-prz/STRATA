@@ -126,10 +126,13 @@ python3 measure_phase3.py            # self-adjustment criteria (3 streams × 5,
 python3 soak.py 50000 > soak_result.json
 python3 live_c2.py 10000 none minimal > live_none.json       # real percepts, no model
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3
+python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
 python3 live_c2.py 3000 ollama minimal > live_ollama.json    # real percepts, local model
 ```
 
 Each suite ends with a `SUMMARY` line; every check should pass. `test_ontology.py` checks what the field must be, from the primary source: Zero Points are never operands, the older operand leads and hands its chirality on, a crystal is never demoted or altered, nothing leaves without a termination proof, no crystal concludes in the cycle it forms, and with a model in the loop every request carries a seed oriented by the history; also the Stop Chasm and Adsurdic caps on conflicts (TMC p.41), anchors that never conclude, and the tolerance within its bounds. One case is known and allowed only during the first breath: a new crystal whose `BOTH` support is eroded by UCO in the same cycle.
+
+The framework has no randomness, but a model runtime may have some even though every request carries a seed derived from the history. `--determinism` runs the model arm on the first stream twice and says whether both runs sealed the same ledger and, if not, the cycle at which they parted; it writes `sirisys_determinism.json` and leaves `sirisys_report.json` alone. Every report also prints the ledger head of each run.
 
 `run_report.py` and `live_c2.py` judge every run by the self-adjustment criteria (durable crystals in every 1000-cycle window, flicker ≤ 5 %, no growth trend, flat cost of the cycle itself, bounded top-3 energy), with the code `measure_phase3.py` uses. `live_c2.py` also records what the field perceived (counts per 1000 cycles and the whole sequence) and the Sombunal questions that entered it. Real percepts read the machine: leave it idle during a `live_c2.py` run whose results you intend to compare.
 

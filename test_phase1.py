@@ -2,7 +2,7 @@
 Run next to Sirisys_Server.py, sirisys_loader.py and the newest framework:
     python3 test_phase1.py
 No API key, no Ollama and no FastAPI needed (a fake Ollama is started)."""
-import io, json, os, sys, time, tempfile, subprocess, threading, contextlib
+import io, json, os, sys, time, hashlib, tempfile, subprocess, threading, contextlib
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -169,7 +169,9 @@ from sirisys_measures import ModelHealth
 import shutil
 
 class HealthFake(BaseHTTPRequestHandler):
-    mode, after, n = "ok", 0, 0                      # ok | empty | error, after `after` answers
+    # ok: "Name <n>", n counting every call (a model whose answers carry state);
+    # alike: the answer depends on the prompt and the seed only; empty | error after `after` answers
+    mode, after, n = "ok", 0, 0
     def log_message(self, *a): pass
     def _send(self, obj, code=200):
         b = json.dumps(obj).encode(); self.send_response(code)
@@ -178,11 +180,15 @@ class HealthFake(BaseHTTPRequestHandler):
     def do_GET(self):
         self._send({"models": [{"name": "fake-model:latest"}]})
     def do_POST(self):
-        self.rfile.read(int(self.headers["Content-Length"]))
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         HealthFake.n += 1
         if HealthFake.n > HealthFake.after and HealthFake.mode == "error":
             return self._send({"error": "model crashed"}, 500)
-        text = "" if HealthFake.n > HealthFake.after and HealthFake.mode == "empty" else f"Name {HealthFake.n}"
+        if HealthFake.mode == "alike":
+            key = f"{body['messages'][-1]['content']}::{body.get('options', {}).get('seed')}"
+            text = "Name " + hashlib.sha256(key.encode()).hexdigest()[:6]
+        else:
+            text = "" if HealthFake.n > HealthFake.after and HealthFake.mode == "empty" else f"Name {HealthFake.n}"
         self._send({"message": {"role": "assistant", "content": text}})
 hf = HTTPServer(("127.0.0.1", 0), HealthFake)
 threading.Thread(target=hf.serve_forever, daemon=True).start()
@@ -223,6 +229,22 @@ p = subprocess.run([sys.executable, "run_report.py", "--backend", "ollama", "--c
                    env=dict(os.environ, OLLAMA_HOST="http://127.0.0.1:9"), timeout=120)
 check("run_report --backend ollama stops before running when the model is not there",
       p.returncode == 3 and "Nothing was run" in p.stdout and not (tools / "sirisys_report.json").exists())
+# The determinism check: a model that answers alike to the same request and seed, and one that does not
+det = {}
+for mode in ("alike", "ok"):
+    fake(mode)
+    (tools / "sirisys_determinism.json").unlink(missing_ok=True)
+    p = subprocess.run([sys.executable, "run_report.py", "--backend", "ollama", "--profile", "minimal",
+                        "--cycles", "40", "--determinism"], capture_output=True, text=True, cwd=tools,
+                       env=dict(os.environ, OLLAMA_HOST=HF), timeout=300)
+    f = tools / "sirisys_determinism.json"
+    det[mode] = json.loads(f.read_text()).get("determinism") if p.returncode == 0 and f.exists() else None
+same, other = det["alike"] or {}, det["ok"] or {}
+check("the determinism check tells a model that answers alike from one that does not, in its own file",
+      same.get("same") is True and other.get("same") is False and other.get("diverged_at_cycle") is not None
+      and not (tools / "sirisys_report.json").exists(),
+      f"alike: same ledger {same.get('same')}; stateful: same ledger {other.get('same')}, "
+      f"parted at cycle {other.get('diverged_at_cycle')}")
 sys.argv = ["run_report.py"]
 with contextlib.redirect_stdout(io.StringIO()):
     import run_report as RR

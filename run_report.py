@@ -41,6 +41,13 @@ MODEL HEALTH
   3 calls in a row fail or more than 10 % of the last 50 fail or come back
   empty. The report is still written, marked "aborted", with the reason.
 
+DETERMINISM
+  The framework has no randomness, but a model runtime may have some even
+  when every request carries a seed. With --determinism the model arm runs
+  the first stream twice and the report says whether both runs sealed the
+  same ledger and, if not, the cycle at which they parted. It writes
+  sirisys_determinism.json, so the main report is never overwritten.
+
 NOTE ON REPRODUCIBILITY
   The framework has no PRNG. With --percepts synthetic (default)
   each "seed" selects a reproducible percept stream and the degraded arm is
@@ -63,6 +70,7 @@ from sirisys_measures import LifeCriteria, ModelHealth
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "sirisys_report.json"
+OUTPUT_DETERMINISM = HERE / "sirisys_determinism.json"
 
 TAIL_START = 100
 
@@ -264,7 +272,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     trace, perceived, promoted, errors, topo_trace = [], Counter(), [], [], []
     genealogy, zero_points = field_topology.Genealogy(), set(S.ZERO_POINTS.keys())
     life, aborted = LifeCriteria(S), None
-    born_names, total_closures = [], 0
+    born_names, total_closures, heads = [], 0, []
     prev = set(field.constructs)
     birth, lifespans = {n: 0 for n in prev}, []
     t0 = time.time()
@@ -316,6 +324,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
+        heads.append(S.get_ledger().head[:16])   # where two runs part, if they do
         # Read-only: criteria and genealogy every cycle, topology once per half-breath
         life.after_cycle(ss, cyc, field_seconds)
         genealogy.update(conc, cyc, field)
@@ -340,6 +349,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         "seed": seed,
         "channels": channels if llm_active else None,
         "ledger_head": S.get_ledger().head,
+        "ledger_head_by_cycle": heads,
         "aborted": aborted,
         "criteria": criteria,
         "criteria_pass": LifeCriteria.verdict(criteria),
@@ -380,6 +390,26 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "ledger_proofs": S.get_ledger().count,
         },
     }
+
+
+def compare_runs(a, b):
+    """Two runs of the same stream with the model: did they seal the same ledger?
+    If not, the first cycle whose ledger head differs, and an example of answers
+    that differ (from the samples, which keep the first 25 of each kind)."""
+    ha, hb = a["ledger_head_by_cycle"], b["ledger_head_by_cycle"]
+    parted = next((i for i, (x, y) in enumerate(zip(ha, hb)) if x != y),
+                  None if len(ha) == len(hb) else min(len(ha), len(hb)))
+    first = None
+    sa, sb = a["llm"]["output_samples"], b["llm"]["output_samples"]
+    for kind in sorted(set(sa) | set(sb)):
+        xs, ys = sa.get(kind, []), sb.get(kind, [])
+        i = next((i for i, (x, y) in enumerate(zip(xs, ys)) if x != y), None)
+        if i is not None and (first is None or i < first[0]):
+            first = (i, {"kind": kind, "index": i, "first": xs[i], "second": ys[i]})
+    return {"same": a["ledger_head"] == b["ledger_head"],
+            "ledger_heads": [a["ledger_head"], b["ledger_head"]],
+            "diverged_at_cycle": parted,
+            "example_different_answers": first[1] if first else None}
 
 
 def summarize(arm):
@@ -458,7 +488,12 @@ def main():
                     help="'minimal': no narration and no time-of-day percept")
     ap.add_argument("--backend", choices=["anthropic", "ollama", "none"], default=None,
                     help="LLM backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
+    ap.add_argument("--determinism", action="store_true",
+                    help="run the model arm on the first stream twice and report whether both "
+                         "runs sealed the same ledger (writes sirisys_determinism.json)")
     args = ap.parse_args()
+    if args.determinism and args.percepts == "live":
+        ap.error("--determinism needs the synthetic percepts: live percepts differ on every run")
 
     lines = []
 
@@ -483,21 +518,29 @@ def main():
     log(f"  file sha256[:16]   : {digest}")
     log(f"  model active       : {llm_ok}")
     log(f"  model id           : {probe.backend} · {probe.model}")
-    log(f"  cycles x seeds     : {args.cycles} x {args.seeds}")
+    if args.determinism:
+        log(f"  determinism check  : the model arm, stream 0, twice x {args.cycles} cycles")
+    else:
+        log(f"  cycles x seeds     : {args.cycles} x {args.seeds}")
     log(f"  both_floor {BOTH_FLOOR}  min_references {MIN_REFERENCES}  "
         f"quantum {EXCHANGE_QUANTUM}")
     explicit = args.backend in ("ollama", "anthropic")
     health_probe = None
     if llm_ok:
         # full arm: at most MAX calls per cycle; questions arm: one every third cycle
-        per_cycle = S.MAX_LLM_CALLS_PER_CYCLE + (0 if args.skip_questions_arm else 1 / 3)
-        health_probe = ModelHealth.probe(probe, cycles=args.cycles * args.seeds,
+        if args.determinism:
+            per_cycle, runs = S.MAX_LLM_CALLS_PER_CYCLE, 2
+        else:
+            per_cycle = S.MAX_LLM_CALLS_PER_CYCLE + (0 if args.skip_questions_arm else 1 / 3)
+            runs = args.seeds
+        health_probe = ModelHealth.probe(probe, cycles=args.cycles * runs,
                                          calls_per_cycle=per_cycle)
         if health_probe["ok"]:
             log(f"  model probe        : ok · {health_probe['call_s']} s per call "
                 f"(first call, with loading: {health_probe['load_s']} s)")
             log(f"  model time, at most: ~{health_probe['estimated_model_hours_max']} h "
-                f"for the model arms ({args.cycles} cycles x {args.seeds} seeds)")
+                f"for the model {'runs' if args.determinism else 'arms'} "
+                f"({args.cycles} cycles x {runs} {'runs' if args.determinism else 'seeds'})")
             if health_probe.get("model"):
                 log(f"  model identity     : {health_probe['model']}")
             log(f"  sample names       : {' | '.join(a[:40] for a in health_probe['answers'])}")
@@ -523,7 +566,10 @@ def main():
             log('      export ANTHROPIC_API_KEY="sk-ant-..."')
         else:
             log("  Backend 'none' selected: the run uses no model.")
-        if explicit:
+        if args.determinism:
+            log("  --determinism checks a model: without one the field is deterministic by")
+            log("  construction (test_sirisys.py and test_ontology.py check it).")
+        if explicit or args.determinism:
             log("  Nothing was run.")
             sys.exit(3)
 
@@ -561,15 +607,20 @@ def main():
     }
 
     aborted = None
-    plan = ([("llm", True, "all")] if llm_ok else []) \
-        + ([("llm_questions", True, "questions")] if llm_ok and not args.skip_questions_arm else []) \
-        + ([] if args.skip_degraded else [("degraded", False, "all")])
-    titles = {"llm": "LLM active", "llm_questions": "LLM, Sombunal questions only",
-              "degraded": "degraded control"}
+    if args.determinism:
+        report["config"]["determinism_check"] = True
+        plan, seeds = [("llm", True, "all")], [0, 0]
+    else:
+        plan = ([("llm", True, "all")] if llm_ok else []) \
+            + ([("llm_questions", True, "questions")] if llm_ok and not args.skip_questions_arm else []) \
+            + ([] if args.skip_degraded else [("degraded", False, "all")])
+        seeds = list(range(args.seeds))
+    titles = {"llm": "LLM active" + (", stream 0 twice" if args.determinism else ""),
+              "llm_questions": "LLM, Sombunal questions only", "degraded": "degraded control"}
     for name, active, channels in plan:
         log(f"\n  --- arm: {titles[name]} ---")
         arm = []
-        for s in range(args.seeds):
+        for s in seeds:
             arm.append(run_arm(s, args.cycles, active, log, args.model, args.backend,
                                args.profile, args.percepts, channels))
             if arm[-1]["aborted"]:
@@ -579,6 +630,8 @@ def main():
         if aborted:
             break
     report["aborted"] = aborted
+    if args.determinism and not aborted:
+        report["determinism"] = compare_runs(*report["arms"]["llm"]["runs"])
 
     log("\n" + "=" * 70)
     for name, a in report["arms"].items():
@@ -594,15 +647,27 @@ def main():
             f"durable/1000 {s['durable_per_1000']}  flicker {s['flicker_share']}")
         log(f"  {'':9} model calls {s['model_calls']}  failures {s['model_failures']}  "
             f"empty {s['model_empty']}  errors {s['errors']}")
+        log(f"  {'':9} ledger heads {[r['ledger_head'][:16] for r in a['runs']]}")
+
+    d = report.get("determinism")
+    if d:
+        log("")
+        if d["same"]:
+            log("  determinism: YES — both runs sealed the same ledger.")
+        else:
+            log(f"  determinism: NO — the two runs parted at cycle {d['diverged_at_cycle']}.")
+            fd = d["example_different_answers"]
+            if fd:
+                log(f"  answers that differ ({fd['kind']}): {fd['first'][:50]!r} | {fd['second'][:50]!r}")
 
     if aborted:
         log("")
         log(f"  STOPPED — model health: {aborted}")
         log("  The report below is partial. Check Ollama and the model, then run again.")
     report["console"] = lines
-    OUTPUT.write_text(json.dumps(report, indent=1, ensure_ascii=False),
-                      encoding="utf-8")
-    print(f"\n  written: {OUTPUT.name}   ({OUTPUT.stat().st_size // 1024} KB)")
+    out = OUTPUT_DETERMINISM if args.determinism else OUTPUT
+    out.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"\n  written: {out.name}   ({out.stat().st_size // 1024} KB)")
     print("  Send that file for analysis.")
     print("=" * 70)
     if aborted:

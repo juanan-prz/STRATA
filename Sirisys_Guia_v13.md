@@ -51,6 +51,7 @@ python3 run_report.py --cycles 150 --seeds 3 --backend none     # 3 flujos sint�
 python3 run_report.py --backend ollama                           # con el modelo local
 python3 run_report.py --percepts live                            # perceptos reales
 python3 run_report.py --backend ollama --profile minimal         # sin narración ni hora del día
+python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism   # ¿el modelo responde siempre igual?
 ```
 
 Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a comparar.
@@ -69,6 +70,8 @@ El informe compara los tres brazos sobre los mismos flujos. El modelo entra en e
 - se detienen (código 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50.
 
 El resultado se escribe igualmente, marcado como `aborted` y con el motivo. La prueba inicial registra además qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
+
+**Determinismo.** El framework no usa azar, pero el motor de un modelo puede tenerlo aunque cada petición lleve una semilla derivada de la historia. Con `--determinism`, el brazo con modelo recorre dos veces el primer flujo y el informe dice si las dos ejecuciones sellaron el mismo ledger y, si no, en qué ciclo se separaron, con un ejemplo de respuestas distintas. Escribe `sirisys_determinism.json` y no toca `sirisys_report.json`. Todos los informes imprimen además la cabeza del ledger de cada ejecución.
 
 **Perceptos reales.** `live_c2.py` registra lo que percibió el campo (recuentos por cada 1.000 ciclos y la secuencia completa) y las preguntas al Sombunal que entraron. Los perceptos reales leen la máquina: no la uses mientras corre una ejecución que quieras comparar.
 
