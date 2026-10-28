@@ -27,7 +27,7 @@
 
     /* Text */
     --text: #b8c0cc;
-    --text-dim: #5c6475;
+    --text-dim: #737c8f;                        /* 4.6:1 on the panels: small text stays legible */
     --text-muted: #8a92a3;
     --text-bright: #eef1f6;
 
@@ -40,6 +40,9 @@
     --err: #ff5571;
     --err-soft: rgba(255, 85, 113, 0.14);
     --sombunal: #9b87f5;
+    --sombunal-soft: rgba(155, 135, 245, 0.10);
+    --sombunal-text: #c9bfff;
+    --concluded: #7a8aa8;                       /* a conclusion is not an error: no alarm colour */
 
     /* Tetralemmic states */
     --col-BOTH: #f0a832;
@@ -69,6 +72,7 @@
   }
 
   *, *::before, *::after { box-sizing: border-box; }
+  :focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
   /* ───── Layout: header across, field state · field · event log ───── */
   html, body {
@@ -131,8 +135,8 @@
   @keyframes heartbeat { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
   .header-status > * { flex-shrink: 0; }
   .stat-inline strong { margin-left: 4px; color: var(--text-bright); font-weight: 600; }
-  .stat-inline.warn, .stat-inline.warn strong { color: var(--warn); }
-  .stat-inline.err, .stat-inline.err strong { color: var(--err); }
+  .stat-inline.warn { color: var(--warn); }
+  .stat-inline.err { color: var(--err); }
   .stat-inline.run-info {                       /* the first to give way on a narrow screen */
     flex-shrink: 1; min-width: 0;
     overflow: hidden; text-overflow: ellipsis;
@@ -222,15 +226,16 @@
   .breakdown-row .count { color: var(--text-bright); }
   .breakdown-row .pct { min-width: 38px; text-align: right; color: var(--text-dim); }
 
-  /* ───── Filters (click a row to hide or show it) ───── */
+  /* ───── Filters: a switch per layer and per edge state ───── */
   .filter-row {
     display: flex; align-items: center; gap: var(--sp-2);
-    padding: 4px 0;
-    font-family: var(--font-mono); font-size: 10px;
+    width: 100%; padding: 4px 0;
+    font-family: var(--font-mono); font-size: 10px; text-align: left;
+    color: inherit; background: none; border: 0;
     cursor: pointer; user-select: none;
     transition: opacity 0.14s;
   }
-  .filter-row.off { opacity: 0.38; }
+  .filter-row[aria-pressed="false"] { opacity: 0.38; }
   .filter-row:hover { color: var(--text-bright); }
   .filter-row .count { color: var(--text-dim); }
   .checkbox {
@@ -242,8 +247,8 @@
     border: 1px solid var(--border-hi); border-radius: 2px;
     transition: all 0.14s;
   }
-  .filter-row.on .checkbox { background: var(--accent-soft); border-color: var(--accent); }
-  .filter-row.off .checkbox { color: transparent; }
+  .filter-row[aria-pressed="true"] .checkbox { background: var(--accent-soft); border-color: var(--accent); }
+  .filter-row[aria-pressed="false"] .checkbox { color: transparent; }
   .filter-row:hover .checkbox { border-color: var(--border-focus); }
 
   #telem-chart {
@@ -400,15 +405,17 @@
     border-radius: 0 var(--r-sm) var(--r-sm) 0;
   }
   .log-entry.event { border-left-color: var(--accent); }
-  .log-entry.event summary { cursor: pointer; }
-  .log-entry.event summary::marker { color: var(--text-dim); }
+  .log-entry.event summary { cursor: pointer; list-style: none; }
+  .log-entry.event summary::-webkit-details-marker { display: none; }
+  .log-entry.event summary::after { content: ' ▸'; color: var(--text-dim); }
+  .log-entry.event[open] summary::after { content: ' ▾'; }
   .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; white-space: pre-line; }
   .log-entry.cussive { border-left-color: var(--layer-UNIT_1); color: var(--layer-UNIT_1); }
   .log-entry.cussive.crystal { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
-  .log-entry.terminate { border-left-color: var(--err); background: var(--err-soft); }
+  .log-entry.terminate { border-left-color: var(--concluded); color: var(--text-muted); }
   .log-entry.narration { border-left-color: var(--text-dim); color: var(--text-muted); font-style: italic; }
-  .log-entry.sombunal { border-left-color: var(--sombunal); background: rgba(155, 135, 245, 0.10); color: #c9bfff; }
-  .log-entry.model { border-left-color: var(--warn); color: var(--warn); }
+  .log-entry.sombunal { border-left-color: var(--sombunal); background: var(--sombunal-soft); color: var(--sombunal-text); }
+  .log-entry.model { border-left-color: var(--err); background: var(--err-soft); color: var(--err); }
   .log-list.hide-event .log-entry.event, .log-list.hide-cussive .log-entry.cussive,
   .log-list.hide-terminate .log-entry.terminate, .log-list.hide-narration .log-entry.narration,
   .log-list.hide-sombunal .log-entry.sombunal, .log-list.hide-model .log-entry.model { display: none; }
@@ -450,10 +457,10 @@
       <div class="stat-row" title="every crystallization in this instance; the Zero Points are crystals from the start"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
       <div class="stat-row" title="constructs that concluded, each with a TERMINATE proof: an identity never vanishes silently"><span class="stat-key">concluded</span><span class="stat-val" id="s-concluded">—</span></div>
       <div class="stat-row" title="conflict constructs: NEITHER × NEITHER as a structure of its own"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
-      <div class="stat-row"><span class="stat-key">BOTH edges</span><span class="stat-val" id="s-both">—</span></div>
-      <div class="stat-row" title="BOTH channels that reached the exchange quantum this cycle, banked on their endpoints"><span class="stat-key">closures (cycle)</span><span class="stat-val" id="s-closures">—</span></div>
+      <div class="stat-row" title="relations in sustained contradiction: they age, mature and feed the exchange"><span class="stat-key">BOTH edges</span><span class="stat-val" id="s-both">—</span></div>
+      <div class="stat-row" title="BOTH channels closed this cycle at the exchange quantum; what they exchanged is banked on their endpoints"><span class="stat-key">closures (cycle)</span><span class="stat-val" id="s-closures">—</span></div>
       <div class="stat-row" title="concluded names born again as new constructs, their conclusion on record"><span class="stat-key">reincarnations</span><span class="stat-val" id="s-reinc">—</span></div>
-      <div class="stat-row" title="the three most energetic constructs: a self-adjustment criterion keeps it bounded"><span class="stat-key">top-3 energy</span><span class="stat-val" id="s-energy3">—</span></div>
+      <div class="stat-row" title="the energy of the three most energetic constructs, together: a self-adjustment criterion asks that it stay bounded"><span class="stat-key">top-3 energy</span><span class="stat-val" id="s-energy3">—</span></div>
       <div class="stat-row" title="share of uncrystallized constructs unstable in some way: BOTH edges, drifted identity, Vc &lt; 0.25 or LEMNISCATE"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
       <div class="bar-track"><div class="bar-fill" id="inst-bar"></div></div>
       <div class="stat-row spaced"><span class="stat-key">last crystal</span><span class="stat-val" id="s-crystal-ago">—</span></div>
@@ -472,7 +479,7 @@
     <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
     <div class="panel-section">
       <h3 title="the candidates for [::] this cycle, and what was done with them">Pool telemetry</h3>
-      <div class="stat-row" title="matured BOTH · energetic conflicts · exchangeable crystals"><span class="stat-key">pools B·C·X</span><span class="stat-val" id="t-pool">—</span></div>
+      <div class="stat-row" title="matured BOTH · energetic conflicts · exchangeable crystals (the 12 most energetic)"><span class="stat-key">pools B·C·X</span><span class="stat-val" id="t-pool">—</span></div>
       <div class="stat-row" title="[::] operations that gave a product, of those tried"><span class="stat-key">[::] ok/tried</span><span class="stat-val" id="t-exec">—</span></div>
       <div class="stat-row" title="products with I::Am or I::AmNot as an operand · with a crystal as an operand"><span class="stat-key">foundational · exchange</span><span class="stat-val" id="t-ops">—</span></div>
       <canvas id="telem-chart"></canvas>
@@ -484,8 +491,8 @@
 <div class="center">
   <div class="controls">
     <div class="ctrl-group floating">
-      <button class="btn" id="btn-play" title="Play / Pause">Play</button>
-      <button class="btn" id="btn-step" title="Step one cycle">Step</button>
+      <button class="btn" id="btn-play" title="Play / Pause (Space)">Play</button>
+      <button class="btn" id="btn-step" title="Step one cycle (S)">Step</button>
       <button class="btn" id="btn-reset" title="Start a new instance (the current run stays in sirisys_runs/)">Reset</button>
     </div>
     <div class="speed-control floating">
@@ -494,19 +501,16 @@
       <span class="val" id="speed-val">80ms</span>
     </div>
     <div class="ctrl-group floating">
-      <button class="btn" id="btn-fit" title="Fit view to all nodes">Fit</button>
+      <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
   </div>
 
-  <canvas id="canvas"></canvas>
+  <canvas id="canvas" role="img" aria-label="The field: each construct coloured by its layer, each relation by its tetralemmic state"></canvas>
 
   <div class="empty-state" id="empty-state">
     <div class="empty-state-icon">∅</div>
-    <div class="empty-state-title">field is dormant</div>
-    <div class="empty-state-hint">
-      Press <kbd>Play</kbd> above to start cycling the field.<br>
-      Its constructs appear here from the first cycle.
-    </div>
+    <div class="empty-state-title" id="empty-state-title"></div>
+    <div class="empty-state-hint" id="empty-state-hint"></div>
   </div>
 
   <div id="tooltip">
@@ -532,7 +536,7 @@
   </div>
 
   <div class="shape-legend floating">
-    <div class="item">
+    <div class="item" title="coloured by its layer; one ring where it rises to UNIT_1">
       <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
       <span>construct</span>
     </div>
@@ -540,7 +544,7 @@
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
       <span>anchor</span>
     </div>
-    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable">
+    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; two amber rings where it crystallizes">
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="11,7 9,11 5,11 3,7 5,3 9,3" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
       <span>apparent</span>
     </div>
@@ -588,18 +592,23 @@ const LAGRANGE = {
   L3: ['local/global', 'local vs. global identity'], L4: ['depth/perf', 'proof depth vs. performance'],
   L5: ['entropy/det', 'entropy vs. determinism'],
 };
-// The kinds of entry in the event log, each with its chip
-const LOG_KINDS = {
-  event: ['[::]', '--accent'], cussive: ['cussive', '--warn'], terminate: ['concluded', '--err'],
-  narration: ['narration', '--text-dim'], sombunal: ['Sombunal', '--sombunal'], model: ['model', '--warn'],
-};
 
+// ═══ Settings ═══════════════════════════════════════════════════════════════
+
+// The kinds of entry in the event log: the label of each chip, and its colour
+const LOG_KINDS = {
+  event: ['[::]', '--accent'], cussive: ['cussive', '--warn'], terminate: ['concluded', '--concluded'],
+  narration: ['narration', '--text-dim'], sombunal: ['Sombunal', '--sombunal'], model: ['model', '--err'],
+};
 const LOG_KEPT = 150;             // event log entries of each kind
 const TELEMETRY_KEPT = 200;       // cycles in the telemetry chart
 const PULSE_MS = 1100;            // the rings drawn where a construct rises a layer
+const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
 const POLL_MS = 300;              // polling, while the field cycles
 const RECONNECT_MS = 2000;        // a WebSocket that closed
 const WS_RETRY_MS = 30000;        // a WebSocket that failed while the server answered
+
+// ═══ Helpers ════════════════════════════════════════════════════════════════
 
 const $ = id => document.getElementById(id);
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -618,6 +627,7 @@ function el(tag, className, text) {
   return e;
 }
 function setText(id, value) { $(id).textContent = value; }
+const fixed = (v, digits) => v != null ? Number(v).toFixed(digits) : '—';
 // Parts of a row, a space apart: invisible in a flex row, but read aloud and copied as words
 const spaced = parts => parts.flatMap((part, i) => i ? [' ', part] : [part]);
 
@@ -641,13 +651,15 @@ function resizeCanvas() {
 }
 
 const isShown = n => FILTERS.layer[n.c.layer];
-const radius = n => [3, 4, 5, 7][n.c.layer] ?? 3;
 function shapeOf(name, layer) {
   if (ZERO_POINTS.has(name)) return 'star';
   if (ANCHORS.has(name)) return 'diamond';
   if (layer === APPARENT) return 'hexagon';
   return 'circle';
 }
+// The size a construct is drawn at: by layer, a little larger for the pointed shapes
+const SHAPE_GROWTH = { circle: 0, diamond: 2, hexagon: 1, star: 3 };
+const sizeOf = (name, n) => ([3, 4, 5, 7][n.c.layer] ?? 3) + SHAPE_GROWTH[shapeOf(name, n.c.layer)];
 
 // A new construct starts at a place fixed by its name (FNV-1a hash), not by a
 // random draw: the same run gives the same picture.
@@ -708,25 +720,32 @@ function tracePolygon(cx, cy, points) {
   points.forEach(([x, y], i) => i ? ctx.lineTo(cx + x, cy + y) : ctx.moveTo(cx + x, cy + y));
   ctx.closePath();
 }
-function traceShape(shape, x, y, r) {
+function traceShape(shape, x, y, size) {
   if (shape === 'diamond') {
-    r += 2;
-    tracePolygon(x, y, [[0, -r], [r, 0], [0, r], [-r, 0]]);
+    tracePolygon(x, y, [[0, -size], [size, 0], [0, size], [-size, 0]]);
   } else if (shape === 'hexagon') {
-    r += 1;
-    tracePolygon(x, y, [0, 1, 2, 3, 4, 5].map(i => [r * Math.cos(i * Math.PI / 3), r * Math.sin(i * Math.PI / 3)]));
+    tracePolygon(x, y, [0, 1, 2, 3, 4, 5].map(i => [size * Math.cos(i * Math.PI / 3), size * Math.sin(i * Math.PI / 3)]));
   } else if (shape === 'star') {
-    r += 3;
     tracePolygon(x, y, Array.from({ length: 16 }, (_, i) => {
-      const a = i * Math.PI / 8 - Math.PI / 2, rr = i % 2 ? r * 0.5 : r;
-      return [rr * Math.cos(a), rr * Math.sin(a)];
+      const a = i * Math.PI / 8 - Math.PI / 2, r = i % 2 ? size * 0.5 : size;
+      return [r * Math.cos(a), r * Math.sin(a)];
     }));
   } else {
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x, y, size, 0, Math.PI * 2);
   }
 }
+function line(a, b, color, alpha, width) {
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
+  ctx.stroke();
+}
+function ring(x, y, r, color, alpha, width) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
+  ctx.stroke();
+}
 
-function render() {
+function render(now) {
   const W = canvas.width / DPR, H = canvas.height / DPR;
   ctx.clearRect(0, 0, W, H);
   ctx.save();
@@ -737,33 +756,20 @@ function render() {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
     if (!a || !b || !FILTERS.edgeState[e.state] || !isShown(a) || !isShown(b)) continue;
     const width = e.state === 'BOTH' ? 2 : 1;
-    if (b.c.layer === APPARENT && e.state !== 'BOTH') {
-      // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
-      // A BOTH edge faces its fixed floor instead, into a crystal or not.
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = COLOR.layer.APPARENT; ctx.globalAlpha = 0.20; ctx.lineWidth = width + 3;
-      ctx.stroke();
-    }
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = COLOR.state[e.state] || COLOR.dim;
-    ctx.globalAlpha = Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6);
-    ctx.lineWidth = width;
-    ctx.stroke();
+    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
+    // A BOTH edge faces its fixed floor instead, into a crystal or not.
+    if (b.c.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12, width + 2);
+    line(a, b, COLOR.state[e.state] || COLOR.dim, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6), width);
   }
-  ctx.globalAlpha = 1;
 
   for (const [name, n] of nodes) {
     if (!isShown(n)) continue;
     const color = COLOR.layer[LAYERS[n.c.layer]] || '#888';
-    const r = radius(n), shape = shapeOf(name, n.c.layer);
-    if (n.c.layer === APPARENT) {                       // a crystal's halo, under its shape
-      ctx.beginPath(); ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = color; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
+    const shape = shapeOf(name, n.c.layer), size = sizeOf(name, n);
+    if (n.c.layer === APPARENT) ring(n.x, n.y, size + 2, color, 0.4, 1.5);      // a crystal's halo
+    ctx.globalAlpha = 1;
     ctx.beginPath();
-    traceShape(shape, n.x, n.y, r);
+    traceShape(shape, n.x, n.y, size);
     ctx.fillStyle = color;
     ctx.fill();
     if (shape !== 'circle') {
@@ -771,65 +777,61 @@ function render() {
       ctx.stroke();
     }
     if (n.c.conflict) {                                 // ⊗: a conflict, a structure of its own
-      const k = r + 2, d = k * Math.SQRT1_2;
+      const k = size + 2, d = k * Math.SQRT1_2;
       ctx.beginPath();
       ctx.arc(n.x, n.y, k, 0, Math.PI * 2);
       ctx.moveTo(n.x - d, n.y - d); ctx.lineTo(n.x + d, n.y + d);
       ctx.moveTo(n.x + d, n.y - d); ctx.lineTo(n.x - d, n.y + d);
       ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7; ctx.lineWidth = 0.9;
       ctx.stroke();
-      ctx.globalAlpha = 1;
     }
   }
 
-  // Cussive collapse, following the construct as it moves: one ring where it rose to
-  // UNIT_1, two amber rings where it crystallized
-  const now = performance.now();
+  // Cussive collapse, following the construct as it moves, the same size at any zoom:
+  // one ring where it rose to UNIT_1, two amber rings where it crystallized
+  const px = 1 / viewK;
   for (const p of pulses) {
     const t = (now - p.start) / PULSE_MS;
     if (t < 0 || t > 1) continue;
     const node = nodes.get(p.name), x = node ? node.x : p.x, y = node ? node.y : p.y;
     if (!p.crystal) {
-      ctx.strokeStyle = COLOR.layer.UNIT_1;
-      ctx.beginPath(); ctx.arc(x, y, 6 + t * 20, 0, Math.PI * 2);
-      ctx.globalAlpha = (1 - t) * 0.6; ctx.lineWidth = 1.2;
-      ctx.stroke();
+      ring(x, y, (6 + t * 20) * px, COLOR.layer.UNIT_1, (1 - t) * 0.6, 1.2 * px);
       continue;
     }
-    ctx.strokeStyle = COLOR.layer.APPARENT;
-    ctx.beginPath(); ctx.arc(x, y, 8 + t * 42, 0, Math.PI * 2);
-    ctx.globalAlpha = (1 - t) * 0.85; ctx.lineWidth = 2;
-    ctx.stroke();
-    if (t > 0.15) {
-      ctx.beginPath(); ctx.arc(x, y, 8 + (t - 0.15) * 38, 0, Math.PI * 2);
-      ctx.globalAlpha = (1 - (t - 0.15)) * 0.45; ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
+    ring(x, y, (8 + t * 42) * px, COLOR.layer.APPARENT, (1 - t) * 0.85, 2 * px);
+    if (t > 0.15) ring(x, y, (8 + (t - 0.15) * 38) * px, COLOR.layer.APPARENT, (1 - (t - 0.15)) * 0.45, 1.5 * px);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
 }
 
+// One frame draws whatever changed: the field, its rings while they last, the chart
 const pulses = [];                // { name, crystal, x, y, start }
-let animating = false;
+let framePending = false, chartStale = false;
+function requestDraw() {
+  if (!framePending) { framePending = true; requestAnimationFrame(frame); }
+}
+function frame(now) {
+  framePending = false;
+  for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].start > PULSE_MS) pulses.splice(i, 1);
+  render(now);
+  if (chartStale) { chartStale = false; drawTelemetry(); }
+  if (pulses.length) requestDraw();
+}
 function pulse(name, crystal) {
   const n = nodes.get(name);
   if (!n) return;
   pulses.push({ name, crystal, x: n.x, y: n.y, start: performance.now() });
-  if (!animating) { animating = true; requestAnimationFrame(animate); }
-}
-function animate() {
-  const now = performance.now();
-  for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].start > PULSE_MS) pulses.splice(i, 1);
-  render();
-  animating = pulses.length > 0;
-  if (animating) requestAnimationFrame(animate);
+  requestDraw();
 }
 
+// The view fitted to the constructs on show (all of them, when every layer is hidden)
 function fitView() {
-  if (nodes.size === 0) return;
+  const shown = Array.from(nodes.values()).filter(isShown);
+  const fit = shown.length ? shown : Array.from(nodes.values());
+  if (!fit.length) return;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const n of nodes.values()) {
+  for (const n of fit) {
     minX = Math.min(minX, n.x); maxX = Math.max(maxX, n.x);
     minY = Math.min(minY, n.y); maxY = Math.max(maxY, n.y);
   }
@@ -837,31 +839,43 @@ function fitView() {
   viewK = Math.min(W, H) * 0.8 / Math.max(maxX - minX, maxY - minY, 100);
   viewX = -(minX + maxX) / 2 * viewK;
   viewY = -(minY + maxY) / 2 * viewK;
-  render();
+  requestDraw();
+}
+
+// The construct under a point of the screen: the nearest one within its drawn size,
+// or within HOVER_PX at any zoom
+function constructAt(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const wx = (clientX - rect.left - rect.width / 2 - viewX) / viewK;
+  const wy = (clientY - rect.top - rect.height / 2 - viewY) / viewK;
+  let found = null, nearest = Infinity;
+  for (const [name, n] of nodes) {
+    if (!isShown(n)) continue;
+    const d = Math.hypot(wx - n.x, wy - n.y);
+    if (d <= Math.max(sizeOf(name, n), HOVER_PX / viewK) && d < nearest) { found = name; nearest = d; }
+  }
+  return found;
 }
 
 // Pan by dragging, zoom with the wheel around the pointer, a tooltip on hover
 let drag = null;                  // { x, y, viewX, viewY } where the drag began
-canvas.addEventListener('mousedown', e => { drag = { x: e.clientX, y: e.clientY, viewX, viewY }; });
+let pointer = null;               // { x, y } while the pointer is over the field
+canvas.addEventListener('mousedown', e => {
+  drag = { x: e.clientX, y: e.clientY, viewX, viewY };
+  hideTooltip();
+});
 window.addEventListener('mouseup', () => { drag = null; });
 canvas.addEventListener('mousemove', e => {
+  pointer = { x: e.clientX, y: e.clientY };
   if (drag) {
     viewX = drag.viewX + e.clientX - drag.x;
     viewY = drag.viewY + e.clientY - drag.y;
-    render();
+    requestDraw();
     return;
   }
-  const rect = canvas.getBoundingClientRect();
-  const wx = (e.clientX - rect.left - viewX - rect.width / 2) / viewK;
-  const wy = (e.clientY - rect.top - viewY - rect.height / 2) / viewK;
-  let hit = null;                 // the last one drawn is the one on top
-  for (const [name, n] of nodes) {
-    const dx = wx - n.x, dy = wy - n.y, r = radius(n);
-    if (isShown(n) && dx * dx + dy * dy < r * r) hit = [name, n];
-  }
-  if (hit) showTooltip(hit[0], hit[1], e.clientX, e.clientY);
-  else hideTooltip();
+  refreshTooltip();
 });
+canvas.addEventListener('mouseleave', () => { pointer = null; hideTooltip(); });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
@@ -870,24 +884,35 @@ canvas.addEventListener('wheel', e => {
   viewK = Math.max(0.1, Math.min(5, viewK * (e.deltaY > 0 ? 0.9 : 1.1)));
   viewX = mx - wx * viewK;
   viewY = my - wy * viewK;
-  render();
+  requestDraw();
 }, { passive: false });
 
+
+// ═══ The tooltip ════════════════════════════════════════════════════════════
+
 const tooltip = $('tooltip');
-// What a construct is, beyond its layer: a Zero Point, an anchor, a conflict, and
-// for a crystal, Universal (the Zero Points) or Exchangeable (TMC p.22)
+const questions = new Set();      // the Sombunal questions of this instance: each entered as a construct
+
+// What a construct is, beyond its layer: a Zero Point, an anchor, a conflict, a
+// Sombunal question, and for a crystal, Universal (the Zero Points) or Exchangeable (TMC p.22)
 function kindOf(name, c) {
   const kind = [];
   if (ZERO_POINTS.has(name)) kind.push('zero point');
   else if (ANCHORS.has(name)) kind.push('anchor');
   if (c.conflict) kind.push('conflict');                      // typed by its proof chain
+  if (questions.has(name)) kind.push('Sombunal question');
   if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
   return kind.join(' · ');
 }
-const fixed = (v, digits) => v != null ? Number(v).toFixed(digits) : '—';
 
-function showTooltip(name, n, mx, my) {
-  const c = n.c, layer = LAYERS[c.layer] || '?', kind = kindOf(name, c);
+// The construct under the pointer, with this cycle's values (also after each snapshot)
+function refreshTooltip() {
+  const name = pointer && !drag && constructAt(pointer.x, pointer.y);
+  if (name) showTooltip(name, nodes.get(name).c, pointer.x, pointer.y);
+  else hideTooltip();
+}
+function showTooltip(name, c, mx, my) {
+  const layer = LAYERS[c.layer] || '?', kind = kindOf(name, c);
   setText('tt-name', c.conflict ? '⊗ ' + name : name);
   $('tt-kind-row').hidden = !kind;
   setText('tt-kind', kind);
@@ -915,6 +940,68 @@ function showTooltip(name, n, mx, my) {
   tooltip.style.top = y + 'px';
 }
 function hideTooltip() { tooltip.classList.remove('visible'); }
+
+
+// ═══ The header ═════════════════════════════════════════════════════════════
+
+// The header describes the instance on screen: the server's mode and framework version
+// (from the status), and the run folder of the snapshots shown
+let runInfo = [], statusRun = null;
+let model = null;                 // { backend, name, active } from the status
+
+function renderRunInfo() {
+  const text = [...runInfo, currentRun || statusRun].filter(Boolean).join(' · ');
+  setText('header-run-info', text || '—');
+  $('header-run-info').title = text + '\nserver mode · framework version · run folder in sirisys_runs/';
+}
+
+function setRunning(running) {
+  $('btn-play').textContent = running ? 'Pause' : 'Play';
+  $('btn-play').classList.toggle('active', running);
+  $('header-running').classList.toggle('active', running);
+  setText('header-run-text', running ? 'running' : 'paused');
+}
+
+function showLedger(ledger) {
+  $('header-ledger').replaceChildren(ledger.count + ' ',
+    el('span', 'n-breakdown', (ledger.head || '').slice(0, 12) + '…'));
+}
+
+// The model, and its watch so far: how many calls failed or came back empty
+function renderModel(watch) {
+  if (!model) return;
+  let text, title, tone = '';
+  if (!model.active) {
+    text = model.backend === 'none' ? 'no model' : 'model unavailable';
+    title = 'constructs are named synthetically'
+      + (model.backend === 'none' ? '' : ` (degraded: the ${model.backend} model was not available at start)`);
+  } else {
+    text = 'model ' + model.name;
+    title = model.backend + ' · ' + model.name;
+    if (watch) {
+      const bad = watch.failures + watch.empty;
+      title += ` · ${watch.calls} calls: ${watch.failures} failed, ${watch.empty} empty`;
+      if (watch.tripped) { text += ' · watch tripped'; tone = 'err'; title += ' · ' + watch.reason; }
+      else if (bad) { text += ` · ${bad}/${watch.calls} bad`; tone = 'warn'; }
+    }
+  }
+  const box = $('header-model');
+  box.textContent = text;
+  box.title = title;
+  box.className = ('stat-inline ' + tone).trim();
+}
+
+// n, then how many of each shape (◆ anchors, ✦ Zero Points, ⬢ crystals the field formed)
+function renderShapeCount(constructs) {
+  let diamonds = 0, stars = 0, hexagons = 0;
+  for (const c of constructs) {
+    if (ZERO_POINTS.has(c.name)) stars++;
+    else if (ANCHORS.has(c.name)) diamonds++;
+    else if (c.layer === APPARENT) hexagons++;
+  }
+  $('header-n').replaceChildren(constructs.length + ' ',
+    el('span', 'n-breakdown', `(${diamonds}◆·${stars}✦·${hexagons}⬢)`));
+}
 
 
 // ═══ The panels ═════════════════════════════════════════════════════════════
@@ -947,41 +1034,42 @@ function renderLagrangian(constructs) {
   })));
 }
 
-// Rows of { label, count, color, on, toggle }; a click hides or shows that category
-function renderFilterRows(id, rows) {
-  $(id).replaceChildren(...rows.map(r => {
-    const row = el('div', 'filter-row ' + (r.on ? 'on' : 'off'));
-    const swatch = el('span', 'swatch');
-    swatch.style.background = r.color;
-    row.append(...spaced([el('span', 'checkbox', '✓'), swatch, el('span', 'label', r.label), el('span', 'count', r.count)]));
-    row.onclick = () => { r.toggle(); renderFilters(); render(); };
+// The filters: one switch per layer and per edge state, built once; a snapshot only
+// updates their counts, so focus and hover stay where they are
+const filterCounts = { layer: {}, state: {} };
+function filterSwitch(label, color, isOn, toggle) {
+  const row = el('button', 'filter-row'), count = el('span', 'count', '—'), swatch = el('span', 'swatch');
+  row.type = 'button';
+  swatch.style.background = color;
+  row.append(...spaced([el('span', 'checkbox', '✓'), swatch, el('span', 'label', label), count]));
+  row.setAttribute('aria-pressed', String(isOn()));
+  row.onclick = () => {
+    toggle();
+    row.setAttribute('aria-pressed', String(isOn()));
+    refreshTooltip();
+    requestDraw();
+  };
+  return [row, count];
+}
+function buildFilters() {
+  $('filter-layer').replaceChildren(...LAYERS.map((name, i) => {
+    const [row, count] = filterSwitch(name, COLOR.layer[name],
+      () => FILTERS.layer[i], () => { FILTERS.layer[i] = !FILTERS.layer[i]; });
+    filterCounts.layer[name] = count;
+    return row;
+  }));
+  $('filter-edge').replaceChildren(...STATES.map(s => {
+    const [row, count] = filterSwitch(s, COLOR.state[s],
+      () => FILTERS.edgeState[s], () => { FILTERS.edgeState[s] = !FILTERS.edgeState[s]; });
+    filterCounts.state[s] = count;
     return row;
   }));
 }
-function renderFilters() {
-  if (!lastSnapshot) return;
-  const layers = lastSnapshot.layers || {}, states = Object.fromEntries(STATES.map(s => [s, 0]));
-  for (const e of lastSnapshot.field.edges) if (e.state in states) states[e.state]++;
-  renderFilterRows('filter-layer', LAYERS.map((name, i) => ({
-    label: name, count: layers[name] || 0, color: COLOR.layer[name],
-    on: FILTERS.layer[i], toggle: () => { FILTERS.layer[i] = !FILTERS.layer[i]; },
-  })));
-  renderFilterRows('filter-edge', STATES.map(s => ({
-    label: s, count: states[s], color: COLOR.state[s],
-    on: FILTERS.edgeState[s], toggle: () => { FILTERS.edgeState[s] = !FILTERS.edgeState[s]; },
-  })));
-}
-
-// Header: n, then how many of each shape (◆ anchors, ✦ Zero Points, ⬢ crystals the field formed)
-function renderShapeCount(constructs) {
-  let diamonds = 0, stars = 0, hexagons = 0;
-  for (const c of constructs) {
-    if (ZERO_POINTS.has(c.name)) stars++;
-    else if (ANCHORS.has(c.name)) diamonds++;
-    else if (c.layer === APPARENT) hexagons++;
-  }
-  $('header-n').replaceChildren(constructs.length + ' ',
-    el('span', 'n-breakdown', `(${diamonds}◆·${stars}✦·${hexagons}⬢)`));
+function updateFilterCounts(snap) {
+  const states = Object.fromEntries(STATES.map(s => [s, 0]));
+  for (const e of snap ? snap.field.edges : []) if (e.state in states) states[e.state]++;
+  for (const name of LAYERS) filterCounts.layer[name].textContent = snap ? snap.layers[name] || 0 : '—';
+  for (const s of STATES) filterCounts.state[s].textContent = snap ? states[s] : '—';
 }
 
 // Pool telemetry: the breath (contraction, 0–1) and the share of products made
@@ -997,7 +1085,7 @@ function drawTelemetry() {
   const pad = 4;
   const xAt = i => i / (telemetry.length - 1) * (W - 2 * pad) + pad;
   const yAt = v => H - pad - v * (H - 2 * pad);
-  const line = (values, color, width) => {
+  const plot = (values, color, width) => {
     tctx.strokeStyle = color; tctx.lineWidth = width;
     tctx.beginPath();
     values.forEach((v, i) => i ? tctx.lineTo(xAt(i), yAt(v)) : tctx.moveTo(xAt(i), yAt(v)));
@@ -1007,11 +1095,33 @@ function drawTelemetry() {
   tctx.setLineDash([2, 3]);
   tctx.beginPath(); tctx.moveTo(pad, yAt(0.5)); tctx.lineTo(W - pad, yAt(0.5)); tctx.stroke();
   tctx.setLineDash([]); tctx.globalAlpha = 1;
-  line(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.warn, 1.3);
-  line(telemetry.map(t => t.contraction || 0), COLOR.accent, 1.4);
+  plot(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.warn, 1.3);
+  plot(telemetry.map(t => t.contraction || 0), COLOR.accent, 1.4);
   tctx.font = '9px ' + FONT_MONO; tctx.textBaseline = 'top'; tctx.textAlign = 'right';
   tctx.fillStyle = COLOR.warn; tctx.fillText('● exchange', W - 5, 3);
   tctx.fillStyle = COLOR.accent; tctx.fillText('● contraction  ', W - 5 - tctx.measureText('● exchange').width, 3);
+}
+
+// Until the field is drawn, the field's panel says why: never cycled, paused (its
+// snapshots went to another viewer), or waiting for the next cycle
+function renderEmptyState() {
+  const drawn = !!(lastSnapshot && lastSnapshot.constructs > 0);
+  $('empty-state').classList.toggle('hidden', drawn);
+  if (drawn) return;
+  const cycles = lastStatus ? lastStatus.cycle || 0 : 0;
+  const kbd = text => el('kbd', null, text);
+  if (lastStatus && lastStatus.running) {
+    setText('empty-state-title', 'field is cycling');
+    $('empty-state-hint').replaceChildren('It appears here with the next cycle.');
+  } else if (cycles > 0) {
+    setText('empty-state-title', 'field is paused');
+    $('empty-state-hint').replaceChildren(`after ${cycles} cycles. Press `, kbd('Play'), ' or ', kbd('Step'),
+                                          ' to draw it here.');
+  } else {
+    setText('empty-state-title', 'field is dormant');
+    $('empty-state-hint').replaceChildren('Press ', kbd('Play'), ' above to start cycling the field.',
+                                          el('br'), 'Its constructs appear here from the first cycle.');
+  }
 }
 
 
@@ -1026,7 +1136,7 @@ $('log-filters').replaceChildren(...Object.entries(LOG_KINDS).map(([kind, [label
   chip.style.setProperty('--chip', `var(${color})`);
   chip.setAttribute('aria-pressed', 'true');
   chip.onclick = () => {
-    const shown = logList.classList.toggle('hide-' + kind) === false;
+    const shown = !logList.classList.toggle('hide-' + kind);
     chip.setAttribute('aria-pressed', String(shown));
   };
   return chip;
@@ -1059,78 +1169,8 @@ function logCycle(snap, crystallized) {
   entry.append(head, el('div', 'names', names.join('\n')));
   addEntry(entry, snap.cycle, summary, 'event', head);
 }
-
-
-// ═══ One snapshot per cycle ═════════════════════════════════════════════════
-
-let lastSnapshot = null;
-let currentRun = null;            // the instance on screen: its run folder
-let discardedRun = null;          // the instance just reset: its snapshots still in flight are dropped
-let lastCrystalCycle = null;
-let watchReported = false;        // a tripped model watch, said once in the log
-
-function applySnapshot(snap) {
-  if (snap.run && snap.run === discardedRun) return;
-  if (snap.run && currentRun && snap.run !== currentRun) clearField();     // a new instance, reset from anywhere
-  currentRun = snap.run || currentRun;
-  lastSnapshot = snap;
-  const field = snap.field, T = `(${snap.T[0]},${snap.T[1]})`;
-  setText('s-cycle', snap.cycle); setText('header-cycle', snap.cycle);
-  setText('s-T', T); setText('header-T', T);
-  setText('s-constructs', snap.constructs);
-  setText('s-edges', snap.edges);
-  // the apparent log also counts the Zero Points, crystals from birth: both figures
-  const zeroPoints = field.constructs.filter(c => ZERO_POINTS.has(c.name) && c.layer === APPARENT).length;
-  setText('s-apparents', `${snap.apparents} (${Math.max(0, snap.apparents - zeroPoints)} emergent)`);
-  setText('s-concluded', snap.terminations);
-  setText('s-conflicts', snap.conflicts);
-  setText('s-both', snap.both_edges);
-  setText('s-closures', snap.closures);
-  setText('s-reinc', snap.reincarnations);
-  // the criterion's measure: the three most energetic constructs, together
-  const energies = field.constructs.map(c => c.energy).filter(e => e != null).sort((a, b) => b - a);
-  setText('s-energy3', energies.length ? energies.slice(0, 3).reduce((sum, e) => sum + e, 0).toFixed(2) : '—');
-  setText('s-instability', snap.instability.toFixed(3));
-  $('inst-bar').style.width = snap.instability * 100 + '%';
-  renderShapeCount(field.constructs);
-  if (snap.ledger) showLedger(snap.ledger);
-  renderRunInfo();
-  if ('model_watch' in snap) renderModel(snap.model_watch);
-
-  setText('b-breath', snap.breath ?? '—');
-  setText('b-contraction', fixed(snap.contraction, 2));
-  $('b-bar').style.width = (snap.contraction || 0) * 100 + '%';
-  setText('b-tolerance', fixed(snap.tolerance, 2));
-
-  renderBreakdown('modes-list', Object.entries(snap.modes).map(([k, v]) => ({ label: k, count: v, color: COLOR.mode[k] || '#888' })));
-  renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({ label: k, count: v, color: COLOR.layer[k] || '#888' })));
-  renderLagrangian(field.constructs);
-  renderFilters();
-
-  const t = snap.telemetry || {};
-  setText('t-pool', [t.both_pool_size, t.conflict_pool_size, t.exchange_pool_size].map(v => v ?? '—').join(' · '));
-  setText('t-exec', (t.executions_successful || 0) + '/' + (t.executions_attempted || 0));
-  setText('t-ops', [t.foundational_executions, t.exchange_executions].map(v => v ?? '—').join(' · '));
-  if (t.cycle !== undefined) {
-    telemetry.push({ ...t, contraction: snap.contraction });
-    if (telemetry.length > TELEMETRY_KEPT) telemetry.shift();
-    drawTelemetry();
-  }
-
-  $('empty-state').classList.toggle('hidden', snap.constructs > 0);
-  syncNodes(field);
-  relaxLayout(4);
-  render();
-
-  // Cussive collapse: every construct that rose a layer, and which of them crystallized
-  const crystallized = snap.crystallized ?? snap.promoted_names.filter(name => nodes.get(name)?.c.layer === APPARENT);
-  const crystals = new Set(crystallized);
+function logSnapshot(snap, crystallized) {
   if (snap.events > 0 || snap.promoted > 0) logCycle(snap, crystallized);
-  snap.promoted_names.forEach(name => pulse(name, crystals.has(name)));
-  if (crystallized.length) lastCrystalCycle = snap.cycle;
-  const ago = lastCrystalCycle === null ? null : snap.cycle - lastCrystalCycle;
-  setText('s-crystal-ago', ago === null ? '—' : ago === 0 ? 'just now' : ago + 'c ago');
-
   // From the framework's console: each cussive collapse, and what went wrong with the model
   for (const line of snap.log) {
     if (line.includes('[CUSSIVE]')) log(snap.cycle, line.trim(), 'cussive', line.includes('→ APPARENT') ? 'crystal' : '');
@@ -1154,58 +1194,118 @@ function applySnapshot(snap) {
   }
 }
 
-// The header describes the instance on screen: the server's mode and framework version
-// (from the status), and the run folder of the snapshots shown
-let runInfo = [], statusRun = null;
-function renderRunInfo() {
-  setText('header-run-info', [...runInfo, currentRun || statusRun].filter(Boolean).join(' · '));
-}
 
-function showLedger(ledger) {
-  $('header-ledger').replaceChildren(ledger.count + ' ',
-    el('span', 'n-breakdown', (ledger.head || '').slice(0, 12) + '…'));
-}
+// ═══ One snapshot per cycle ═════════════════════════════════════════════════
 
-// The model from the status ({ backend, name, active }), and its watch so far
-let model = null;
-function renderModel(watch) {
-  const box = $('header-model');
-  if (!model) return;
-  let text, title, tone = '';
-  if (!model.active) {
-    text = model.backend === 'none' ? 'no model' : 'model unavailable';
-    title = 'constructs are named synthetically'
-      + (model.backend === 'none' ? '' : ` (degraded: ${model.backend} did not answer at start)`);
-  } else {
-    text = 'model ' + model.name;
-    title = model.backend + ' · ' + model.name;
-    if (watch) {
-      const bad = watch.failures + watch.empty;
-      title += ` · ${watch.calls} calls: ${watch.failures} failed, ${watch.empty} empty`;
-      if (watch.tripped) { text += ' · watch tripped'; tone = 'err'; title += ' · ' + watch.reason; }
-      else if (bad) { text += ` · ${bad} bad of ${watch.calls}`; tone = 'warn'; }
-    }
+let lastSnapshot = null;
+let currentRun = null;            // the instance on screen: its run folder
+let discardedRun = null;          // the instance just reset: its snapshots still in flight are dropped
+let lastCrystalCycle = null;
+let watchReported = false;        // a tripped model watch, said once in the log
+
+// The BOTH channels the tetralemmic scan closed at the exchange quantum, as the framework
+// reports them ([EVENTUALITY] N). Its `closures` is the net drop in BOTH edges over the
+// scan, which opens new BOTH while it closes, so it counts fewer.
+function closedAtQuantum(lines) {
+  let closed = 0;
+  for (const line of lines) {
+    const m = /\[EVENTUALITY\] (\d+)/.exec(line);
+    if (m) closed += Number(m[1]);
   }
-  box.textContent = text;
-  box.title = title;
-  box.className = ('stat-inline ' + tone).trim();
+  return closed;
+}
+
+function renderCounters(snap) {
+  const field = snap.field, T = `(${snap.T[0]},${snap.T[1]})`;
+  setText('s-cycle', snap.cycle); setText('header-cycle', snap.cycle);
+  setText('s-T', T); setText('header-T', T);
+  setText('s-constructs', snap.constructs);
+  setText('s-edges', snap.edges);
+  // the apparent log also counts the Zero Points, crystals from birth: both figures
+  const zeroPoints = field.constructs.filter(c => ZERO_POINTS.has(c.name) && c.layer === APPARENT).length;
+  setText('s-apparents', `${snap.apparents} (${Math.max(0, snap.apparents - zeroPoints)} emergent)`);
+  setText('s-concluded', snap.terminations);
+  setText('s-conflicts', snap.conflicts);
+  setText('s-both', snap.both_edges);
+  setText('s-closures', closedAtQuantum(snap.log));
+  setText('s-reinc', snap.reincarnations);
+  // the criterion's measure: the three most energetic constructs, together
+  const energies = field.constructs.map(c => c.energy).filter(e => e != null).sort((a, b) => b - a);
+  setText('s-energy3', energies.length ? energies.slice(0, 3).reduce((sum, e) => sum + e, 0).toFixed(2) : '—');
+  setText('s-instability', snap.instability.toFixed(3));
+  $('inst-bar').style.width = snap.instability * 100 + '%';
+  const ago = lastCrystalCycle === null ? null : snap.cycle - lastCrystalCycle;
+  setText('s-crystal-ago', ago === null ? '—' : ago === 0 ? 'just now' : ago + 'c ago');
+}
+
+function renderBreathing(snap) {
+  setText('b-breath', snap.breath ?? '—');
+  setText('b-contraction', fixed(snap.contraction, 2));
+  $('b-bar').style.width = (snap.contraction || 0) * 100 + '%';
+  setText('b-tolerance', fixed(snap.tolerance, 2));
+}
+
+function renderPoolTelemetry(snap) {
+  const t = snap.telemetry || {};
+  setText('t-pool', [t.both_pool_size, t.conflict_pool_size, t.exchange_pool_size].map(v => v ?? '—').join(' · '));
+  setText('t-exec', (t.executions_successful || 0) + '/' + (t.executions_attempted || 0));
+  setText('t-ops', [t.foundational_executions, t.exchange_executions].map(v => v ?? '—').join(' · '));
+  if (t.cycle !== undefined) {
+    telemetry.push({ ...t, contraction: snap.contraction });
+    if (telemetry.length > TELEMETRY_KEPT) telemetry.shift();
+    chartStale = true;
+  }
+}
+
+function applySnapshot(snap) {
+  if (snap.run && snap.run === discardedRun) return;
+  if (snap.run && currentRun && snap.run !== currentRun) clearField();     // a new instance, reset from anywhere
+  currentRun = snap.run || currentRun;
+  lastSnapshot = snap;
+  if (snap.question) questions.add(snap.question);
+  syncNodes(snap.field);
+  relaxLayout(4);
+
+  // Cussive collapse: every construct that rose a layer, and which of them crystallized
+  const crystallized = snap.crystallized ?? snap.promoted_names.filter(name => nodes.get(name)?.c.layer === APPARENT);
+  const crystals = new Set(crystallized);
+  if (crystallized.length) lastCrystalCycle = snap.cycle;
+
+  renderShapeCount(snap.field.constructs);
+  if (snap.ledger) showLedger(snap.ledger);
+  renderRunInfo();
+  if ('model_watch' in snap) renderModel(snap.model_watch);
+  renderCounters(snap);
+  renderBreathing(snap);
+  renderBreakdown('modes-list', Object.entries(snap.modes).map(([k, v]) => ({ label: k, count: v, color: COLOR.mode[k] || '#888' })));
+  renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({ label: k, count: v, color: COLOR.layer[k] || '#888' })));
+  renderLagrangian(snap.field.constructs);
+  updateFilterCounts(snap);
+  renderPoolTelemetry(snap);
+  renderEmptyState();
+
+  logSnapshot(snap, crystallized);
+  snap.promoted_names.forEach(name => pulse(name, crystals.has(name)));
+  refreshTooltip();
+  requestDraw();
 }
 
 // After a reset: nothing of the previous instance stays on screen
 function clearField() {
-  nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0;
+  nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0; questions.clear();
   lastSnapshot = null; currentRun = null; lastCrystalCycle = null; watchReported = false;
   for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-concluded', 's-conflicts',
                     's-both', 's-closures', 's-reinc', 's-energy3', 's-instability', 's-crystal-ago',
                     'b-breath', 'b-contraction', 'b-tolerance', 't-pool', 't-exec', 't-ops',
                     'header-cycle', 'header-T', 'header-n', 'header-ledger']) setText(id, '—');
   for (const id of ['inst-bar', 'b-bar']) $(id).style.width = '0%';
-  for (const id of ['modes-list', 'layers-list', 'lagrangian-list', 'filter-layer', 'filter-edge']) $(id).replaceChildren();
+  for (const id of ['modes-list', 'layers-list', 'lagrangian-list']) $(id).replaceChildren();
+  updateFilterCounts(null);
   logList.replaceChildren($('log-placeholder').content.cloneNode(true));
-  $('empty-state').classList.remove('hidden');
   hideTooltip();
-  render();
-  drawTelemetry();
+  renderEmptyState();
+  chartStale = true;
+  requestDraw();
 }
 
 
@@ -1215,9 +1315,15 @@ let transport = 'ws';             // 'ws' | 'poll'
 let ws = null;
 let wsFailed = false;             // the WebSocket failed while the server answered: poll, retry later
 let lastWsRetry = 0;
-let serverStatus = null;          // the last status polling received
+let serverStatus = null;          // the last status polling received: the server is up
+let lastStatus = null;            // the last status, by either way
 let reconnectTimer = null;
 let pollTimer = null, pollRun = 0;          // pollRun: only the newest polling loop goes on
+
+// A snapshot the page cannot show is reported and passed over: the next one still arrives
+function applySafely(snap) {
+  try { applySnapshot(snap); } catch (err) { console.error('Snapshot handler crashed:', err, snap); }
+}
 
 function setConnStatus(state) {
   $('conn-dot').className = 'dot ' + state;
@@ -1242,13 +1348,9 @@ function connectWS() {
   ws.onmessage = ev => {
     let msg;
     try { msg = JSON.parse(ev.data); } catch (err) { console.error('Bad WS message:', err, ev.data); return; }
-    try {
-      if (msg.type === 'cycle') applySnapshot(msg);
-      else if (msg.type === 'status') updateStatus(msg);
-      else if (msg.type === 'ack') updateStatus(msg.status);
-    } catch (err) {
-      console.error('Snapshot handler crashed:', err, msg);
-    }
+    if (msg.type === 'cycle') applySafely(msg);
+    else if (msg.type === 'status') updateStatus(msg);
+    else if (msg.type === 'ack') updateStatus(msg.status);
   };
   ws.onclose = () => {
     setConnStatus('offline');
@@ -1267,6 +1369,17 @@ function connectWS() {
 }
 
 async function getJSON(path) { return (await fetch(path)).json(); }
+
+// The server hands each snapshot out once: one request at a time, in order, and what
+// it drained is applied even if a newer polling loop, or the WebSocket, took over
+let draining = Promise.resolve();
+function drainSnapshots() {
+  draining = draining.then(async () => {
+    const snapshots = await getJSON('/api/snapshot').catch(() => []);
+    for (const snap of Array.isArray(snapshots) ? snapshots : []) applySafely(snap);
+  });
+  return draining;
+}
 
 function startPolling() {
   stopPolling();
@@ -1291,9 +1404,8 @@ async function poll(run) {
       connectWS();
       return;
     }
-    const snapshots = await getJSON('/api/snapshot').catch(() => []);
+    await drainSnapshots();
     if (run !== pollRun) return;
-    for (const snap of Array.isArray(snapshots) ? snapshots : []) applySnapshot(snap);
   } catch (err) {
     if (run !== pollRun) return;
     setConnStatus('offline');
@@ -1304,37 +1416,39 @@ async function poll(run) {
 
 function updateStatus(st) {
   if (!st) return;
+  lastStatus = st;
   if (st.mode || st.framework_version) runInfo = [st.mode, st.framework_version && 'v' + st.framework_version];
   statusRun = st.run || statusRun;
   renderRunInfo();
   if (st.model) { model = st.model; renderModel(st.model.watch); }
   if (st.ledger && !lastSnapshot) showLedger(st.ledger);     // until a snapshot keeps it current
-  $('btn-play').textContent = st.running ? 'Pause' : 'Play';
-  $('btn-play').classList.toggle('active', !!st.running);
-  $('header-running').classList.toggle('active', !!st.running);
-  setText('header-run-text', st.running ? 'running' : 'paused');
-  const slider = $('speed-slider');
+  setRunning(!!st.running);
   if (st.cycle_delay_ms != null && document.activeElement !== slider) {      // the server's own delay
     slider.value = st.cycle_delay_ms;
     setText('speed-val', st.cycle_delay_ms + 'ms');
   }
+  renderEmptyState();
 }
 
-// An action goes over the WebSocket when it is open, otherwise as a POST
+// An action goes over the WebSocket when it is open (the ack brings the status),
+// otherwise as a POST, whose reply says at once whether the field now runs
 function send(action, options) {
   const body = { action, ...options };
   if (transport === 'ws' && ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(body));
-  } else {
-    fetch(`/api/control/${action}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    }).catch(err => console.error('Control failed:', err));
+    return;
   }
+  fetch(`/api/control/${action}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }).then(r => r.json())
+    .then(reply => { if (typeof reply.running === 'boolean') setRunning(reply.running); })
+    .catch(err => console.error('Control failed:', err));
 }
 
 
-// ═══ The buttons, and the start ═════════════════════════════════════════════
+// ═══ The controls, and the start ════════════════════════════════════════════
 
+const slider = $('speed-slider');
 $('btn-play').onclick = () => send($('btn-play').classList.contains('active') ? 'pause' : 'play');
 $('btn-step').onclick = () => send('step');
 $('btn-reset').onclick = () => {
@@ -1345,15 +1459,22 @@ $('btn-reset').onclick = () => {
   }
 };
 $('btn-fit').onclick = fitView;
-$('speed-slider').oninput = e => {
-  const ms = parseInt(e.target.value, 10);
-  setText('speed-val', ms + 'ms');
-  send('speed', { cycle_delay_ms: ms });
-};
-window.addEventListener('resize', () => { resizeCanvas(); render(); drawTelemetry(); });
+slider.oninput = () => setText('speed-val', slider.value + 'ms');
+slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
+// Space plays or pauses, S steps, F fits; a focused control keeps its own keys
+window.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+  if (e.target instanceof Element && e.target.closest('button, input, summary')) return;
+  const act = { ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView }[e.key.toLowerCase()];
+  if (act) { e.preventDefault(); act(); }
+});
+window.addEventListener('resize', () => { resizeCanvas(); chartStale = true; requestDraw(); });
+
+buildFilters();
 logList.replaceChildren($('log-placeholder').content.cloneNode(true));
 resizeCanvas();
+renderEmptyState();
 connectWS();
 </script>
 </body>

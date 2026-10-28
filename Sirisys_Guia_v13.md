@@ -37,7 +37,7 @@ python3 Sirisys_Server.py --stream 0 --play       # perceptos sintéticos: ejecu
 python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del día
 ```
 
-- Abre `http://127.0.0.1:8000`. Play, Step y Reset controlan el campo; Fit recentra la vista.
+- Abre `http://127.0.0.1:8000`. Play, Step y Reset controlan el campo; Fit recentra la vista (teclas: Espacio, S, F).
 - Cada arranque y cada Reset crean una instancia nueva en `sirisys_runs/<fecha-hora>_live/` (o `_stream0/`), que contiene `state.json` y `ledger.jsonl`. Nada se borra.
 - **No hay semilla.** El framework no usa ningún generador aleatorio: cada elección se deriva de la historia (el hash de cabeza del ledger). Con `--stream N` y los mismos perceptos, dos ejecuciones son idénticas; con `live`, los perceptos de la máquina las hacen únicas.
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.

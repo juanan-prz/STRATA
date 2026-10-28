@@ -62,7 +62,7 @@ python3 test_sirisys.py                    # integrity, determinism, bounded mem
 python3 Sirisys_Server.py --play           # experiment mode, live percepts
 ```
 
-Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; Fit recentres the view; `Ctrl+C` in the terminal stops the server.
+Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; Fit recentres the view (keys: Space, S, F); `Ctrl+C` in the terminal stops the server.
 
 ```bash
 python3 run_report.py --cycles 20 --seeds 1 --backend ollama    # short measured run
