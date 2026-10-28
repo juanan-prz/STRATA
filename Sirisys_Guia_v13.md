@@ -47,12 +47,14 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 ## Informes
 
 ```bash
-python3 run_report.py --cycles 150 --seeds 3 --backend none     # 3 flujos sintéticos reproducibles, sin modelo
+python3 run_report.py --backend none                             # solo el control, sin modelo
 python3 run_report.py --backend ollama                           # con el modelo local
 python3 run_report.py --percepts live                            # perceptos reales
 python3 run_report.py --backend ollama --profile minimal         # sin narración ni hora del día
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism   # ¿el modelo responde siempre igual?
 ```
+
+Por defecto, cada ejecución dura 1.000 ciclos (lo mínimo para juzgar los criterios) y recorre 3 flujos sintéticos reproducibles (`--cycles`, `--seeds`).
 
 Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a comparar.
 

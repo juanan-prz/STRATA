@@ -1,61 +1,56 @@
 #!/usr/bin/env python3
-"""
-SIRISYS — instrumented run and report generator.
+"""SIRISYS — instrumented runs and their report.
 
-WHAT TO DO
-  1. Put this file, sirisys_loader.py and the framework file in one folder.
-     The newest Sirisys_Framework_vX_Y.py in that folder is used automatically.
-  2. In Terminal:
-         pip3 install anthropic numpy psutil
-         export ANTHROPIC_API_KEY="sk-ant-..."
-         python3 run_report.py --cycles 20 --seeds 1      # smoke test first
-         python3 run_report.py                            # full run
-  3. Send the file sirisys_report.json that appears in the folder.
+USAGE
+  python3 run_report.py --cycles 20 --seeds 1 --backend ollama --profile minimal     # smoke test
+  python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # the experiment
+  python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
+  python3 run_report.py --backend none                                               # the control alone
 
-  To use a different Claude model (optional):
-         python3 run_report.py --model claude-haiku-4-5-20251001
-  To use a local model through Ollama instead of the API:
-         python3 run_report.py --backend ollama [--model <installed model>]
-  Keep the SAME backend and model for every run you intend to compare.
-
-COST
-  The framework caps itself at 4 model calls per cycle. Before the arms run,
-  two real calls prove the model answers and give an upper estimate of the
-  model time. The report states the actual number of calls, broken down by
-  purpose, with failures, empty answers and latency.
+  Keep the same backend, model and profile for every run you intend to compare,
+  and send the file the run writes: sirisys_report.json (or, with --determinism,
+  sirisys_determinism.json).
 
 WHAT THE REPORT COMPARES
-  Three arms on the same percept streams: the model (it names constructs and
-  asks the Sombunal questions), the model asking only the Sombunal questions
-  (names stay the control's), and a control without a model. The model reaches
-  the field through those two channels; the middle arm separates them. Each run is judged by the Phase 3 criteria (sirisys_measures.
-  LifeCriteria, the same code as measure_phase3.py): durable crystals in every
+  Three arms on the same percept streams. The model reaches the field through
+  two channels: the names it gives constructs (names are keys, and enter every
+  orientation) and the Sombunal questions (they enter the field as constructs).
+    llm            the model, through both channels;
+    llm_questions  the model asking only the Sombunal questions; the names are
+                   the control's own, so this arm separates the two channels;
+    degraded       the control, without a model.
+  Each run is judged by the self-adjustment criteria (sirisys_measures.
+  LifeCriteria, the code measure_phase3.py uses): durable crystals in every
   1000-cycle window, flicker <= 5 %, no growth trend, flat cost of the cycle
-  itself (model time excluded), bounded top-3 energy; with the tolerance the
-  field sets for itself. Each run also carries the topology trace.
+  itself (model time excluded), bounded top-3 energy. Each run also records the
+  tolerance the field sets for itself, a trace of every cycle, the topology
+  twice per breath and the ledger head after every cycle.
 
 MODEL HEALTH
-  A model that fails or answers empty leaves the field on synthetic names
-  without notice. With --backend ollama|anthropic the run stops (exit code 3)
-  if the model does not answer before the arms start, or if during the run
-  3 calls in a row fail or more than 10 % of the last 50 fail or come back
-  empty. The report is still written, marked "aborted", with the reason.
+  A model that fails or answers empty would leave the field on synthetic names
+  without notice. With a model, two real calls are made before anything runs;
+  during the run, it stops when 3 calls in a row fail or more than 10 % of the
+  last 50 fail or come back empty. The report is still written, marked
+  "aborted", with the reason.
 
 DETERMINISM
-  The framework has no randomness, but a model runtime may have some even
-  when every request carries a seed. With --determinism the model arm runs
-  the first stream twice and the report says whether both runs sealed the
-  same ledger and, if not, the cycle at which they parted. It writes
-  sirisys_determinism.json, so the main report is never overwritten.
+  The framework has no PRNG: every choice derives from the ledger head, so a run
+  without a model is bit-reproducible on its synthetic stream. A model runtime
+  may have randomness of its own even though every request carries a seed
+  derived from the history. --determinism runs the model arm on stream 0 twice
+  and says whether both runs sealed the same ledger and, if not, the cycle at
+  which they parted.
 
-NOTE ON REPRODUCIBILITY
-  The framework has no PRNG. With --percepts synthetic (default)
-  each "seed" selects a reproducible percept stream and the degraded arm is
-  bit-reproducible; with --percepts live, runs read this machine's CPU/RAM.
+EXIT CODES
+  0  the report is written
+  1  the framework lacks a mechanism this report measures
+  3  a model was asked for and is missing or does not answer, or it stopped
+     answering during the run (the report is then marked "aborted")
 """
 import argparse
 import contextlib
 import hashlib
+import inspect
 import io
 import json
 import platform
@@ -63,70 +58,81 @@ import statistics
 import sys
 import time
 import traceback
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from pathlib import Path
-import field_topology  # read-only topology (pure Python, no networkx)
-from sirisys_measures import LifeCriteria, ModelHealth
 
 HERE = Path(__file__).resolve().parent
-OUTPUT = HERE / "sirisys_report.json"
-OUTPUT_DETERMINISM = HERE / "sirisys_determinism.json"
-
-TAIL_START = 100
-
-# The framework is found by version, not by exact file name: the newest
-# Sirisys_Framework_vX_Y.py in this folder is used (see sirisys_loader.py).
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
+    import field_topology                                   # read-only topology and depth
+    from sirisys_measures import LifeCriteria, ModelHealth
     from sirisys_loader import load_framework
-except ImportError:
-    sys.exit("ERROR: sirisys_loader.py not found. Put it in the same folder "
-             "as run_report.py and the framework file.")
+except ImportError as ex:
+    sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
+             "field_topology.py and the framework file in one folder.")
 try:
-    S = load_framework(HERE)
+    S = load_framework(HERE)        # the newest Sirisys_Framework_vX_Y.py in this folder
 except FileNotFoundError as ex:
     sys.exit(f"ERROR: {ex}")
+
 FRAMEWORK = Path(S.__sirisys_path__)
+REPORT = HERE / "sirisys_report.json"
+DETERMINISM_REPORT = HERE / "sirisys_determinism.json"
 
-# Configuration is READ from the framework, so the report records what
-# actually ran instead of what this script assumed.
-import inspect as _inspect
-_prune = _inspect.signature(S.ConcordancyField.prune).parameters
-BOTH_FLOOR = _prune["both_floor"].default
-MIN_REFERENCES = _prune["min_references"].default
-EXCHANGE_QUANTUM = S.TetralemmaEngine.EXCHANGE_QUANTUM
+PROFILES = {"standard": {"narrate": True, "include_hour": True},
+            "minimal": {"narrate": False, "include_hour": False}}
+# name: (title, model active, channels through which the model reaches the field)
+ARMS = {"llm": ("LLM active", True, "all"),
+        "llm_questions": ("LLM, Sombunal questions only", True, "questions"),
+        "degraded": ("degraded control", False, "all")}
+ACCEPTANCE = ("Phase 3, per run: durable crystals (life >= one breath) in every 1000-cycle "
+              "window, flicker <= 5 %, constructs trend <= 1.2, cost of the cycle itself flat "
+              "(late <= 1.5 x early + 0.5 ms), top-3 energy trend <= 1.2")
+ZERO_POINTS = frozenset(S.ZERO_POINTS)   # left out of the topology: never operands (TMC p.22)
+PROGRESS_EVERY = 25                      # cycles between progress lines
+SAMPLE_NAMES, SAMPLE_CRYSTALS, SAMPLE_TAIL = 60, 40, 40   # how much of each list a run keeps
 
 
-def _default_floor(src):
-    import re as _re
-    m = _re.search(r"both_floor:\s*float\s*=\s*([0-9.]+)", src)
-    return float(m.group(1)) if m else 0.0
+def _prune_default(name):
+    p = inspect.signature(S.ConcordancyField.prune).parameters.get(name)
+    return None if p is None else p.default
 
 
-def integrity_check():
-    """Confirm the loaded framework carries every mechanism the report measures.
+# Read from the framework, so the report records what ran rather than what this file assumes
+BOTH_FLOOR, MIN_REFERENCES = _prune_default("both_floor"), _prune_default("min_references")
+EXCHANGE_QUANTUM = getattr(S.TetralemmaEngine, "EXCHANGE_QUANTUM", None)
 
-    These are checks of MECHANISMS, not of a version number, so they keep
-    passing on future versions as long as nothing measured here is removed.
-    A failure means the framework changed in substance — exactly the moment
-    this runner should be reviewed before trusting its numbers.
-    """
+
+class _Discard(io.TextIOBase):
+    """Where the framework's own printing goes while a run is measured."""
+
+    def write(self, s):
+        return len(s)
+
+
+def quiet():
+    return contextlib.redirect_stdout(_Discard())
+
+
+def integrity_checks():
+    """The mechanisms this report measures, checked in the loaded framework.
+
+    Mechanisms, not a version number: the checks keep passing on later versions
+    as long as nothing measured here is removed. A failure means the framework
+    changed in substance, and this file must be reviewed before its numbers are
+    trusted. Returns the checks and the framework file's sha256[:16]."""
     src = FRAMEWORK.read_text(encoding="utf-8")
     checks = {
-        "conflict identity from the proof record": "def is_conflict_construct" in src,
-        "no name-based conflict test":
-            src.count("startswith('[CONFLICT'") <= 1,
-        "prune floors (both_floor, min_references)": "both_floor: float" in src,
+        "conflict identity from the proof record": hasattr(S, "is_conflict_construct"),
+        "no name-based conflict test": src.count("startswith('[CONFLICT'") <= 1,
+        "prune floors (both_floor, min_references)": None not in (BOTH_FLOOR, MIN_REFERENCES),
         "eventuality by banked exchange": "recursion_exchanged" in src,
-        "banked exchange persisted":
-            '"recursion_exchanged":' in src,
-        "exchange quantum": "EXCHANGE_QUANTUM" in src,
+        "banked exchange persisted": '"recursion_exchanged":' in src,
+        "exchange quantum": EXCHANGE_QUANTUM is not None,
         "no age bound on eventuality": "EVENTUALITY_BOUND" not in src,
         "no silent name replacement": "terminated_names" in src,
-        # Invariant, not a literal: BOTH edge weights start at ~0.317, so a
-        # default floor below that prunes nothing and disables BOTH resistance.
-        "effective BOTH floor (>= 0.32)":
-            _default_floor(src) >= 0.32,
+        # BOTH edges are born at a weight of about 0.317: a lower floor prunes none of them
+        "effective BOTH floor (>= 0.32)": (BOTH_FLOOR or 0) >= 0.32,
         "lifetime witness counts": "proofs_total" in src and "erode_total" in src,
         "proof ledger": hasattr(S, "ProofLedger") and hasattr(S, "verify_ledger"),
         "canonical cycle in the framework": hasattr(S, "run_cycle") and hasattr(S, "new_session"),
@@ -136,215 +142,150 @@ def integrity_check():
     return checks, hashlib.sha256(src.encode()).hexdigest()[:16]
 
 
-class CountingLLM(S.LLMIntermediary):
-    """Wraps the real Intermediary to record every call and output; `health`
-    watches failures, empty answers and latency (sirisys_measures.ModelHealth).
+class ArmIntermediary(S.LLMIntermediary):
+    """The intermediary as one arm of the experiment sees it.
 
-    `channels` separates the two ways the model enters the field:
-      "all"        names (construct keys, hence orientation) and Sombunal questions;
-      "questions"  Sombunal questions only: names are the control's own synthetic
-                   ones, and the model budget is spent exactly as in "all", so the
-                   questions arrive at the same cadence;
-      "none"       nothing reaches the model, yet the model path is taken: the
-                   control, reached the long way (it checks the ablation itself).
-    """
+    `active=False` keeps the model out (the control). `channels` selects how an
+    active model reaches the field:
+      "all"        it names constructs and asks the Sombunal questions;
+      "questions"  it only asks the questions: the names are the control's own,
+                   and the framework still spends its model budget as in "all",
+                   so the questions arrive at the same cadence;
+      "none"       nothing reaches the model, though the model path is taken: the
+                   control reached the long way (test_phase1.py checks it is the
+                   control bit for bit).
+    `health` watches every call the model answers or fails."""
 
-    def __init__(self, force_degraded=False, model=None, backend=None, channels="all"):
-        self.force_degraded = force_degraded
-        self.channels = channels
-        self.cycle = 0                          # set by run_arm; the control's names carry it
-        self.by_kind = Counter()
-        self.empty_by_kind = Counter()
-        self.samples = defaultdict(list)
+    def __init__(self, active, channels="all", model=None, backend=None):
+        self.active, self.channels = active, channels
+        self.cycle = 0                              # set by run_arm: the control's names carry it
         self.health = ModelHealth()
         super().__init__(model=model, backend=backend)
         if self.available:
             self.health.attach(self)
 
     def _init(self):
-        if self.force_degraded:
-            self._available = False
-            return
-        super()._init()
+        if self.active:                             # otherwise it stays unavailable
+            super()._init()
 
-    def _record(self, kind, out):
-        self.by_kind[kind] += 1
-        if not out:
-            self.empty_by_kind[kind] += 1
-        elif len(self.samples[kind]) < 25:
-            self.samples[kind].append(str(out)[:160])
-        return out
-
-    # The control's synthetic names (ConcordancyOperator.execute, model unavailable).
-    # If the framework changes them, the "none" check in test_phase1.py fails.
-    def propose_emergent(self, x, y, xs, ys):
-        if self.channels != "all":
-            return f"[{x[:18]}]::[{y[:18]}]@c{self.cycle}"
-        return self._record("propose_emergent",
-                            super().propose_emergent(x, y, xs, ys))
+    # The control's names, as ConcordancyOperator.execute writes them when no model is
+    # available. If the framework changes them, the "none" check in test_phase1.py fails.
+    def propose_emergent(self, x, y, x_state, y_state):
+        if self.channels == "all":
+            return super().propose_emergent(x, y, x_state, y_state)
+        return f"[{x[:18]}]::[{y[:18]}]@c{self.cycle}"
 
     def interpret_conflict(self, x, y):
-        if self.channels != "all":
-            return f"CONFLICT::{x[:14]}⊗{y[:14]}"
-        return self._record("interpret_conflict",
-                            super().interpret_conflict(x, y))
+        if self.channels == "all":
+            return super().interpret_conflict(x, y)
+        return f"CONFLICT::{x[:14]}⊗{y[:14]}"
 
     def question_sombunal(self, instability):
-        if self.channels == "none":
-            return ""
-        return self._record("question_sombunal",
-                            super().question_sombunal(instability))
-
-    def narrate(self, *a, **k):
-        return self._record("narrate", super().narrate(*a, **k))
+        return "" if self.channels == "none" else super().question_sombunal(instability)
 
 
-def cycle_metrics(field, clock, cuss):
-    edges = field.edges
+def cycle_metrics(ss):
+    """The state of the field after a cycle. Read-only."""
+    field, clock = ss.field, ss.clock
+    constructs, edges = field.constructs.values(), field.edges
     both = [e for e in edges if e.state == S.TetraState.BOTH]
-    conflicts = [c for c in field.constructs.values()
-                 if S.is_conflict_construct(c)]
-
+    conflicts = [c for c in constructs if S.is_conflict_construct(c)]
     tension = defaultdict(float)
     for e in edges:
         tension[e.tgt] += e.weight * clock.tension(e.born_at)
-
-    protected = set(S.ZERO_POINTS) | {"I::Am", "I::AmNot", "SYSTEM"}
-    elig, totals = 0, []
-    for n, c in field.constructs.items():
-        if c.layer != S.Layer.UNIT_1 or n in protected:
-            continue
-        if clock.age_since(c.born_at) >= cuss.min_construct_age:
-            elig += 1
-            totals.append(tension[n] + c.recursion_exchanged)
-
-    banked = [c.recursion_exchanged
-              for c in field.constructs.values()]
-    depths = [c.proofs_total for c in field.constructs.values()]
-    modes = Counter()
-    for c in field.constructs.values():
-        try:
-            modes[str(field.compute_existence_mode(c))] += 1
-        except Exception:                                        # noqa: BLE001
-            modes["ERROR"] += 1
-
+    # what each UNIT_1 construct old enough to crystallize holds (as cussive collapse counts it)
+    eligible = [tension[n] + c.recursion_exchanged for n, c in field.constructs.items()
+                if c.layer == S.Layer.UNIT_1 and n not in S.ANCHORS
+                and clock.age_since(c.born_at) >= ss.cussive.min_construct_age]
+    banked = [c.recursion_exchanged for c in constructs]
     return {
         "constructs": len(field.constructs),
         "edges": len(edges),
         "both_frac": round(len(both) / max(len(edges), 1), 4),
-        "both_age_mean": round(statistics.mean([e.both_age for e in both]), 2)
-                         if both else 0.0,
-        "both_age_max": max([e.both_age for e in both], default=0),
+        "both_age_mean": round(statistics.mean(e.both_age for e in both), 2) if both else 0.0,
+        "both_age_max": max((e.both_age for e in both), default=0),
         "edge_states": dict(Counter(e.state.name for e in edges)),
         "apparents": field.apparents_total,
         "terminations": field.terminations_total,
         "reincarnations": field.reincarnations,
         "conflicts": len(conflicts),
-        "conflict_energy_max": round(
-            max([c.umbragiac_score for c in conflicts], default=0.0), 3),
+        "conflict_energy_max": round(max((c.umbragiac_score for c in conflicts), default=0.0), 3),
         "banked_total": round(sum(banked), 3),
-        "banked_constructs": sum(1 for v in banked if v > 0),
-        "eligible_unit1": elig,
-        "best_total": round(max(totals), 3) if totals else 0.0,
-        "layers": dict(Counter(c.layer.name for c in field.constructs.values())),
-        "modes": dict(modes),
-        "proof_depth_mean": round(statistics.mean(depths), 2) if depths else 0.0,
+        "banked_constructs": sum(1 for b in banked if b > 0),
+        "eligible_unit1": len(eligible),
+        "best_total": round(max(eligible), 3) if eligible else 0.0,
+        "layers": dict(Counter(c.layer.name for c in constructs)),
+        "modes": dict(Counter(str(field.compute_existence_mode(c)) for c in constructs)),
+        "proof_depth_mean": (round(statistics.mean(c.proofs_total for c in constructs), 2)
+                             if constructs else 0.0),
     }
-
-
-PROFILES = {"standard": {"narrate": True,  "include_hour": True},
-            "minimal":  {"narrate": False, "include_hour": False}}
 
 
 def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="standard",
             percepts="synthetic", channels="all"):
-    # The framework has no PRNG: `seed` selects the synthetic percept
-    # stream (reproducible); with percepts="live" runs read this machine.
-    S.set_ledger(S.ProofLedger(None))          # each arm: its own in-memory ledger
-    quiet = io.StringIO()
-    with contextlib.redirect_stdout(quiet):
-        llm = CountingLLM(force_degraded=not llm_active, model=model, backend=backend,
-                          channels=channels)
+    """One life of `cycles` cycles; returns its record.
+
+    `seed` selects the synthetic percept stream (the framework has no PRNG);
+    with percepts="live" the run reads this machine instead. Everything measured
+    here only reads the field: the ledger head is the same with and without it
+    (test_phase2_guarantee.py)."""
+    S.set_ledger(S.ProofLedger(None))               # each run: its own in-memory ledger
+    with quiet():
+        llm = ArmIntermediary(llm_active, channels, model=model, backend=backend)
         ss = S.new_session(llm=llm)
-    clock, field, conc, cuss = ss.clock, ss.field, ss.concordancy, ss.cussive
+    field, prof = ss.field, PROFILES[profile]
+    life, genealogy = LifeCriteria(S), field_topology.Genealogy()
+    trace, topology, heads, errors, lifespans = [], [], [], [], []
+    perceived, born_at = Counter(), dict.fromkeys(field.constructs, 0)
+    born_names, crystals = deque(maxlen=SAMPLE_NAMES), deque(maxlen=SAMPLE_CRYSTALS)
+    closures, aborted, t0 = 0, None, time.perf_counter()
 
-    # `percepts` is the source ("synthetic" or "live"); what arrives is counted apart
-    trace, perceived, promoted, errors, topo_trace = [], Counter(), [], [], []
-    genealogy, zero_points = field_topology.Genealogy(), set(S.ZERO_POINTS.keys())
-    life, aborted = LifeCriteria(S), None
-    born_names, total_closures, heads = [], 0, []
-    prev = set(field.constructs)
-    birth, lifespans = {n: 0 for n in prev}, []
-    t0 = time.time()
-
-    for cyc in range(cycles):
-        before_a = field.apparents_total
+    for cycle in range(cycles):
+        apparents_before, alive_before = field.apparents_total, set(field.constructs)
         try:
-            # The canonical cycle — identical to the framework's own run() and
-            # to what the live server shows (see sirisys_loader.run_cycle).
-            with contextlib.redirect_stdout(quiet):
-                prof = PROFILES[profile]
-                ev = (S.synthetic_percepts(cyc, seed, prof["include_hour"])
-                      if percepts == "synthetic" else None)
-                llm.cycle = cyc
-                t_cycle, t_model = time.perf_counter(), llm.health.model_seconds
-                r = S.run_cycle(ss, cyc, percepts=ev, **prof)
-                field_seconds = ((time.perf_counter() - t_cycle)
-                                 - (llm.health.model_seconds - t_model))
-            for e in r["percepts"]:
-                perceived[e["tgt"]] += 1
-        except Exception:                                        # noqa: BLE001
-            errors.append({"cycle": cyc,
-                           "traceback": traceback.format_exc()[-900:]})
+            with quiet():
+                stream = (S.synthetic_percepts(cycle, seed, prof["include_hour"])
+                          if percepts == "synthetic" else None)
+                llm.cycle = cycle
+                t, model_t = time.perf_counter(), llm.health.model_seconds
+                r = S.run_cycle(ss, cycle, percepts=stream, **prof)
+                field_seconds = time.perf_counter() - t - (llm.health.model_seconds - model_t)
+        except Exception:                                                   # noqa: BLE001
+            errors.append({"cycle": cycle, "traceback": traceback.format_exc()[-900:]})
             break
+        perceived.update(e["tgt"] for e in r["percepts"])
 
-        now = set(field.constructs)
-        died = prev - now
-        new = now - prev
-        for n in died:
-            if n in birth:
-                lifespans.append(cyc - birth[n])
-                del birth[n]
-        for n in new:
-            birth[n] = cyc
-        born_names += list(new)
-        prev = now
-        closures = r["closures"]
-        total_closures += closures
+        alive = set(field.constructs)
+        died, new = alive_before - alive, alive - alive_before
+        lifespans += [cycle - born_at.pop(n) for n in died if n in born_at]
+        born_at.update(dict.fromkeys(new, cycle))
+        born_names.extend(sorted(new))
+        crystals.extend(field.apparents_since(apparents_before))
+        closures += r["closures"]
 
-        m = cycle_metrics(field, clock, cuss)
-        m.update({
-            "cycle": cyc,
-            "born": len(new),
-            "died": len(died),
-            "closures": closures,
-            "llm_calls_this_cycle": r["llm_used"],
-            "narrated": bool(r["narration"]),
-            "sombunal_question": bool(r["question"]),
-            "new_apparents": field.apparents_total - before_a,
-        })
+        m = cycle_metrics(ss)
+        m.update({"cycle": cycle, "born": len(new), "died": len(died), "closures": r["closures"],
+                  "llm_calls_this_cycle": r["llm_used"], "narrated": bool(r["narration"]),
+                  "sombunal_question": bool(r["question"]),
+                  "new_apparents": field.apparents_total - apparents_before})
         trace.append(m)
-        heads.append(S.get_ledger().head[:16])   # where two runs part, if they do
-        # Read-only: criteria and genealogy every cycle, topology once per half-breath
-        life.after_cycle(ss, cyc, field_seconds)
-        genealogy.update(conc, cyc, field)
-        if cyc % (S.BREATH_PERIOD // 2) == 0:
-            topo_trace.append(field_topology.field_topology(
-                field, cycle=cyc, zero_points=zero_points, genealogy=genealogy))
-        if m["new_apparents"] > 0:
-            promoted += [str(a) for a in field.apparents_since(field.apparents_total - m["new_apparents"])]
+        heads.append(S.get_ledger().head[:16])       # where two runs part, if they do
+        life.after_cycle(ss, cycle, field_seconds)
+        genealogy.update(ss.concordancy, cycle, field)
+        if cycle % (S.BREATH_PERIOD // 2) == 0:       # expansion and contraction of every breath
+            topology.append(field_topology.field_topology(
+                field, cycle=cycle, zero_points=ZERO_POINTS, genealogy=genealogy))
 
-        if cyc % 25 == 0:
-            log(f"    cycle {cyc:4}  constructs {m['constructs']:4}  "
+        if cycle % PROGRESS_EVERY == 0:
+            log(f"    cycle {cycle:4}  constructs {m['constructs']:4}  "
                 f"apparents {m['apparents']:4}  conflicts {m['conflicts']:3}  "
-                f"BOTH {m['both_frac']:.3f}  calls {llm.call_count}")
+                f"BOTH {m['both_frac']:.3f}  calls {llm.health.calls}")
         if llm.health.tripped:
-            aborted = f"cycle {cyc}: {llm.health.reason}"
+            aborted = f"cycle {cycle}: {llm.health.reason}"
             log(f"    MODEL HEALTH — {aborted}")
             break
 
     criteria = life.result()
-
     return {
         "seed": seed,
         "channels": channels if llm_active else None,
@@ -354,224 +295,272 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         "criteria": criteria,
         "criteria_pass": LifeCriteria.verdict(criteria),
         "trace": trace,
-        "topology_trace": topo_trace,
+        "topology_trace": topology,
         "errors": errors,
-        "seconds": round(time.time() - t0, 1),
-        "llm": {
-            "available": llm.available,
-            "model": llm.model,
-            "total_calls": llm.call_count,
-            "calls_by_kind": dict(llm.by_kind),
-            "empty_responses_by_kind": dict(llm.empty_by_kind),
-            "failure_count": llm.health.failures,
-            "failures": llm.health.errors,
-            "health": llm.health.report(),
-            "output_samples": {k: v for k, v in llm.samples.items()},
-        },
-        "percept_catalog": {
-            "distinct_targets": len(perceived),
-            "counts": dict(perceived.most_common(40)),
-        },
-        "lifespans": {
-            "n": len(lifespans),
-            "median": statistics.median(lifespans) if lifespans else None,
-            "mean": round(statistics.mean(lifespans), 2) if lifespans else None,
-            "max": max(lifespans) if lifespans else None,
-        },
-        "total_closures": total_closures,
-        "sample_born_names": born_names[-60:],
-        "apparents_named": promoted[-40:],
-        "pool_telemetry_tail": list(conc.pool_telemetry)[-40:],
-        "final_sizes": {
-            "constructs": len(field.constructs),
-            "edges": len(field.edges),
-            "apparent_log": field.apparents_total,
-            "terminations_total": field.terminations_total,
-            "ledger_proofs": S.get_ledger().count,
-        },
+        "seconds": round(time.perf_counter() - t0, 1),
+        "llm": {"available": llm.available, "model": llm.model, "health": llm.health.report()},
+        "percept_catalog": {"distinct_targets": len(perceived),
+                            "counts": dict(perceived.most_common(SAMPLE_TAIL))},
+        "lifespans": {"n": len(lifespans),
+                      "median": statistics.median(lifespans) if lifespans else None,
+                      "mean": round(statistics.mean(lifespans), 2) if lifespans else None,
+                      "max": max(lifespans, default=None)},
+        "total_closures": closures,
+        "sample_born_names": list(born_names),
+        "apparents_named": list(crystals),
+        "pool_telemetry_tail": list(ss.concordancy.pool_telemetry)[-SAMPLE_TAIL:],
+        "final_sizes": {"constructs": len(field.constructs),
+                        "edges": len(field.edges),
+                        "apparent_log": field.apparents_total,
+                        "terminations_total": field.terminations_total,
+                        "ledger_proofs": S.get_ledger().count},
+    }
+
+
+def summarize(runs):
+    """One arm: the mean final state, and per run the criteria and the model's health."""
+    traces = [r["trace"] for r in runs if r["trace"]]
+    if not traces:
+        return {"error": "no cycles completed"}
+    n = min(map(len, traces))
+
+    def final(key, digits):
+        return round(statistics.mean(t[n - 1][key] for t in traces), digits)
+
+    def per_run(key):
+        return [r["criteria"][key] for r in runs]
+
+    def model(key):
+        return sum(r["llm"]["health"][key] for r in runs)
+
+    medians = [r["lifespans"]["median"] for r in runs if r["lifespans"]["median"] is not None]
+    return {
+        "cycles_completed": n,
+        "final_constructs": final("constructs", 1),
+        "final_edges": final("edges", 1),
+        "final_both_frac": final("both_frac", 4),
+        "final_apparents": final("apparents", 1),
+        "final_conflicts": final("conflicts", 1),
+        "final_terminations": final("terminations", 1),
+        "final_reincarnations": final("reincarnations", 1),
+        "total_closures": round(statistics.mean(r["total_closures"] for r in runs), 1),
+        "distinct_percepts": round(statistics.mean(r["percept_catalog"]["distinct_targets"]
+                                                   for r in runs), 1),
+        "median_lifespan": round(statistics.mean(medians or [0]), 2),
+        "errors": sum(len(r["errors"]) for r in runs),
+        "criteria_pass": [r["criteria_pass"] for r in runs],
+        "durable_per_1000": per_run("durable_per_1000"),
+        "flicker_share": per_run("flicker_share"),
+        "constructs_trend": per_run("constructs_trend"),
+        "top3_energy_trend": per_run("top3_energy_trend"),
+        "tolerance_first_last": per_run("tolerance_first_last"),
+        "model_calls": model("calls"),
+        "model_failures": model("failures"),
+        "model_empty": model("empty"),
+        "aborted": [r["aborted"] for r in runs if r["aborted"]],
     }
 
 
 def compare_runs(a, b):
     """Two runs of the same stream with the model: did they seal the same ledger?
     If not, the first cycle whose ledger head differs, and an example of answers
-    that differ (from the samples, which keep the first 25 of each kind)."""
+    that differ when one is among the recorded samples (the first of each kind)."""
     ha, hb = a["ledger_head_by_cycle"], b["ledger_head_by_cycle"]
     parted = next((i for i, (x, y) in enumerate(zip(ha, hb)) if x != y),
                   None if len(ha) == len(hb) else min(len(ha), len(hb)))
-    first = None
-    sa, sb = a["llm"]["output_samples"], b["llm"]["output_samples"]
+    example = None
+    sa, sb = a["llm"]["health"]["samples"], b["llm"]["health"]["samples"]
     for kind in sorted(set(sa) | set(sb)):
         xs, ys = sa.get(kind, []), sb.get(kind, [])
         i = next((i for i, (x, y) in enumerate(zip(xs, ys)) if x != y), None)
-        if i is not None and (first is None or i < first[0]):
-            first = (i, {"kind": kind, "index": i, "first": xs[i], "second": ys[i]})
+        if i is not None and (example is None or i < example["index"]):
+            example = {"kind": kind, "index": i, "first": xs[i], "second": ys[i]}
     return {"same": a["ledger_head"] == b["ledger_head"],
             "ledger_heads": [a["ledger_head"], b["ledger_head"]],
             "diverged_at_cycle": parted,
-            "example_different_answers": first[1] if first else None}
+            "example_different_answers": example}
 
 
-def summarize(arm):
-    traces = [r["trace"] for r in arm if r["trace"]]
-    if not traces:
-        return {"error": "no cycles completed"}
-    n = min(len(t) for t in traces)
+class Console:
+    """Prints each line and keeps it: the report carries its own console."""
 
-    def at(i, k):
-        return statistics.mean(t[i][k] for t in traces)
+    def __init__(self):
+        self.lines = []
 
-    out = {
-        "cycles_completed": n,
-        "final_constructs": round(at(n - 1, "constructs"), 1),
-        "final_edges": round(at(n - 1, "edges"), 1),
-        "final_both_frac": round(at(n - 1, "both_frac"), 4),
-        "final_apparents": round(at(n - 1, "apparents"), 1),
-        "final_conflicts": round(at(n - 1, "conflicts"), 1),
-        "final_terminations": round(at(n - 1, "terminations"), 1),
-        "final_reincarnations": round(at(n - 1, "reincarnations"), 1),
-        "total_closures": round(statistics.mean(
-            r["total_closures"] for r in arm), 1),
-        "total_llm_calls": sum(r["llm"]["total_calls"] for r in arm),
-        "distinct_percepts": round(statistics.mean(
-            r["percept_catalog"]["distinct_targets"] for r in arm), 1),
-        "median_lifespan": round(statistics.mean(
-            [r["lifespans"]["median"] for r in arm
-             if r["lifespans"]["median"] is not None] or [0]), 2),
-        "errors": sum(len(r["errors"]) for r in arm),
-        "criteria_pass": [r["criteria_pass"] for r in arm],
-        "durable_per_1000": [r["criteria"]["durable_per_1000"] for r in arm],
-        "flicker_share": [r["criteria"]["flicker_share"] for r in arm],
-        "constructs_trend": [r["criteria"]["constructs_trend"] for r in arm],
-        "top3_energy_trend": [r["criteria"]["top3_energy_trend"] for r in arm],
-        "tolerance_first_last": [r["criteria"]["tolerance_first_last"] for r in arm],
-        "model_calls": sum(r["llm"]["health"]["calls"] for r in arm),
-        "model_failures": sum(r["llm"]["health"]["failures"] for r in arm),
-        "model_empty": sum(r["llm"]["health"]["empty"] for r in arm),
-        "aborted": [r["aborted"] for r in arm if r["aborted"]],
-    }
-    if n > TAIL_START:
-        out["steady_rate_per_10cyc"] = round(statistics.mean(
-            (t[n - 1]["apparents"] - t[TAIL_START]["apparents"])
-            / ((n - TAIL_START) / 10) for t in traces), 3)
-        out["tail_growth_constructs"] = round(statistics.mean(
-            t[n - 1]["constructs"] - t[TAIL_START]["constructs"]
-            for t in traces), 1)
-        out["tail_eligible_unit1"] = round(statistics.mean(
-            statistics.mean(t[i]["eligible_unit1"] for i in range(TAIL_START, n))
-            for t in traces), 2)
-        out["tail_best_total"] = round(statistics.mean(
-            max(t[i]["best_total"] for i in range(TAIL_START, n))
-            for t in traces), 3)
-    else:
-        out["steady_rate_per_10cyc"] = None
-        out["tail_growth_constructs"] = None
-        out["note"] = (f"fewer than {TAIL_START} cycles — steady-state figures "
-                       "not computed; run 150 cycles to test the prediction")
-    return out
+    def __call__(self, msg=""):
+        print(msg)
+        self.lines.append(msg)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--cycles", type=int, default=150)
-    ap.add_argument("--seeds", type=int, default=3)
-    ap.add_argument("--skip-degraded", action="store_true")
-    ap.add_argument("--skip-questions-arm", action="store_true",
-                    help="skip the arm in which the model only asks the Sombunal questions")
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(description="SIRISYS instrumented runs (see the docstring "
+                                             "at the top of this file).")
+    ap.add_argument("--cycles", type=int, default=1000,
+                    help="cycles per run (the criteria need at least 1000; default 1000)")
+    ap.add_argument("--seeds", type=int, default=3,
+                    help="synthetic percept streams 0, 1, ... (default 3)")
+    ap.add_argument("--backend", choices=S.LLMIntermediary.BACKENDS, default=None,
+                    help="model backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
     ap.add_argument("--model", default=None,
-                    help="model id, e.g. claude-haiku-4-5-20251001. "
-                         "Default: the backend's own (anthropic: claude-sonnet-4-6; "
-                         "ollama: first installed model).")
-    ap.add_argument("--percepts", choices=["synthetic", "live"], default="synthetic",
-                    help="synthetic: reproducible stream per seed; live: this machine")
+                    help="model name (default: SIRISYS_LLM_MODEL, else the backend's own; "
+                         "with Ollama, the first installed model)")
     ap.add_argument("--profile", choices=sorted(PROFILES), default="standard",
                     help="'minimal': no narration and no time-of-day percept")
-    ap.add_argument("--backend", choices=["anthropic", "ollama", "none"], default=None,
-                    help="LLM backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
+    ap.add_argument("--percepts", choices=["synthetic", "live"], default="synthetic",
+                    help="synthetic: one reproducible stream per seed; live: this machine")
+    ap.add_argument("--skip-questions-arm", action="store_true",
+                    help="skip the arm in which the model only asks the Sombunal questions")
+    ap.add_argument("--skip-degraded", action="store_true", help="skip the control arm")
     ap.add_argument("--determinism", action="store_true",
-                    help="run the model arm on the first stream twice and report whether both "
-                         "runs sealed the same ledger (writes sirisys_determinism.json)")
-    args = ap.parse_args()
+                    help="run the model arm on stream 0 twice and report whether both runs "
+                         "sealed the same ledger (writes sirisys_determinism.json)")
+    args = ap.parse_args(argv)
     if args.determinism and args.percepts == "live":
         ap.error("--determinism needs the synthetic percepts: live percepts differ on every run")
+    return args
 
-    lines = []
 
-    def log(msg):
-        print(msg)
-        lines.append(msg)
+def plan(args, model_on):
+    """The arms to run, in order, and the percept streams each one runs."""
+    if args.determinism:
+        return ["llm"], [0, 0]
+    arms = (["llm"] if model_on else []) \
+        + (["llm_questions"] if model_on and not args.skip_questions_arm else []) \
+        + ([] if args.skip_degraded else ["degraded"])
+    return arms, list(range(args.seeds))
 
-    checks, digest = integrity_check()
-    with contextlib.redirect_stdout(io.StringIO()):
-        probe = S.LLMIntermediary(model=args.model, backend=args.backend)
-    llm_ok = probe.available
 
+def print_header(args, checks, digest, intermediary, log):
+    """The framework that runs and its checks; exits (code 1) when a check fails."""
     log("=" * 70)
     log("SIRISYS — instrumented report run")
     log("=" * 70)
-    for k, v in checks.items():
-        log(f"  [{'ok ' if v else 'FAIL'}] {k}")
+    for label, ok in checks.items():
+        log(f"  [{'ok ' if ok else 'FAIL'}] {label}")
     if not all(checks.values()):
         log("\n  The framework lacks a mechanism this report measures. Stopping.")
         sys.exit(1)
     log(f"  framework file     : {S.__sirisys_file__}  (v{S.__sirisys_version__})")
     log(f"  file sha256[:16]   : {digest}")
-    log(f"  model active       : {llm_ok}")
-    log(f"  model id           : {probe.backend} · {probe.model}")
+    log(f"  model active       : {intermediary.available}")
+    log(f"  model id           : {intermediary.backend} · {intermediary.model or '(none)'}")
     if args.determinism:
         log(f"  determinism check  : the model arm, stream 0, twice x {args.cycles} cycles")
     else:
         log(f"  cycles x seeds     : {args.cycles} x {args.seeds}")
-    log(f"  both_floor {BOTH_FLOOR}  min_references {MIN_REFERENCES}  "
-        f"quantum {EXCHANGE_QUANTUM}")
-    explicit = args.backend in ("ollama", "anthropic")
-    health_probe = None
-    if llm_ok:
-        # full arm: at most MAX calls per cycle; questions arm: one every third cycle
-        if args.determinism:
-            per_cycle, runs = S.MAX_LLM_CALLS_PER_CYCLE, 2
-        else:
-            per_cycle = S.MAX_LLM_CALLS_PER_CYCLE + (0 if args.skip_questions_arm else 1 / 3)
-            runs = args.seeds
-        health_probe = ModelHealth.probe(probe, cycles=args.cycles * runs,
-                                         calls_per_cycle=per_cycle)
-        if health_probe["ok"]:
-            log(f"  model probe        : ok · {health_probe['call_s']} s per call "
-                f"(first call, with loading: {health_probe['load_s']} s)")
-            log(f"  model time, at most: ~{health_probe['estimated_model_hours_max']} h "
-                f"for the model {'runs' if args.determinism else 'arms'} "
-                f"({args.cycles} cycles x {runs} {'runs' if args.determinism else 'seeds'})")
-            if health_probe.get("model"):
-                log(f"  model identity     : {health_probe['model']}")
-            log(f"  sample names       : {' | '.join(a[:40] for a in health_probe['answers'])}")
-        else:
-            log("")
-            log(f"  STOP: the model does not answer properly — {health_probe['reason']}.")
-            log(f"  Answers received: {health_probe.get('answers')}")
+    log(f"  both_floor {BOTH_FLOOR}  min_references {MIN_REFERENCES}  quantum {EXCHANGE_QUANTUM}")
+
+
+def check_model(args, intermediary, streams, log):
+    """With a model, prove it answers before anything runs; without one, say why.
+    Exits (code 3) when a model was asked for, or is needed, and does not answer."""
+    if intermediary.available:
+        # at most MAX calls per cycle in the full arm; one every third cycle in the questions arm
+        questions = 0 if args.determinism or args.skip_questions_arm else 1 / 3
+        probe = ModelHealth.probe(intermediary, cycles=args.cycles * len(streams),
+                                  calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE + questions)
+        if not probe["ok"]:
+            log()
+            log(f"  STOP: the model does not answer properly — {probe['reason']}.")
+            log(f"  Answers received: {probe.get('answers')}")
             log("  Nothing was run. Fix the model (ollama list; try a general-purpose")
             log("  model with --model) and run again.")
             sys.exit(3)
-    if not llm_ok:
-        log("")
-        if explicit:
-            log(f"  STOP: --backend {args.backend} was asked for, but the model is not available.")
+        log(f"  model probe        : ok · {probe['call_s']} s per call "
+            f"(first call, with loading: {probe['load_s']} s)")
+        log(f"  model time, at most: ~{probe['estimated_model_hours_max']} h "
+            f"for the model runs ({args.cycles} cycles x {len(streams)} streams)")
+        if probe.get("model"):
+            log(f"  model identity     : {probe['model']}")
+        log(f"  sample names       : {' | '.join(a[:40] for a in probe['answers'])}")
+        return probe
+
+    explicit = args.backend in ("ollama", "anthropic")
+    log()
+    if explicit:
+        log(f"  STOP: --backend {args.backend} was asked for, but the model is not available.")
+    else:
+        log("  WARNING: model NOT active — this run cannot compare model and control.")
+    if intermediary.backend == "ollama":
+        log(f"  Open the Ollama app (it must answer at {intermediary.host}), check the")
+        log("  model is installed with: ollama list — then re-run.")
+    elif intermediary.backend == "anthropic":
+        log("  Install the package and set the key, then re-run:")
+        log("      pip3 install anthropic")
+        log('      export ANTHROPIC_API_KEY="sk-ant-..."')
+    else:
+        log("  Backend 'none' selected: the run uses no model.")
+    if args.determinism:
+        log("  --determinism checks a model: without one the field is deterministic by")
+        log("  construction (test_sirisys.py and test_ontology.py check it).")
+    if explicit or args.determinism:
+        log("  Nothing was run.")
+        sys.exit(3)
+    return None
+
+
+def run_plan(args, arms, streams, log):
+    """Every arm on every stream; stops at the first run whose model stopped answering.
+    Returns the arms and the reason for stopping, if any."""
+    out = {}
+    for name in arms:
+        title, active, channels = ARMS[name]
+        log(f"\n  --- arm: {title}{', stream 0 twice' if args.determinism else ''} ---")
+        runs = []
+        for seed in streams:
+            runs.append(run_arm(seed, args.cycles, active, log, model=args.model,
+                                backend=args.backend, profile=args.profile,
+                                percepts=args.percepts, channels=channels))
+            if runs[-1]["aborted"]:
+                out[name] = {"runs": runs, "summary": summarize(runs)}
+                return out, f"arm {name}, seed {seed}, {runs[-1]['aborted']}"
+        out[name] = {"runs": runs, "summary": summarize(runs)}
+    return out, None
+
+
+def print_summary(report, log):
+    def verdict(v):
+        return "PASS" if v else "FAIL" if v is False else "n/a"
+
+    log("\n" + "=" * 70)
+    for name, arm in report["arms"].items():
+        s = arm["summary"]
+        if "error" in s:
+            log(f"  {name:9} {s['error']}")
+            continue
+        log(f"  {name:9} constructs {s['final_constructs']:7}  apparents {s['final_apparents']:6}  "
+            f"conflicts {s['final_conflicts']:5}  BOTH {s['final_both_frac']:.3f}")
+        log(f"  {'':9} criteria {[verdict(v) for v in s['criteria_pass']]}  "
+            f"durable/1000 {s['durable_per_1000']}  flicker {s['flicker_share']}")
+        log(f"  {'':9} model calls {s['model_calls']}  failures {s['model_failures']}  "
+            f"empty {s['model_empty']}  errors {s['errors']}")
+        log(f"  {'':9} ledger heads {[r['ledger_head'][:16] for r in arm['runs']]}")
+
+    d = report.get("determinism")
+    if d:
+        log()
+        if d["same"]:
+            log("  determinism: YES — both runs sealed the same ledger.")
         else:
-            log("  WARNING: model NOT active — this run cannot compare model and control.")
-        if probe.backend == "ollama":
-            log(f"  Open the Ollama app (it must answer at {probe.host}), check the")
-            log("  model is installed with: ollama list — then re-run.")
-        elif probe.backend == "anthropic":
-            log("  Install the package and set the key, then re-run:")
-            log("      pip3 install anthropic")
-            log('      export ANTHROPIC_API_KEY="sk-ant-..."')
-        else:
-            log("  Backend 'none' selected: the run uses no model.")
-        if args.determinism:
-            log("  --determinism checks a model: without one the field is deterministic by")
-            log("  construction (test_sirisys.py and test_ontology.py check it).")
-        if explicit or args.determinism:
-            log("  Nothing was run.")
-            sys.exit(3)
+            log(f"  determinism: NO — the two runs parted at cycle {d['diverged_at_cycle']}.")
+            ex = d["example_different_answers"]
+            if ex:
+                log(f"  answers that differ ({ex['kind']}): {ex['first'][:50]!r} | {ex['second'][:50]!r}")
+    if report["aborted"]:
+        log()
+        log(f"  STOPPED — model health: {report['aborted']}")
+        log("  The report is partial. Check Ollama and the model, then run again.")
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    log = Console()
+    checks, digest = integrity_checks()
+    with quiet():
+        intermediary = S.LLMIntermediary(model=args.model, backend=args.backend)
+    arms, streams = plan(args, intermediary.available)
+    print_header(args, checks, digest, intermediary, log)
+    probe = check_model(args, intermediary, streams, log)
 
     report = {
         "config": {
@@ -583,94 +572,33 @@ def main():
             "min_references": MIN_REFERENCES,
             "exchange_quantum": EXCHANGE_QUANTUM,
             "cycles": args.cycles,
-            "seeds": args.seeds,
-            "tail_start": TAIL_START,
-            "llm_active": llm_ok,
-            "model_probe": health_probe,
-            "backend": probe.backend,
+            "streams": streams,
+            "determinism_check": args.determinism,
+            "llm_active": intermediary.available,
+            "model_probe": probe,
+            "backend": intermediary.backend,
+            "model": intermediary.model,
             "profile": args.profile,
             "percepts": args.percepts,
-            "model": probe.model,
             "max_llm_calls_per_cycle": S.MAX_LLM_CALLS_PER_CYCLE,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "platform": platform.platform(),
             "python": sys.version.split()[0],
-            "note_reproducibility": (
-                "With --percepts synthetic a run is bit-reproducible (the "
-                "framework has no PRNG); with live percepts it reads this machine."),
         },
-        "acceptance_criteria": (
-            "Phase 3, per run: durable crystals (life >= one breath) in every "
-            "1000-cycle window, flicker <= 5 %, constructs trend <= 1.2, cost of the "
-            "cycle itself flat (late <= 1.5 x early + 0.5 ms), top-3 energy trend <= 1.2"),
-        "arms": {},
+        "acceptance_criteria": ACCEPTANCE,
     }
-
-    aborted = None
-    if args.determinism:
-        report["config"]["determinism_check"] = True
-        plan, seeds = [("llm", True, "all")], [0, 0]
-    else:
-        plan = ([("llm", True, "all")] if llm_ok else []) \
-            + ([("llm_questions", True, "questions")] if llm_ok and not args.skip_questions_arm else []) \
-            + ([] if args.skip_degraded else [("degraded", False, "all")])
-        seeds = list(range(args.seeds))
-    titles = {"llm": "LLM active" + (", stream 0 twice" if args.determinism else ""),
-              "llm_questions": "LLM, Sombunal questions only", "degraded": "degraded control"}
-    for name, active, channels in plan:
-        log(f"\n  --- arm: {titles[name]} ---")
-        arm = []
-        for s in seeds:
-            arm.append(run_arm(s, args.cycles, active, log, args.model, args.backend,
-                               args.profile, args.percepts, channels))
-            if arm[-1]["aborted"]:
-                aborted = f"arm {name}, seed {s}, {arm[-1]['aborted']}"
-                break
-        report["arms"][name] = {"runs": arm, "summary": summarize(arm)}
-        if aborted:
-            break
-    report["aborted"] = aborted
-    if args.determinism and not aborted:
+    report["arms"], report["aborted"] = run_plan(args, arms, streams, log)
+    if args.determinism and not report["aborted"]:
         report["determinism"] = compare_runs(*report["arms"]["llm"]["runs"])
+    print_summary(report, log)
 
-    log("\n" + "=" * 70)
-    for name, a in report["arms"].items():
-        s = a["summary"]
-        if "error" in s:
-            log(f"  {name:9} {s['error']}")
-            continue
-        log(f"  {name:9} constructs {s['final_constructs']:7}  "
-            f"apparents {s['final_apparents']:6}  "
-            f"conflicts {s['final_conflicts']:5}  "
-            f"BOTH {s['final_both_frac']:.3f}")
-        log(f"  {'':9} criteria {['PASS' if v else 'FAIL' if v is False else 'n/a' for v in s['criteria_pass']]}  "
-            f"durable/1000 {s['durable_per_1000']}  flicker {s['flicker_share']}")
-        log(f"  {'':9} model calls {s['model_calls']}  failures {s['model_failures']}  "
-            f"empty {s['model_empty']}  errors {s['errors']}")
-        log(f"  {'':9} ledger heads {[r['ledger_head'][:16] for r in a['runs']]}")
-
-    d = report.get("determinism")
-    if d:
-        log("")
-        if d["same"]:
-            log("  determinism: YES — both runs sealed the same ledger.")
-        else:
-            log(f"  determinism: NO — the two runs parted at cycle {d['diverged_at_cycle']}.")
-            fd = d["example_different_answers"]
-            if fd:
-                log(f"  answers that differ ({fd['kind']}): {fd['first'][:50]!r} | {fd['second'][:50]!r}")
-
-    if aborted:
-        log("")
-        log(f"  STOPPED — model health: {aborted}")
-        log("  The report below is partial. Check Ollama and the model, then run again.")
-    report["console"] = lines
-    out = OUTPUT_DETERMINISM if args.determinism else OUTPUT
-    out.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
-    print(f"\n  written: {out.name}   ({out.stat().st_size // 1024} KB)")
+    report["console"] = log.lines
+    path = DETERMINISM_REPORT if args.determinism else REPORT
+    path.write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"\n  written: {path.name}   ({path.stat().st_size // 1024} KB)")
     print("  Send that file for analysis.")
     print("=" * 70)
-    if aborted:
+    if report["aborted"]:
         sys.exit(3)
 
 

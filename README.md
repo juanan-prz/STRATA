@@ -145,7 +145,7 @@ The framework has no randomness, but a model runtime may have some even though e
 | Path | Written by |
 |---|---|
 | `sirisys_runs/` | experiment mode, one folder per instance |
-| `sirisys_report.json` | `run_report.py` |
+| `sirisys_report.json`, `sirisys_determinism.json` | `run_report.py` |
 | `sirisys_v13_state.json`, `sirisys_v13_ledger*` | the framework run on its own |
 
 None of these belong in the repository; `.gitignore` excludes them.
