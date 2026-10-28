@@ -83,7 +83,7 @@ For calibration and refinement. Every start and every Reset is a new instance in
 | `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
 | `--port` | Web port (default 8000) |
 
-The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". Details are in `Sirisys_Guia_v13.md`.
+The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". The server can be left cycling with no browser open: it keeps only the latest 200 snapshots for the next viewer. The interface (the routes and the control actions) is described at the top of `Sirisys_Server.py`; details are in `Sirisys_Guia_v13.md`.
 
 -----
 

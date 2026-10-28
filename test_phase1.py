@@ -5,7 +5,6 @@ No API key, no Ollama and no FastAPI needed: a local fake model, and a stub in
 place of the web framework.
 Usage: python3 test_phase1.py"""
 import json
-import logging
 import os
 import shutil
 import subprocess
@@ -18,7 +17,6 @@ from sirisys_testkit import HERE, Checks, FakeModel, environment, quiet, raises,
 
 with quiet():
     import Sirisys_Server as server
-server.log.setLevel(logging.WARNING)                 # the server's own progress lines
 S = server.S
 check = Checks()
 
@@ -61,6 +59,25 @@ expected = {"cycle", "T", "constructs", "edges", "apparents", "terminations", "c
 check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys(),
       f"{len(snapshots)} snapshots")
 check("snapshot is JSON-serializable", bool(json.dumps(snapshots[-1])))
+with quiet():                                       # the visualizer's buttons
+    engine.control("pause")
+    time.sleep(0.1)
+    at = engine.cycle
+    time.sleep(0.2)
+    held = engine.cycle == at
+    engine.control("step")
+    wait_for(lambda: not engine.step_once)
+    one = engine.cycle == at + 1
+    engine.control("play")
+    wait_for(lambda: engine.cycle >= at + 5)
+    engine.control("step")                          # while playing: one more cycle, then paused
+    wait_for(lambda: not engine.step_once)
+    time.sleep(0.1)
+    stopped = not engine.running
+    speed, unknown = engine.control("speed", cycle_delay_ms=5), engine.control("dance")
+check("controls: pause holds, step advances one cycle and pauses, play, speed; an unknown action refused",
+      held and one and stopped and speed == {"ok": True, "cycle_delay_ms": 5} and unknown["ok"] is False,
+      f"held {held}, one cycle {one}, paused after step {stopped}, {unknown.get('error')}")
 with quiet():
     reset = engine.control("reset", stream="live")
 check("reset opens a new run folder, old one kept",
@@ -142,35 +159,63 @@ stub = scratch()
     "self.status_code=status_code\nclass JSONResponse:\n def __init__(self,content): self.content=content\n")
 (stub / "uvicorn.py").write_text("APP=None\ndef run(app,**k):\n global APP; APP=app\n")
 (stub / "web.py").write_text(f"""
-import sys, asyncio, io, contextlib, pathlib
+import sys, asyncio, io, contextlib, json, pathlib
 sys.path.insert(0, {str(stub)!r}); sys.path.insert(0, {str(HERE)!r}); sys.argv = ['web']
 import Sirisys_Server as srv, uvicorn, fastapi
-srv.log.setLevel('WARNING')
 srv.HERE = pathlib.Path({str(stub)!r})
 with contextlib.redirect_stdout(io.StringIO()):
     srv.serve_experiment(srv.parse_args(['--delay-ms', '0']))
 routes = uvicorn.APP.routes
+class Request:
+    def __init__(self, body): self.body = body
+    async def json(self):
+        if self.body is None: raise ValueError('no body')
+        return self.body
 async def go():
-    class Request:
-        async def json(self): return {{}}
-    await routes[('POST', '/api/control/{{action}}')]('play', Request())
-    sent = []
-    class Socket:                                   # the client has already gone
-        received = 0
+    control = routes[('POST', '/api/control/{{action}}')]
+    replies = [(await control(action, Request(body))).content
+               for action, body in (('play', None), ('reset', {{'stream': 'abc'}}), ('pause', [1, 2]))]
+    # two malformed messages, one step, half a second for its snapshot, then the client goes
+    sent, script = [], ['[1]', 'not json', json.dumps({{'action': 'step'}}), 0.5]
+    class Socket:
         async def accept(self): pass
         async def send_json(self, o): sent.append(o)
         async def receive_text(self):
-            Socket.received += 1
+            while script:
+                item = script.pop(0)
+                if isinstance(item, str): return item
+                await asyncio.sleep(item)
             raise fastapi.WebSocketDisconnect()
     await asyncio.wait_for(routes[('WS', '/ws')](Socket()), 10)
     async with uvicorn.APP.lifespan(uvicorn.APP): pass
-    print('WS_EXITED', len(sent), Socket.received)
+    print(json.dumps({{'replies': replies, 'sent': [m.get('type') for m in sent],
+                      'acks': [m.get('stepping') for m in sent if m.get('type') == 'ack']}}))
 asyncio.run(go())
 """)
 p = run(["web.py"], stub, 60)
 output = (p.stdout + p.stderr).strip()
-check("WebSocket handler exits on disconnect (no busy loop on a dead socket)",
-      "WS_EXITED" in p.stdout, output.splitlines()[-1][:90] if output else "")
+web = json.loads(p.stdout.strip().splitlines()[-1]) if p.returncode == 0 and p.stdout.strip() else {}
+replies, sent = web.get("replies", [{}] * 3), web.get("sent", [])
+check("malformed control requests get an answer, not an error (a bad stream, a body that is not an object)",
+      replies[0].get("ok") and replies[1].get("ok") is False and "stream" in replies[1].get("error", "")
+      and replies[2] == {"ok": True, "running": False}, str(replies)[:90] if web else output[-90:])
+check("WebSocket: status first, malformed messages ignored, a step acknowledged and its snapshot sent, "
+      "exits when the client goes",
+      sent[:1] == ["status"] and web.get("acks") == [True] and "cycle" in sent[sent.index("ack"):],
+      f"{len(sent)} messages, {sent.count('cycle')} snapshot(s)" if web else output[-90:])
+
+# Nobody reading: the queue keeps only the latest snapshots, so memory stays flat
+with quiet():
+    unread = server.ExperimentEngine(stream=2, delay_ms=0, runs_dir=scratch())
+    unread.running = True
+    wait_for(lambda: unread.cycle >= server.MAX_PENDING + 20, 120)
+    unread.running = False
+    time.sleep(0.2)
+    pending = unread.drain()
+    unread.shutdown()
+check(f"unread snapshots are capped at the latest {server.MAX_PENDING}",
+      len(pending) == server.MAX_PENDING and pending[-1]["cycle"] == unread.cycle - 1,
+      f"{unread.cycle} cycles, {len(pending)} kept")
 
 check.section("4 · Model health")
 model = FakeModel("counter")

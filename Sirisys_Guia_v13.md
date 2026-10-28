@@ -43,6 +43,7 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.
 - `--host` fija la dirección en la que escucha el servidor. Por defecto es `127.0.0.1`: solo se puede abrir desde la misma máquina.
 - El visualizador se conecta por WebSocket. Si el entorno lo bloquea, consulta al servidor por HTTP y muestra «connected (polling)»; cada 30 s vuelve a probar el WebSocket.
+- El servidor puede quedarse ciclando sin ningún navegador abierto: guarda solo las 200 instantáneas más recientes para quien abra el visualizador después. Las rutas y las acciones de control están descritas al principio de `Sirisys_Server.py`.
 - Modelo: `SIRISYS_LLM_BACKEND=anthropic|ollama|none`, `SIRISYS_LLM_MODEL`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`.
 
 ## Informes
