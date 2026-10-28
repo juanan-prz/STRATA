@@ -20,7 +20,7 @@ Author: Juan A. Pérez-Gómez.
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live visualizer |
 | `Sirisys_Live_Visualizer.html` | Live topology in the browser (experiment mode) |
-| `Sirisys_Static_Visualizer.html` | Opens a saved `state.json` in the browser, no server needed |
+| `Sirisys_Static_Visualizer.html` | Inspector of a saved instance: opens its `state.json` in the browser (no server, no connection) to examine each construct, its proofs, its genesis and its relations; several files of one instance make a timeline |
 | `run_report.py` | Instrumented runs on the same synthetic streams: the model, the model asking only the Sombunal questions, and a control without a model; writes `sirisys_report.json` |
 | `field_topology.py` | Read-only topology and depth of the field, recorded by `run_report.py` and `live_c2.py` |
 | `sirisys_measures.py` | Shared measurements: the self-adjustment criteria, and the model-health watch that stops a run whose model does not answer |
@@ -72,7 +72,7 @@ python3 run_report.py --cycles 20 --seeds 1 --backend ollama    # short measured
 
 ## Experiment mode
 
-For calibration and refinement. Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>/`, holding `state.json` and the ledger. Nothing is overwritten.
+For calibration and refinement. Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>/`, holding `state.json` and the ledger. Nothing is overwritten. To examine an instance afterwards, open its `state.json` in `Sirisys_Static_Visualizer.html`.
 
 | Option | Effect |
 |---|---|

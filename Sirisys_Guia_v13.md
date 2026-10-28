@@ -11,7 +11,7 @@
 | `field_topology.py` | Topología y profundidad del campo, de solo lectura. La registran `run_report.py` y `live_c2.py`. |
 | `sirisys_measures.py` | Mediciones compartidas: los criterios de autoajuste y la vigilancia del modelo, que detiene una ejecución si el modelo no responde. |
 | `Sirisys_Live_Visualizer.html` | Visualizador en vivo. |
-| `Sirisys_Static_Visualizer.html` | Abre en el navegador un `state.json` guardado y muestra su topología (sin servidor). |
+| `Sirisys_Static_Visualizer.html` | Inspector de una instancia guardada: abre su `state.json` en el navegador (sin servidor ni conexión) para examinar cada constructo, sus pruebas, su génesis y sus relaciones; varios archivos de una misma instancia forman una línea de tiempo. |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Pruebas. Ejecútalas tras cada cambio. |
 | `sirisys_testkit.py` | Lo que comparten las pruebas: las comprobaciones y su resumen, copias nuevas del framework y un modelo de Ollama simulado. |
 | `measure_phase3.py` | Mide los criterios de autoajuste (3 flujos × 5.000 ciclos: cristalización, crecimiento, energía, coste). |
@@ -38,7 +38,7 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 ```
 
 - Abre `http://127.0.0.1:8000`. Play, Step y Reset controlan el campo; Fit recentra la vista (teclas: Espacio, S, F).
-- Cada arranque y cada Reset crean una instancia nueva en `sirisys_runs/<fecha-hora>_live/` (o `_stream0/`), que contiene `state.json` y `ledger.jsonl`. Nada se borra.
+- Cada arranque y cada Reset crean una instancia nueva en `sirisys_runs/<fecha-hora>_live/` (o `_stream0/`), que contiene `state.json` y `ledger.jsonl`. Nada se borra. Para examinar una instancia después, abre su `state.json` con `Sirisys_Static_Visualizer.html`.
 - **No hay semilla.** El framework no usa ningún generador aleatorio: cada elección se deriva de la historia (el hash de cabeza del ledger). Con `--stream N` y los mismos perceptos, dos ejecuciones son idénticas; con `live`, los perceptos de la máquina las hacen únicas.
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.
 - `--host` fija la dirección en la que escucha el servidor. Por defecto es `127.0.0.1`: solo se puede abrir desde la misma máquina.

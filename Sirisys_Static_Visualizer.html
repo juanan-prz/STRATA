@@ -1,1586 +1,1528 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SIRISYS — Field Topology</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIRISYS — Inspector</title>
+<!--
+  The inspector of a saved instance: open the state.json of an experiment run
+  (sirisys_runs/<run>/state.json) or of any other instance, and examine it
+  construct by construct: its proofs, its genesis, its relations. Several files
+  of one instance make a timeline. Nothing is sent anywhere and nothing is
+  needed besides this file: it works with no server and no connection.
+
+  The live view (Sirisys_Live_Visualizer.html) shows the field as it cycles; this
+  one shows a moment of it in depth. Both use the same shapes, colours and names.
+
+  Values the framework derives at run time (existence mode, Vc, selection
+  energy, dominant state, instability) are not stored in the file: they are
+  computed here exactly as the framework computes them, and each function below
+  names the one it follows.
+-->
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+  :root {
+    /* Backgrounds */
+    --bg-0: #07080a;
+    --bg-1: #0b0d11;
+    --bg-2: #12151b;
+    --bg-3: #1a1e26;
+    --bg-elevated: rgba(11, 13, 17, 0.94);
 
-:root {
-/* ── COLOR TOKENS ─────────────────────────────────────────── */
-/* Surfaces: 4-tier depth, each layer slightly lifted from the last */
---bg-0:            #07080a;  /* app backdrop */
---bg-1:            #0b0d11;  /* panel */
---bg-2:            #12151b;  /* card / elevated */
---bg-3:            #1a1e26;  /* hover / elevated-active */
-/* Legacy aliases (do not remove — JS references may inline these) */
---bg:              var(--bg-0);
---bg-panel:        var(--bg-1);
---bg-card:         var(--bg-2);
+    /* Borders */
+    --border: #1a1e26;
+    --border-hi: #2a2f3a;
+    --border-focus: #3a4050;
 
-/* Borders */
---border:          #1a1e26;
---border-hi:       #2a2f3a;
---border-focus:    #3a4050;
+    /* Text */
+    --text: #b8c0cc;
+    --text-dim: #737c8f;                        /* 4.6:1 on the panels: small text stays legible */
+    --text-muted: #8a92a3;
+    --text-bright: #eef1f6;
 
-/* Text hierarchy */
---text:            #b8c0cc;
---text-dim:        #5c6475;
---text-muted:      #8a92a3;
---text-bright:     #eef1f6;
+    /* Accents */
+    --accent: #4af0c4;
+    --accent-soft: rgba(74, 240, 196, 0.12);
+    --accent-strong: rgba(74, 240, 196, 0.28);
+    --warn: #f0a832;
 
-/* Brand */
---accent:          #4af0c4;
---accent-soft:     rgba(74,240,196,.12);
---accent-strong:   rgba(74,240,196,.22);
+    /* Tetralemmic states */
+    --col-BOTH: #f0a832;
+    --col-TRUE: #4af0c4;
+    --col-FALSE: #ff5571;
+    --col-NEITHER: #5c6475;
 
-/* Ontological palette — tetra states */
---col-BOTH:        #f0a832;
---col-TRUE:        #4af0c4;
---col-FALSE:       #f05050;
---col-NEITHER:     #5a6072;
---col-APPARENT:    #eef1f6;
+    /* Ontological layers */
+    --layer-NULL_00: #4a4f5a;
+    --layer-UMBRA_0: #6a7c9a;
+    --layer-UNIT_1: #4af0c4;
+    --layer-APPARENT: #f0a832;
 
-/* Lagrangian palette */
---L1: #4af0c4;
---L2: #f0a832;
---L3: #a070f0;
---L4: #f05090;
---L5: #50c0f0;
+    /* Proof relations (the proof overlay, the proofs in the inspector) */
+    --rel-CONCORDANCE: #4af0c4;
+    --rel-COLLAPSE: #a070f0;
+    --rel-PERCEIVE: #50c0f0;
+    --rel-CONFLICT: #f0a832;
+    --rel-INTENSIFY: #f0a832;
+    --rel-ERODE: #f05090;
+    --rel-REINCARNATE: #c9bfff;
 
-/* ── SPACING — 4px base grid ──────────────────────────────── */
---sp-1: 4px;
---sp-2: 8px;
---sp-3: 12px;
---sp-4: 16px;
---sp-5: 20px;
---sp-6: 24px;
+    /* Spacing, type, radii, shadows */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --font-mono: 'SF Mono', Menlo, Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --ls-wide: 0.08em;
+    --ls-wider: 0.14em;
+    --r-sm: 3px;
+    --r-md: 4px;
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.55);
+  }
 
-/* ── TYPOGRAPHY ───────────────────────────────────────────── */
---font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
---font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  *, *::before, *::after { box-sizing: border-box; }
+  :focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
-/* Modular scale (1.2 ratio) — consistent hierarchy */
---fs-xs:   9px;
---fs-sm:   10px;
---fs-md:   11px;
---fs-base: 12px;
---fs-lg:   13px;
---fs-xl:   15px;
+  /* ───── Layout: header across, saved state · field · construct ───── */
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg-0); color: var(--text);
+    font-family: var(--font-sans); font-size: 13px;
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    display: grid;
+    grid-template-columns: 280px 1fr 340px;
+    grid-template-rows: 48px 1fr;
+    grid-template-areas:
+      "header header header"
+      "left   center right";
+    height: 100vh;
+  }
+  button { font: inherit; }
 
-/* Line heights & letter spacing */
---lh-tight:  1.25;
---lh-normal: 1.5;
---lh-loose:  1.7;
---ls-wide:   .08em;
---ls-wider:  .14em;
---ls-label:  .18em;
+  /* ───── Header ───── */
+  .top-header {
+    grid-area: header;
+    display: flex; align-items: center; gap: var(--sp-4);
+    padding: 0 var(--sp-4);
+    background: var(--bg-1);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+    color: var(--text-bright); letter-spacing: var(--ls-wider);
+  }
+  .brand-tag {
+    margin-left: var(--sp-2);
+    color: var(--accent); font-weight: 400; letter-spacing: var(--ls-wide);
+  }
+  .header-status {
+    margin-left: auto; min-width: 0;
+    display: flex; align-items: center; gap: var(--sp-3);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: var(--ls-wide);
+    color: var(--text-muted);
+    white-space: nowrap; overflow: hidden;
+  }
+  .header-status > * { flex-shrink: 0; }
+  .stat-inline strong { margin-left: 4px; color: var(--text-bright); font-weight: 600; }
+  .stat-inline.run-info {                       /* the first to give way on a narrow screen */
+    flex-shrink: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .n-breakdown { color: var(--text-dim); font-size: 10px; }
 
-/* ── ELEVATION & RADII ────────────────────────────────────── */
---radius-sm: 3px;
---radius:    5px;
---radius-lg: 8px;
---shadow-1:  0 1px 2px rgba(0,0,0,.3);
---shadow-2:  0 4px 16px rgba(0,0,0,.55);
---shadow-3:  0 8px 28px rgba(0,0,0,.65);
+  /* ───── Side panels ───── */
+  .panel {
+    display: flex; flex-direction: column;
+    min-height: 0;                              /* lets the body below scroll */
+    overflow: hidden;
+    background: var(--bg-1);
+  }
+  .panel.left { grid-area: left; border-right: 1px solid var(--border); }
+  .panel.right { grid-area: right; border-left: 1px solid var(--border); }
+  .panel-header {
+    flex-shrink: 0;
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: var(--ls-wider);
+    color: var(--text-bright);
+  }
+  .panel-body {                                 /* scrolls, so nothing is cut off on small screens */
+    flex: 1 1 auto; min-height: 0;
+    overflow-y: auto; overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-hi) transparent;
+  }
+  .panel-body::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+  .panel-body::-webkit-scrollbar-thumb:hover { background: var(--border-focus); }
+  .panel-section {
+    padding: var(--sp-3) var(--sp-4);
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-section:last-child { border-bottom: none; }
+  .panel-section[hidden] { display: none; }
+  .panel-section h3 {
+    margin: 0 0 var(--sp-2) 0;
+    font-family: var(--font-mono); font-size: 9.5px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: var(--ls-wider);
+    color: var(--text-muted);
+  }
+  .note { margin: var(--sp-2) 0 0; font-family: var(--font-mono); font-size: 10px; line-height: 1.6; color: var(--text-dim); }
+  .note.warn { color: var(--warn); }
 
-/* ── MOTION ───────────────────────────────────────────────── */
---ease:      cubic-bezier(.2, .6, .2, 1);
---dur-fast:  .12s;
---dur:       .2s;
---dur-slow:  .4s;
+  /* ───── Files and timeline ───── */
+  .btn-wide { width: 100%; }
+  .timeline input[type="range"] { width: 100%; margin: var(--sp-2) 0; accent-color: var(--accent); }
+  .timeline .ctrl-row { display: flex; gap: var(--sp-1); }
+  .timeline .ctrl-row .btn { flex: 1; }
+  .drop-veil {                                  /* while files are dragged over the page */
+    position: fixed; inset: 0; z-index: 200;
+    display: none; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: var(--ls-wider); text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(7, 8, 10, 0.82);
+    border: 2px dashed var(--accent);
+    pointer-events: none;
+  }
+  body.dragging .drop-veil { display: flex; }
 
-}
+  /* ───── Counters ───── */
+  .stat-row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3);
+    padding: 4px 0;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .stat-row.spaced { margin-top: 6px; }
+  .stat-key { color: var(--text-muted); letter-spacing: var(--ls-wide); }
+  .stat-val { color: var(--text-bright); font-weight: 600; text-align: right; }
+  .stat-val.accent { color: var(--accent); }
+  .stat-val.warn { color: var(--warn); }
+  .bar-track {
+    height: 4px; margin-top: 5px; overflow: hidden;
+    background: var(--bg-3); border-radius: 2px;
+  }
+  .bar-fill {
+    width: 0; height: 100%;
+    background: var(--accent);
+    transition: width 0.35s ease;
+  }
 
-/* ── RESET ─────────────────────────────────────────────────── */
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-html,body{height:100%;}
-body{
-background:var(--bg-0);
-color:var(--text);
-font-family:var(--font-sans);
-font-size:var(--fs-base);
-line-height:var(--lh-normal);
-font-feature-settings:"cv11","ss01";
--webkit-font-smoothing:antialiased;
-text-rendering:optimizeLegibility;
-display:flex;
-flex-direction:column;
-overflow:hidden;
-}
-::selection{background:var(--accent-strong);color:var(--text-bright);}
+  /* ───── Breakdowns (modes, layers, Lagrangian points) ───── */
+  .breakdown-row {
+    position: relative; isolation: isolate; overflow: hidden;
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: 4px var(--sp-2);
+    font-family: var(--font-mono); font-size: 10px;
+    border-radius: var(--r-sm);
+  }
+  .breakdown-row::before {                      /* a bar as long as the share */
+    content: '';
+    position: absolute; inset: 0; z-index: -1;
+    width: var(--pct, 0%);
+    background: var(--bar-color, var(--accent));
+    opacity: 0.10;
+    border-radius: var(--r-sm);
+  }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .breakdown-row .label,
+  .filter-row .label { flex: 1; color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--ls-wide); }
+  .breakdown-row .count { color: var(--text-bright); }
+  .breakdown-row .pct { min-width: 38px; text-align: right; color: var(--text-dim); }
 
-/* Scrollbars — consistent, subtle */
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:3px;}
-::-webkit-scrollbar-thumb:hover{background:var(--border-focus);}
+  /* ───── Filters: a switch per layer and per edge state ───── */
+  .filter-row {
+    display: flex; align-items: center; gap: var(--sp-2);
+    width: 100%; padding: 4px 0;
+    font-family: var(--font-mono); font-size: 10px; text-align: left;
+    color: inherit; background: none; border: 0;
+    cursor: pointer; user-select: none;
+    transition: opacity 0.14s;
+  }
+  .filter-row[aria-pressed="false"] { opacity: 0.38; }
+  .filter-row:hover { color: var(--text-bright); }
+  .filter-row .count { color: var(--text-dim); }
+  .checkbox {
+    width: 13px; height: 13px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; line-height: 1;
+    color: var(--accent);
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi); border-radius: 2px;
+    transition: all 0.14s;
+  }
+  .filter-row[aria-pressed="true"] .checkbox { background: var(--accent-soft); border-color: var(--accent); }
+  .filter-row[aria-pressed="false"] .checkbox { color: transparent; }
+  .filter-row:hover .checkbox { border-color: var(--border-focus); }
 
-/* ── HEADER ────────────────────────────────────────────────── */
-header{
-display:flex;
-align-items:center;
-justify-content:space-between;
-padding:var(--sp-3) var(--sp-4);
-border-bottom:1px solid var(--border);
-background:var(--bg-1);
-flex-shrink:0;
-gap:var(--sp-3);
-height:48px;
-}
-.logo{
-font-family:var(--font-mono);
-font-size:var(--fs-lg);
-font-weight:600;
-letter-spacing:var(--ls-label);
-color:var(--accent);
-white-space:nowrap;
-display:flex;
-align-items:center;
-gap:var(--sp-2);
-}
-.logo::before{
-content:'';
-width:6px;height:6px;border-radius:50%;
-background:var(--accent);
-box-shadow:0 0 8px var(--accent);
-animation:pulse-dot 2.4s ease-in-out infinite;
-}
-@keyframes pulse-dot{
-0%,100%{opacity:1;transform:scale(1);}
-50%    {opacity:.4;transform:scale(.8);}
-}
-.logo span{color:var(--text-dim);font-weight:400;letter-spacing:var(--ls-wider);}
-.header-controls{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;}
-.header-meta{
-color:var(--text-dim);
-font-size:var(--fs-sm);
-font-family:var(--font-mono);
-letter-spacing:var(--ls-wide);
-flex:1;
-text-align:center;
-}
+  /* ───── The field ───── */
+  .center { grid-area: center; position: relative; overflow: hidden; background: var(--bg-0); }
+  #canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #canvas:active { cursor: grabbing; }
+  #canvas.over-construct { cursor: pointer; }
+  .floating {                                   /* the boxes over the field */
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-hi); border-radius: var(--r-md);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .controls {
+    position: absolute; top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); z-index: 10;
+    display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2);
+    pointer-events: none;
+  }
+  .controls > * { pointer-events: auto; }
+  .ctrl-group { display: flex; gap: var(--sp-1); padding: var(--sp-1); }
+  .btn {
+    padding: 6px var(--sp-3);
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: var(--ls-wide);
+    color: var(--text);
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi); border-radius: var(--r-sm);
+    cursor: pointer; user-select: none;
+    transition: all 0.14s ease;
+  }
+  .btn:hover { background: var(--bg-3); border-color: var(--border-focus); color: var(--text-bright); }
+  .btn:active { transform: translateY(1px); }
+  .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .btn[aria-pressed="true"]:hover { background: var(--accent-strong); }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .search {
+    width: 220px; padding: 6px var(--sp-3);
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-bright);
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi); border-radius: var(--r-sm);
+  }
+  .search::placeholder { color: var(--text-dim); }
+  .legend {
+    position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
+    max-width: calc(100% - 2 * var(--sp-3));
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+    gap: 6px var(--sp-4);
+    padding: 7px 14px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide);
+    color: var(--text-muted);
+  }
+  .legend .item { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+  .legend svg { flex-shrink: 0; }
+  .legend.proofs { top: 58px; bottom: auto; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .legend[hidden] { display: none; }
+  .legend .line { width: 16px; height: 0; border-top: 2px solid; }
+  @media (max-width: 1100px) { .legend { display: none; } }
 
-/* ── BUTTON ────────────────────────────────────────────────── */
-.btn{
-background:transparent;
-border:1px solid var(--border-hi);
-color:var(--text-muted);
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-font-weight:500;
-padding:var(--sp-1) var(--sp-3);
-border-radius:var(--radius-sm);
-cursor:pointer;
-letter-spacing:var(--ls-wide);
-white-space:nowrap;
-height:26px;
-display:inline-flex;
-align-items:center;
-gap:var(--sp-1);
-transition:
-border-color var(--dur-fast) var(--ease),
-color        var(--dur-fast) var(--ease),
-background   var(--dur-fast) var(--ease),
-transform    var(--dur-fast) var(--ease);
-}
-.btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
-.btn:active{transform:translateY(1px);}
-.btn:focus-visible{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);}
-.btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
-.btn.active:hover{background:var(--accent-strong);}
+  .empty-state {                                /* until a state is loaded */
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    font-family: var(--font-mono); color: var(--text-dim);
+  }
+  .empty-state[hidden] { display: none; }
+  .empty-state-icon {
+    width: 56px; height: 56px; margin-bottom: var(--sp-4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; color: var(--text-muted);
+    border: 2px dashed var(--border-focus); border-radius: 50%;
+  }
+  .empty-state-title {
+    margin-bottom: var(--sp-2);
+    font-size: 13px; letter-spacing: var(--ls-wider); text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .empty-state-hint { max-width: 320px; font-size: 11px; line-height: 1.6; color: var(--text-dim); }
+  .empty-state .btn { margin-top: var(--sp-4); }
 
-/* ── APP LAYOUT ───────────────────────────────────────────── */
-.app{display:grid;grid-template-columns:204px 1fr 272px;flex:1;min-height:0;}
+  #tooltip {
+    position: absolute; z-index: 100;
+    max-width: 320px;
+    padding: var(--sp-2) var(--sp-3);
+    font-family: var(--font-mono); font-size: 10.5px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-focus); border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.12s;
+  }
+  #tooltip.visible { opacity: 1; }
+  .tt-name { margin-bottom: 3px; font-size: 11px; font-weight: 600; color: var(--text-bright); word-break: break-all; }
+  .tt-line { color: var(--text-muted); }
 
-/* ── PANELS (shared) ───────────────────────────────────────── */
-.panel-left, .panel-right{
-background:var(--bg-1);
-display:flex;
-flex-direction:column;
-overflow-y:auto;
-}
-.panel-left{
-border-right:1px solid var(--border);
-padding:var(--sp-4);
-gap:var(--sp-4);
-}
-.panel-right{
-border-left:1px solid var(--border);
-overflow:hidden;
-}
-
-.panel-section{display:flex;flex-direction:column;gap:var(--sp-2);}
-/* Reference sections (legends, overlay keys) — slightly de-emphasized
-so interactive filters dominate the hierarchy */
-.panel-section.reference{opacity:.85;}
-.panel-section.reference:hover{opacity:1;transition:opacity var(--dur) var(--ease);}
-.panel-label{
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-font-weight:600;
-letter-spacing:var(--ls-label);
-color:var(--text-muted);
-text-transform:uppercase;
-padding-bottom:var(--sp-2);
-border-bottom:1px solid var(--border);
-display:flex;
-align-items:center;
-justify-content:space-between;
-gap:var(--sp-2);
-}
-.filter-hint{
-font-size:var(--fs-xs);
-color:var(--text-dim);
-font-style:italic;
-font-weight:400;
-letter-spacing:0;
-text-transform:none;
-}
-
-/* ── STATS ─────────────────────────────────────────────────── */
-.stat-row{
-display:flex;
-justify-content:space-between;
-align-items:center;
-font-family:var(--font-mono);
-font-size:var(--fs-md);
-padding:2px 0;
-}
-.stat-key{color:var(--text-dim);letter-spacing:var(--ls-wide);}
-.stat-val{color:var(--text-bright);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap;}
-.stat-val.accent{color:var(--accent);}
-.instability-bar{
-height:3px;
-background:var(--bg-2);
-border-radius:2px;
-overflow:hidden;
-margin-top:var(--sp-1);
-}
-.instability-fill{
-height:100%;
-background:linear-gradient(90deg, var(--accent), var(--col-BOTH));
-transition:width var(--dur-slow) var(--ease);
-}
-
-/* ── LEGEND ITEMS ──────────────────────────────────────────── */
-.legend-item{
-display:flex;
-align-items:center;
-gap:var(--sp-2);
-cursor:pointer;
-padding:var(--sp-1) var(--sp-2);
-border-radius:var(--radius-sm);
-font-size:var(--fs-md);
-font-family:var(--font-mono);
-letter-spacing:var(--ls-wide);
-color:var(--text);
-transition:
-background var(--dur-fast) var(--ease),
-opacity    var(--dur) var(--ease),
-color      var(--dur-fast) var(--ease);
-user-select:none;
-}
-.legend-item:hover{background:var(--bg-2);color:var(--text-bright);}
-.legend-item.active{background:var(--bg-2);outline:1px solid var(--border-hi);}
-.legend-item.dimmed{opacity:.3;}
-.legend-dot,.legend-hex,.legend-star,.legend-dia{width:10px;height:10px;flex-shrink:0;}
-.legend-dot{border-radius:50%;}
-.legend-hex{clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);}
-.legend-star{clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%);}
-.legend-dia{clip-path:polygon(50% 0%,100% 50%,50% 100%,0% 50%);background:none;border:1px dashed var(--border-focus);}
-
-/* ── UPLOAD ZONE ──────────────────────────────────────────── */
-.upload-zone{
-border:1px dashed var(--border-hi);
-border-radius:var(--radius);
-padding:var(--sp-3);
-text-align:center;
-cursor:pointer;
-color:var(--text-muted);
-font-size:var(--fs-md);
-font-family:var(--font-mono);
-letter-spacing:var(--ls-wide);
-transition:
-border-color var(--dur) var(--ease),
-color        var(--dur) var(--ease),
-background   var(--dur) var(--ease);
-}
-.upload-zone:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
-.upload-zone input{display:none;}
-
-/* ── TIMELINE ──────────────────────────────────────────────── */
-.timeline-wrap{display:flex;flex-direction:column;gap:var(--sp-2);}
-.tl-controls{display:flex;gap:var(--sp-1);align-items:center;}
-.tl-slider{
-width:100%;
-accent-color:var(--accent);
-cursor:pointer;
-height:20px;
-}
-.tl-info{
-font-family:var(--font-mono);
-font-size:var(--fs-md);
-color:var(--text-muted);
-text-align:center;
-letter-spacing:var(--ls-wide);
-}
-.tl-cycle{color:var(--accent);font-weight:600;font-variant-numeric:tabular-nums;}
-.tl-hint{
-font-size:var(--fs-xs);
-color:var(--text-dim);
-text-align:center;
-font-style:italic;
-}
-
-/* ── CANVAS ────────────────────────────────────────────────── */
-.canvas-area{
-position:relative;
-overflow:hidden;
-background:
-radial-gradient(ellipse at center, rgba(74,240,196,.015) 0%, transparent 55%),
-var(--bg-0);
-}
-svg#field{width:100%;height:100%;cursor:grab;}
-svg#field:active{cursor:grabbing;}
-svg#field.frozen{cursor:default;}
-
-/* ── CANVAS ELEMENTS ──────────────────────────────────────── */
-.layer-ring{fill:none;stroke-dasharray:4 4;opacity:.14;}
-
-.edge{
-stroke-opacity:.45;
-transition:stroke-opacity var(--dur) var(--ease);
-}
-.edge:hover{stroke-opacity:1;}
-.edge-BOTH   {stroke:var(--col-BOTH);   stroke-dasharray:6 3; animation:dash-flow 1.4s linear infinite;}
-.edge-TRUE   {stroke:var(--col-TRUE);}
-.edge-FALSE  {stroke:var(--col-FALSE);}
-.edge-NEITHER{stroke:var(--col-NEITHER);}
-@keyframes dash-flow{to{stroke-dashoffset:-27;}}
-
-@keyframes birth-glow{
-0%  {opacity:1;transform:scale(1.6);}
-100%{opacity:0;transform:scale(2.8);}
-}
-.birth-ring{animation:birth-glow .8s ease-out forwards;transform-origin:center;}
-
-#field.zoomed-out .node-label:not(.anchor-label){display:none;}
-.node-label{
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-fill:var(--text);
-pointer-events:none;
-text-anchor:middle;
-letter-spacing:.02em;
-}
-.lagrange-badge{
-font-family:var(--font-mono);
-font-size:7px;
-font-weight:700;
-pointer-events:none;
-letter-spacing:0;
-}
-.conflict-mark{
-font-family:var(--font-mono);
-font-weight:700;
-pointer-events:none;
-text-anchor:middle;
-dominant-baseline:central;
-}
-.zero-point-ring{
-fill:none;
-stroke:var(--accent);
-stroke-width:1.5;
-stroke-dasharray:3 2;
-opacity:.7;
-}
-.ring-label{
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-fill:var(--text-dim);
-opacity:.55;
-pointer-events:none;
-letter-spacing:var(--ls-wide);
-}
-
-/* ── FIELD EMPTY STATE ────────────────────────────────────── */
-.field-empty{
-position:absolute;
-top:50%;left:50%;
-transform:translate(-50%,-50%);
-text-align:center;
-color:var(--text-dim);
-pointer-events:none;
-max-width:420px;
-padding:0 var(--sp-4);
-}
-.field-empty h2{
-font-family:var(--font-mono);
-font-size:var(--fs-xl);
-font-weight:600;
-letter-spacing:var(--ls-label);
-margin-bottom:var(--sp-3);
-color:var(--text-muted);
-}
-.field-empty p{
-font-size:var(--fs-md);
-line-height:var(--lh-loose);
-opacity:.8;
-}
-.field-empty p + p{margin-top:var(--sp-3);opacity:.5;font-size:var(--fs-sm);}
-
-/* ── TOOLTIP ───────────────────────────────────────────────── */
-#tooltip{
-position:fixed;
-pointer-events:none;
-background:var(--bg-2);
-border:1px solid var(--border-hi);
-border-radius:var(--radius);
-padding:var(--sp-2) var(--sp-3);
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-color:var(--text);
-min-width:200px;
-max-width:260px;
-z-index:9999;
-opacity:0;
-transform:translateY(2px);
-transition:
-opacity   var(--dur-fast) var(--ease),
-transform var(--dur-fast) var(--ease);
-box-shadow:var(--shadow-2);
-}
-#tooltip.visible{opacity:1;transform:translateY(0);}
-#tooltip .tt-name{
-color:var(--text-bright);
-font-weight:600;
-word-break:break-all;
-margin-bottom:var(--sp-1);
-letter-spacing:var(--ls-wide);
-}
-#tooltip .tt-row{
-color:var(--text-dim);
-display:flex;
-justify-content:space-between;
-gap:var(--sp-2);
-letter-spacing:var(--ls-wide);
-}
-#tooltip .tt-val{color:var(--text);font-variant-numeric:tabular-nums;}
-
-/* ── INSPECTOR ─────────────────────────────────────────────── */
-.inspector-header{
-padding:var(--sp-3) var(--sp-4);
-border-bottom:1px solid var(--border);
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-font-weight:600;
-letter-spacing:var(--ls-label);
-color:var(--text-muted);
-text-transform:uppercase;
-background:var(--bg-1);
-}
-.inspector-body{
-flex:1;
-overflow-y:auto;
-padding:var(--sp-4);
-display:flex;
-flex-direction:column;
-gap:var(--sp-3);
-}
-.inspector-empty{
-color:var(--text-dim);
-font-size:var(--fs-md);
-margin-top:var(--sp-6);
-text-align:center;
-font-style:italic;
-}
-.inspect-field{display:flex;flex-direction:column;gap:var(--sp-1);}
-.inspect-key{
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-font-weight:600;
-letter-spacing:var(--ls-wider);
-color:var(--text-dim);
-text-transform:uppercase;
-}
-.inspect-val{
-color:var(--text-bright);
-word-break:break-all;
-line-height:var(--lh-normal);
-font-size:var(--fs-md);
-}
-.layer-badge{
-display:inline-block;
-padding:2px var(--sp-2);
-border-radius:var(--radius-sm);
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-font-weight:600;
-letter-spacing:var(--ls-wide);
-}
-.lagrange-tag{
-display:inline-flex;
-align-items:center;
-gap:var(--sp-1);
-padding:2px var(--sp-2);
-border-radius:var(--radius-sm);
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-font-weight:700;
-letter-spacing:var(--ls-wide);
-border:1px solid currentColor;
-}
-.proof-chain{display:flex;flex-direction:column;gap:var(--sp-1);}
-.proof-entry{
-background:var(--bg-2);
-border:1px solid var(--border);
-border-radius:var(--radius-sm);
-padding:var(--sp-2) var(--sp-3);
-display:flex;
-flex-direction:column;
-gap:2px;
-transition:border-color var(--dur-fast) var(--ease);
-}
-.proof-entry:hover{border-color:var(--border-hi);}
-.proof-relation{
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-font-weight:700;
-letter-spacing:var(--ls-wider);
-}
-.proof-meta{
-color:var(--text-dim);
-font-family:var(--font-mono);
-font-size:var(--fs-xs);
-letter-spacing:var(--ls-wide);
-font-variant-numeric:tabular-nums;
-}
-.edge-entry{
-background:var(--bg-2);
-border:1px solid var(--border);
-border-radius:var(--radius-sm);
-padding:var(--sp-2);
-margin-top:var(--sp-1);
-display:flex;
-flex-direction:column;
-gap:2px;
-font-family:var(--font-mono);
-transition:border-color var(--dur-fast) var(--ease);
-}
-.edge-entry:hover{border-color:var(--border-hi);}
-
-/* ── GENESIS OVERLAY ──────────────────────────────────────── */
-.genesis-edge{
-stroke-opacity:.6;
-stroke-dasharray:6 3;
-stroke-width:1.4;
-pointer-events:none;
-}
-.genesis-node-hi{
-fill:none;
-stroke-width:1.5;
-stroke-dasharray:3 2;
-pointer-events:none;
-opacity:.6;
-}
-.genesis-op-label{
-font-family:var(--font-mono);
-font-size:var(--fs-md);
-font-weight:700;
-pointer-events:none;
-opacity:.7;
-letter-spacing:0;
-}
-.genesis-role-label{
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-font-weight:600;
-pointer-events:none;
-opacity:.5;
-letter-spacing:.04em;
-}
-
-/* ── FOOTER ────────────────────────────────────────────────── */
-footer{
-border-top:1px solid var(--border);
-padding:var(--sp-2) var(--sp-5);
-background:var(--bg-1);
-font-family:var(--font-mono);
-font-size:var(--fs-sm);
-color:var(--text-dim);
-display:flex;
-gap:var(--sp-5);
-flex-shrink:0;
-letter-spacing:var(--ls-wide);
-height:28px;
-align-items:center;
-}
-footer span{color:var(--accent);font-variant-numeric:tabular-nums;}
+  /* ───── The construct (inspector) ───── */
+  .inspector { padding: var(--sp-3) var(--sp-4) var(--sp-4); font-family: var(--font-mono); font-size: 11px; }
+  .inspector h3 {
+    margin: var(--sp-4) 0 var(--sp-2);
+    font-size: 9.5px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: var(--ls-wider);
+    color: var(--text-muted);
+  }
+  .inspector h3:first-child { margin-top: 0; }
+  .construct-name { display: flex; align-items: flex-start; gap: var(--sp-2); font-size: 12px; font-weight: 600; color: var(--text-bright); word-break: break-all; }
+  .construct-name .dot { width: 9px; height: 9px; margin-top: 3px; border-radius: 50%; flex-shrink: 0; }
+  .construct-kind { margin: 3px 0 0 17px; color: var(--text-muted); }
+  .kv { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 2px 0; }
+  .kv .k { color: var(--text-muted); letter-spacing: var(--ls-wide); white-space: nowrap; }
+  .kv .v { text-align: right; color: var(--text); overflow-wrap: anywhere; }
+  .vc-bar { height: 4px; margin: 2px 0 4px; overflow: hidden; background: var(--bg-3); border-radius: 2px; }
+  .vc-bar > div { height: 100%; background: var(--accent); }
+  .proof {
+    margin-bottom: 4px; padding: var(--sp-1) var(--sp-2);
+    background: var(--bg-2);
+    border-left: 2px solid var(--rel, var(--border-hi)); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  }
+  .proof .rel { color: var(--rel, var(--text)); font-weight: 600; }
+  .proof .meta { color: var(--text-dim); font-size: 10px; overflow-wrap: anywhere; }
+  .genesis {
+    padding: var(--sp-2) var(--sp-3);
+    background: var(--bg-2);
+    border: 1px solid var(--border); border-radius: var(--r-md);
+    line-height: 1.9;
+  }
+  .genesis .op { padding-left: var(--sp-3); font-weight: 700; }
+  .genesis .op.concordance { color: var(--accent); }
+  .genesis .op.conflict { color: var(--warn); }
+  .link {                                       /* a construct named in the inspector: a click selects it */
+    padding: 0; border: 0; background: none;
+    font-family: var(--font-mono); font-size: inherit; text-align: left;
+    color: var(--text-bright); overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  .link:hover { color: var(--accent); text-decoration: underline; }
+  .gone { color: var(--text-dim); font-style: italic; overflow-wrap: anywhere; }
+  .relation { display: flex; gap: var(--sp-2); padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .relation:last-child { border-bottom: none; }
+  .relation .dir { width: 12px; flex-shrink: 0; }
+  .relation .body { flex: 1; min-width: 0; }
+  .relation .meta { color: var(--text-dim); font-size: 10px; }
+  .list-entry { padding: 3px 0; border-bottom: 1px solid var(--border); }
+  .list-entry:last-child { border-bottom: none; }
+  .list-entry .meta { color: var(--text-dim); font-size: 10px; }
 </style>
-
 </head>
 <body>
 
-<div id="tooltip">
-  <div class="tt-name" id="tt-name"></div>
-  <div class="tt-row"><span>layer</span><span class="tt-val" id="tt-layer"></span></div>
-  <div class="tt-row"><span>state</span><span class="tt-val" id="tt-state"></span></div>
-  <div class="tt-row"><span>lagrange</span><span class="tt-val" id="tt-lagrange"></span></div>
-  <div class="tt-row"><span>energy</span><span class="tt-val" id="tt-energy"></span></div>
-  <div class="tt-row"><span>chirality</span><span class="tt-val" id="tt-chirality"></span></div>
-  <div class="tt-row"><span>crystal state</span><span class="tt-val" id="tt-crystal"></span></div>
-</div>
-
-<header>
-  <div class="logo">SIRISYS <span>// FIELD TOPOLOGY</span></div>
-  <div class="header-meta" id="field-meta">Load state JSON files to begin</div>
-  <div class="header-controls">
-    <button class="btn" id="btn-proof">◈ Proofs</button>
-    <button class="btn" id="btn-layout">⬡ Radial</button>
-    <button class="btn" id="btn-freeze">❄ Freeze</button>
-    <button class="btn" id="btn-fit">⊡ Fit</button>
+<header class="top-header">
+  <div class="brand">SIRISYS<span class="brand-tag">inspector</span></div>
+  <div class="header-status">
+    <span class="stat-inline" title="cycles the instance had run when this state was saved">cycles<strong id="header-cycles">—</strong></span>
+    <span class="stat-inline" title="internal time (era, offset): it never moves backwards">T<strong id="header-T">—</strong></span>
+    <span class="stat-inline" title="constructs (◆ anchors · ✦ Zero Points · ⬢ crystals the field formed)">n<strong id="header-n">—</strong></span>
+    <span class="stat-inline" title="proofs sealed in the instance's ledger when this state was saved · the ledger head (the whole history in one hash)">ledger<strong id="header-ledger">—</strong></span>
+    <span class="stat-inline run-info" id="header-file">—</span>
   </div>
 </header>
 
-<div class="app">
-
-  <!-- LEFT -->
-
-  <div class="panel-left">
+<!-- ═══════════════ Saved state ═══════════════ -->
+<div class="panel left">
+  <div class="panel-header">Saved State</div>
+  <div class="panel-body">
     <div class="panel-section">
-      <div class="panel-label">State Files</div>
-      <div class="upload-zone" id="dropzone">
-        <input type="file" id="fileInput" accept=".json" multiple>
-        <div>↑ Load .json(s)<br><span style="font-size:9px;opacity:.6">multiple = timeline</span></div>
+      <h3>Files</h3>
+      <button class="btn btn-wide" id="btn-open" title="Open one state.json, or several of one instance for a timeline (O)">Open state.json…</button>
+      <input type="file" id="file-input" accept=".json,application/json" multiple hidden>
+      <p class="note" id="files-note">or drop them anywhere on the page</p>
+    </div>
+    <div class="panel-section timeline" id="timeline" hidden>
+      <h3>Timeline</h3>
+      <div class="stat-row"><span class="stat-key" id="tl-position">—</span><span class="stat-val" id="tl-cycles">—</span></div>
+      <input type="range" id="tl-slider" min="0" max="0" value="0" aria-label="state in the timeline">
+      <div class="ctrl-row">
+        <button class="btn" id="btn-prev" title="Previous state (←)">◀</button>
+        <button class="btn" id="btn-play" title="Play the timeline">Play</button>
+        <button class="btn" id="btn-next" title="Next state (→)">▶</button>
       </div>
+      <p class="note">a ring marks each construct the field did not hold in the previous state</p>
     </div>
-
-<!-- TIMELINE (hidden until ≥2 files) -->
-<div class="panel-section" id="timeline-section" style="display:none">
-  <div class="panel-label">Timeline</div>
-  <div class="timeline-wrap">
-    <div class="tl-info">Cycle <span class="tl-cycle" id="tl-cycle">—</span> of <span id="tl-max">—</span></div>
-    <input type="range" class="tl-slider" id="tl-slider" min="0" max="0" value="0">
-    <div class="tl-controls">
-      <button class="btn" id="btn-prev" style="flex:1">◀</button>
-      <button class="btn" id="btn-play" style="flex:2">▶ Play</button>
-      <button class="btn" id="btn-next" style="flex:1">▶</button>
+    <div class="panel-section">
+      <h3>Counters</h3>
+      <div class="stat-row" title="cycles the instance had run when this state was saved"><span class="stat-key">cycles run</span><span class="stat-val accent" id="s-cycles">—</span></div>
+      <div class="stat-row" title="internal time (era, offset): it never moves backwards"><span class="stat-key">T</span><span class="stat-val" id="s-T">—</span></div>
+      <div class="stat-row"><span class="stat-key">constructs</span><span class="stat-val" id="s-constructs">—</span></div>
+      <div class="stat-row"><span class="stat-key">edges</span><span class="stat-val" id="s-edges">—</span></div>
+      <div class="stat-row" title="every crystallization in this instance; the Zero Points are crystals from the start"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
+      <div class="stat-row" title="constructs that concluded, each with a TERMINATE proof: an identity never vanishes silently"><span class="stat-key">concluded</span><span class="stat-val" id="s-concluded">—</span></div>
+      <div class="stat-row" title="conflict constructs: NEITHER × NEITHER as a structure of its own"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
+      <div class="stat-row" title="relations in sustained contradiction: they age, mature and feed the exchange"><span class="stat-key">BOTH edges</span><span class="stat-val" id="s-both">—</span></div>
+      <div class="stat-row" title="concluded names born again as new constructs, their conclusion on record"><span class="stat-key">reincarnations</span><span class="stat-val" id="s-reinc">—</span></div>
+      <div class="stat-row" title="the energy of the three most energetic constructs, together: a self-adjustment criterion asks that it stay bounded"><span class="stat-key">top-3 energy</span><span class="stat-val" id="s-energy3">—</span></div>
+      <div class="stat-row" title="share of uncrystallized constructs unstable in some way: BOTH edges, drifted identity, Vc &lt; 0.25 or LEMNISCATE"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
+      <div class="bar-track"><div class="bar-fill" id="inst-bar"></div></div>
+      <div class="stat-row spaced" title="∀C, ∃(Z, L): every construct that is neither a crystal nor a Zero Point nor SYSTEM carries a Lagrangian point (DeOS Compiler Guide pp.15–20)"><span class="stat-key">invariant</span><span class="stat-val" id="s-invariant">—</span></div>
     </div>
-    <div class="tl-hint">New constructs glow on appearance</div>
-  </div>
-</div>
-
-<div class="panel-section" id="stats-section" style="display:none">
-  <div class="panel-label">Field Stats</div>
-  <div class="stat-row"><span class="stat-key">cycle</span><span class="stat-val accent" id="s-cycle">—</span></div>
-  <div class="stat-row"><span class="stat-key">T</span><span class="stat-val" id="s-T">—</span></div>
-  <div class="stat-row"><span class="stat-key">constructs</span><span class="stat-val" id="s-constructs">—</span></div>
-  <div class="stat-row"><span class="stat-key">edges</span><span class="stat-val" id="s-edges">—</span></div>
-  <div class="stat-row"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
-  <div class="stat-row"><span class="stat-key">· emergent</span><span class="stat-val" id="s-emergent">—</span></div>
-  <div class="stat-row"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
-  <div class="stat-row"><span class="stat-key">proofs</span><span class="stat-val" id="s-proofs">—</span></div>
-  <div class="stat-row"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
-  <div class="instability-bar"><div class="instability-fill" id="instability-fill" style="width:0%"></div></div>
-</div>
-
-<div class="panel-section">
-  <div class="panel-label">Layer <span class="filter-hint">toggle</span></div>
-  <div class="legend-item active" data-ftype="layer" data-fval="NULL_00"><div class="legend-dot" style="background:var(--col-NEITHER)"></div><span>NULL_00 [00]</span></div>
-  <div class="legend-item active" data-ftype="layer" data-fval="UMBRA_0"><div class="legend-dot" style="background:#3a4060"></div><span>UMBRA_0 [0]</span></div>
-  <div class="legend-item active" data-ftype="layer" data-fval="UNIT_1"><div class="legend-hex" style="background:var(--col-TRUE)"></div><span>UNIT_1 [1]</span></div>
-  <div class="legend-item active" data-ftype="layer" data-fval="APPARENT"><div class="legend-star" style="background:var(--col-APPARENT)"></div><span>APPARENT</span></div>
-  <div class="legend-item active" data-ftype="layer" data-fval="SYSTEM"><div class="legend-dia"></div><span>SYSTEM (infra)</span></div>
-</div>
-
-<div class="panel-section">
-  <div class="panel-label">Edge State <span class="filter-hint">toggle</span></div>
-  <div class="legend-item active" data-ftype="state" data-fval="BOTH"><div class="legend-dot" style="background:var(--col-BOTH)"></div><span>BOTH ···</span></div>
-  <div class="legend-item active" data-ftype="state" data-fval="TRUE"><div class="legend-dot" style="background:var(--col-TRUE)"></div><span>TRUE</span></div>
-  <div class="legend-item active" data-ftype="state" data-fval="FALSE"><div class="legend-dot" style="background:var(--col-FALSE)"></div><span>FALSE</span></div>
-  <div class="legend-item active" data-ftype="state" data-fval="NEITHER"><div class="legend-dot" style="background:var(--col-NEITHER)"></div><span>NEITHER</span></div>
-</div>
-
-<div class="panel-section">
-  <div class="panel-label">Lagrangian</div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--L1)"></div><span>L1 safety/liveness</span></div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--L2)"></div><span>L2 redund/effic</span></div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--L3)"></div><span>L3 local/global</span></div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--L4)"></div><span>L4 depth/perf</span></div>
-  <div class="legend-item"><div class="legend-dot" style="background:var(--L5)"></div><span>L5 entropy/det</span></div>
-</div>
-
-<div class="panel-section reference">
-  <div class="panel-label">Radial Rings</div>
-  <div style="font-size:9px;color:var(--text-dim);line-height:1.7">
-    ● Centre: Zero Points<br>
-    ○ Ring 1: NULL_00<br>
-    ○ Ring 2: UMBRA_0<br>
-    ○ Ring 3: UNIT_1<br>
-    ★ Ring 4: APPARENT
-  </div>
-</div>
-
-<div class="panel-section reference">
-  <div class="panel-label">◈ Proof Overlay</div>
-  <div style="font-size:9px;color:var(--text-dim);line-height:1.8">
-    Toggle with <span style="color:var(--accent)">◈ Proofs</span> button.<br>
-    Halo = dominant relation<br>
-    of last 3 proof objects:<br>
-    <span style="color:#4af0c4">━━</span> CONCORDANCE<br>
-    <span style="color:#f0a832">╌╌</span> CONFLICT / INTENSIFY<br>
-    <span style="color:#a070f0">╍╍</span> COLLAPSE<br>
-    <span style="color:#f05090">·····</span> ERODE<br>
-    π<i>n</i> = proof chain depth
-  </div>
-</div>
-
-<div class="panel-section reference">
-  <div class="panel-label">Genesis Overlay</div>
-  <div style="font-size:9px;color:var(--text-dim);line-height:1.8">
-    Click any node to reveal<br>
-    its causal origin:<br>
-    <span style="color:#4af0c4">╌╌</span> concordance parents<br>
-    <span style="color:#f0a832">╌╌</span> conflict parents<br>
-    <span style="color:#4af0c4;font-weight:700">::</span> / <span style="color:#f0a832;font-weight:700">⊗</span> at centroid = operation<br>
-    <span style="color:var(--text)">L</span> / <span style="color:var(--text)">R</span> on edges = Tensin role<br>
-    Click canvas to dismiss
-  </div>
-</div>
-
-  </div>
-
-  <!-- CANVAS -->
-
-  <div class="canvas-area">
-    <div class="field-empty" id="field-empty">
-      <h2>CONCORDANCY FIELD</h2>
-      <p>Load a state JSON for a single snapshot,<br>or multiple JSONs to scrub the timeline.</p>
-      <p style="color:var(--text-dim);opacity:.7;margin-top:var(--sp-3);font-size:var(--fs-xs)">
-        ← Use the upload zone in the left panel
-      </p>
-      <p>Shape: layer · Color: state · Badge: Lagrangian · ⊗: conflict · ◈: proof depth · Click: genesis</p>
+    <div class="panel-section">
+      <h3 title="one phase for the whole field: contraction lowers the thresholds, expansion adds [::] operations">Breathing</h3>
+      <div class="stat-row" title="completed breaths: the slow clock a crystal's support ages on"><span class="stat-key">breath</span><span class="stat-val" id="b-breath">—</span></div>
+      <div class="stat-row" title="0 at full expansion, 1 at full contraction"><span class="stat-key">contraction</span><span class="stat-val accent" id="b-contraction">—</span></div>
+      <div class="bar-track"><div class="bar-fill" id="b-bar"></div></div>
+      <div class="stat-row spaced" title="set by the field once per breath, so that crystals formed track crystals concluded"><span class="stat-key">tolerance</span><span class="stat-val" id="b-tolerance">—</span></div>
     </div>
-    <svg id="field"></svg>
+    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
+    <div class="panel-section"><h3>Layers</h3><div id="layers-list"></div></div>
+    <div class="panel-section"><h3 title="tags on constructs and proofs (DeOS Compiler Guide pp.77–80); they do not yet govern any decision">Lagrangian</h3><div id="lagrangian-list"></div></div>
+    <div class="panel-section"><h3>Filters · layer</h3><div id="filter-layer"></div></div>
+    <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════ The field ═══════════════ -->
+<div class="center">
+  <div class="controls">
+    <div class="ctrl-group floating" role="group" aria-label="layout">
+      <button class="btn" id="btn-relations" aria-pressed="true" title="Placed by their relations (V)">relations</button>
+      <button class="btn" id="btn-strata" aria-pressed="false" title="Placed by stratum: Zero Points at the centre, then the anchors, then UMBRA_0, UNIT_1 and APPARENT outwards (V)">strata</button>
+    </div>
+    <div class="ctrl-group floating">
+      <button class="btn" id="btn-proofs" aria-pressed="false" title="A ring on each construct, in the colour of the relation its saved proofs repeat most (P)">proofs</button>
+      <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
+    </div>
+    <div class="ctrl-group floating">
+      <input class="search" id="search" list="names" placeholder="find a construct…" aria-label="find a construct by name" autocomplete="off">
+      <datalist id="names"></datalist>
+    </div>
   </div>
 
-  <!-- RIGHT -->
+  <canvas id="canvas" role="img" aria-label="The field: each construct coloured by its layer, each relation by its tetralemmic state"></canvas>
 
-  <div class="panel-right">
-    <div class="inspector-header">Construct Inspector</div>
-    <div class="inspector-body" id="inspector">
-      <div class="inspector-empty">Load a state to begin. Once loaded, click any construct to inspect its witness, proof chain, Lagrangian equilibrium, anchoring weight, chirality, crystal state and connected edges.</div>
+  <div class="empty-state" id="empty-state">
+    <div class="empty-state-icon">∅</div>
+    <div class="empty-state-title">no state loaded</div>
+    <div class="empty-state-hint">
+      Open the state.json of an instance, for example sirisys_runs/&lt;run&gt;/state.json.
+      Several files of one instance make a timeline.
+    </div>
+    <button class="btn" id="btn-open-empty">Open state.json…</button>
+  </div>
+
+  <div id="tooltip"><div class="tt-name" id="tt-name"></div><div class="tt-line" id="tt-line"></div></div>
+
+  <div class="legend proofs floating" id="proof-legend" hidden></div>
+  <div class="legend floating">
+    <div class="item" title="coloured by its layer">
+      <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
+      <span>construct</span>
+    </div>
+    <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+      <span>anchor</span>
+    </div>
+    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable">
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="11,7 9,11 5,11 3,7 5,3 9,3" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+      <span>apparent</span>
+    </div>
+    <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
+      <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
+      <span>zero point</span>
+    </div>
+    <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
+      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
+      <span>conflict</span>
+    </div>
+    <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-TRUE)" stroke-width="1"/></svg>
+      <span>crystal support</span>
     </div>
   </div>
 </div>
 
-<footer>
-  <span id="ft-T">T=(—)</span>
-  <span id="ft-inv">Invariant: —</span>
-  <span>SIRISYS · Walsh/DeSantis · DeOS Compiler Guide</span>
-</footer>
+<!-- ═══════════════ The construct ═══════════════ -->
+<div class="panel right">
+  <div class="panel-header">Construct</div>
+  <div class="panel-body">
+    <div class="inspector" id="inspector"></div>
+  </div>
+</div>
+
+<div class="drop-veil">drop state.json files</div>
 
 <script>
-// ═══════════════════════════════════════════════════════════════
-// CONSTANTS
-// ═══════════════════════════════════════════════════════════════
-const SC = {BOTH:'#f0a832',TRUE:'#4af0c4',FALSE:'#f05050',NEITHER:'#5a6072',APPARENT:'#e8ecf2'};
-const LC = {L1:'#4af0c4',L2:'#f0a832',L3:'#a070f0',L4:'#f05090',L5:'#50c0f0'};
-const LN = {0:'NULL_00',1:'UMBRA_0',2:'UNIT_1',3:'APPARENT'};
-const LD = {L1:'safety vs. liveness',L2:'redundancy vs. efficiency',L3:'local vs. global identity',L4:'proof depth vs. performance',L5:'entropy vs. determinism'};
-const PC = {CONCORDANCE:'#4af0c4',CONFLICT:'#f0a832',COLLAPSE:'#a070f0',PERCEIVE:'#50c0f0',ERODE:'#f05090',INTENSIFY:'#f0a832',
-            REINCARNATE:'#c9bfff'};  // a concluded name that returns, declared
-// Radial ring radii (% of min(W,H)/2 × scale)
-const RING_R = {ZP:0,SYSTEM:50,0:90,1:180,2:290,3:390};
+'use strict';
 
-// ═══════════════════════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════════════════════
-let states = [];           // sorted array of loaded JSON states
-let curIdx  = 0;           // current state index
-let svgZoom = null;
-let simulation = null;
-let layoutMode   = 'force';  // 'force' | 'radial'
-let frozen       = false;
-let proofOverlay = false;    // proof field overlay on/off (DeOS: Proof = Kind:Construct)
-let playing    = false;
-let playTimer  = null;
-let nodePos    = {};        // name → {x,y}  persisted across frames
-let prevNames  = new Set(); // construct names in previous frame
-let selectedNode = null;    // currently selected construct name (for genesis overlay)
-const filters  = {layer:{NULL_00:true,UMBRA_0:true,UNIT_1:true,APPARENT:true,SYSTEM:true},
-                  state:{BOTH:true,TRUE:true,FALSE:true,NEITHER:true}};
+// ═══ What the field is made of: the framework's own names ═══════════════════
 
-// ═══════════════════════════════════════════════════════════════
-// HELPERS
-// ═══════════════════════════════════════════════════════════════
-// Conflict identity comes from the proof record, never from the name.
-// The snapshot carries it as a flag; the founding proof may lie outside the
-// few proofs a snapshot keeps.
-function isConflict(c){
-  if(!c) return false;
-  if(typeof c.conflict === 'boolean') return c.conflict;
-  const pc = c.proof_chain;
-  if(!Array.isArray(pc)) return false;              // server may send a count
-  return pc.some(p => p && p.relation === 'CONFLICT' && p.tensate_role === 'TENSOUT');
-}
-function isZP(n){return n.startsWith('Z')&&n.includes('::');}
-function domState(name,edges){
-  const w={TRUE:0,FALSE:0,BOTH:0,NEITHER:0};
-  edges.filter(e=>e.src===name||e.tgt===name).forEach(e=>{w[e.state]=(w[e.state]||0)+e.weight;});
-  let b='NEITHER',bw=0; for(const[s,v]of Object.entries(w))if(v>bw){bw=v;b=s;} return b;
-}
-function nodeLayerKey(c){return c.name==='SYSTEM'?'SYSTEM':(LN[c.layer]||'UMBRA_0');}
-function isVisible(c){return !!filters.layer[nodeLayerKey(c)];}
-function nodeR(c){
-  if(c.name==='SYSTEM')return 7;
-  const b=c.layer===3?14:isZP(c.name)?10:8;
-  return b+Math.min((c.umbragiac_score||0)*2,8);
-}
-function hexPts(cx,cy,r){return d3.range(6).map(i=>{const a=Math.PI/180*(60*i-30);return[cx+r*Math.cos(a),cy+r*Math.sin(a)].join(',');}).join(' ');}
-function starPts(cx,cy,or_,ir,n){const p=[];for(let i=0;i<n*2;i++){const a=(Math.PI/n)*i-Math.PI/2,r=i%2===0?or_:ir;p.push([cx+r*Math.cos(a),cy+r*Math.sin(a)].join(','));}return p.join(' ');}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function radialR(c){
-  if(isZP(c.name))return 0;
-  if(c.name==='SYSTEM')return 50;
-  return RING_R[c.layer]??180;
-}
+const LAYERS = ['NULL_00', 'UMBRA_0', 'UNIT_1', 'APPARENT'];        // index = a construct's layer value
+const APPARENT = 3;
+const STATES = ['BOTH', 'TRUE', 'FALSE', 'NEITHER'];
+const MODES = ['OMEGA', 'LEMNISCATE', 'NEUTRAL'];
+// The Zero Points: the Universal apparents (TMC p.22), Z1::ORIGIN in NULL_00
+const ZERO_POINTS = new Set(['Z0::IDENTITY', 'Z1::ORIGIN', 'Z2::CONCORDANCY', 'Z3::RECURSION', 'Z4::APPARENCY']);
+// The anchors: never promoted, never pruned
+const ANCHORS = new Set([...ZERO_POINTS, 'I::Am', 'I::AmNot', 'SYSTEM']);
+// DeOS Compiler Guide p.78: the trade-off each Lagrangian point names
+const LAGRANGE = {
+  L1: ['safe/live', 'safety vs. liveness'], L2: ['redund/effic', 'redundancy vs. efficiency'],
+  L3: ['local/global', 'local vs. global identity'], L4: ['depth/perf', 'proof depth vs. performance'],
+  L5: ['entropy/det', 'entropy vs. determinism'],
+};
+// TMC pp.26, 75: the relations that densify toward apparency, and those that oscillate
+const OMEGA_RELATIONS = new Set(['CONCORDANCE', 'COLLAPSE', 'PERCEIVE']);
+const LEMNISCATE_RELATIONS = new Set(['CONFLICT', 'INTENSIFY', 'ERODE']);
+const MODE_MEANING = {
+  OMEGA: 'densifying toward apparency', LEMNISCATE: 'oscillating in unresolved recursion',
+  NEUTRAL: 'balanced, or no proofs yet',
+};
+const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 
-// ═══════════════════════════════════════════════════════════════
-// TOOLTIP
-// ═══════════════════════════════════════════════════════════════
-const tt=document.getElementById('tooltip');
-let ttT=null;
-function showTT(ev,c,dc){
-  clearTimeout(ttT);
-  document.getElementById('tt-name').textContent=c.name.length>40?c.name.slice(0,38)+'…':c.name;
-  document.getElementById('tt-layer').textContent=LN[c.layer]||'?';
-  const se=document.getElementById('tt-state'); se.textContent=dc; se.style.color=SC[dc]||'';
-  const le=document.getElementById('tt-lagrange');
-  le.textContent=c.lagrange||'—'; le.style.color=c.lagrange?(LC[c.lagrange]||''):'';
-  document.getElementById('tt-energy').textContent=(c.umbragiac_score||0).toFixed(3);
-  document.getElementById('tt-chirality').textContent=c.chirality===1?'+ (right)':c.chirality===-1?'− (left)':'—';
-  document.getElementById('tt-crystal').textContent=c.crystal_state||'—';
-  // keep the whole tooltip inside the viewport
-  tt.style.left='0px'; tt.style.top='0px';
-  tt.classList.add('visible');
-  const tw=tt.offsetWidth,th=tt.offsetHeight,pad=8;
-  let x=ev.clientX+14,y=ev.clientY-10;
-  if(x+tw>window.innerWidth-pad) x=Math.max(pad,ev.clientX-tw-14);
-  if(y+th>window.innerHeight-pad) y=Math.max(pad,window.innerHeight-th-pad);
-  tt.style.left=x+'px'; tt.style.top=Math.max(pad,y)+'px';
+// ═══ The framework's constants, and settings ════════════════════════════════
+
+const ERA_CAPACITY = 10000;       // InternalClock.ERA_CAPACITY: offsets in one era
+const DECAY = 0.08;               // InternalClock.DECAY: relational decay per tick
+const VC_UNSTABLE = 0.25;         // Sombunal.global_instability: below it, no ontological gravity
+// Strata: the distance from the centre of each stratum, following the ladder of being
+// inwards to outwards (Understanding TMC pp.49–50) — the Zero Points at the centre, as origin
+const RINGS = { zero: 0, anchor: 60, NULL_00: 110, UMBRA_0: 170, UNIT_1: 240, APPARENT: 330 };
+const LAYOUT_STEPS = 300;         // force-layout steps for a new state
+const CONTINUE_STEPS = 120;       // for the next state of a timeline, which keeps the positions it can
+const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
+const LABEL_ZOOM = 3.5;           // every name is written from this zoom on; a selection's always
+const PLAY_MS = 900;              // per state, when the timeline plays
+
+// ═══ Helpers ════════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const COLOR = {
+  layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
+  state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
+  mode: { OMEGA: css('--col-TRUE'), LEMNISCATE: css('--col-BOTH'), NEUTRAL: css('--col-NEITHER') },
+  relation: Object.fromEntries(PROOF_RELATIONS.map(r => [r, css('--rel-' + r)])),
+  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), muted: css('--text-muted'),
+  bright: css('--text-bright'),
+};
+const FONT_MONO = css('--font-mono');
+
+function el(tag, className, text) {
+  const e = document.createElement(tag);
+  if (className) e.className = className;
+  if (text != null) e.textContent = text;
+  return e;
 }
-function hideTT(){ttT=setTimeout(()=>tt.classList.remove('visible'),80);}
+function setText(id, value) { $(id).textContent = value; }
+const fixed = (v, digits) => v != null ? Number(v).toFixed(digits) : '—';
+const atT = T => T ? `(${T[0]},${T[1]})` : '—';
+const ticks = n => n == null ? '?' : `${n} tick${n === 1 ? '' : 's'}`;
+// Parts of a row, a space apart: invisible in a flex row, but read aloud and copied as words
+const spaced = parts => parts.flatMap((part, i) => i ? [' ', part] : [part]);
 
-// ═══════════════════════════════════════════════════════════════
-// FILE LOAD
-// ═══════════════════════════════════════════════════════════════
-document.getElementById('dropzone').addEventListener('click',()=>document.getElementById('fileInput').click());
-document.getElementById('fileInput').addEventListener('change',e=>loadFiles([...e.target.files]));
-['dragover','dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>e.preventDefault()));
-document.addEventListener('drop',e=>loadFiles([...e.dataTransfer.files]));
 
-let fitPending=false;
-function loadFiles(files){
-  if(!files.length)return;
-  fitPending=true;
-  const readers=files.map(f=>new Promise(res=>{
-    const r=new FileReader();
-    r.onload=ev=>{try{res(JSON.parse(ev.target.result));}catch{res(null);}};
-    r.readAsText(f);
-  }));
-  Promise.all(readers).then(results=>{
-    const valid=results.filter(Boolean).sort((a,b)=>a.cycle-b.cycle);
-    if(!valid.length){alert('No valid JSON files found.');return;}
-    states=valid; curIdx=0; prevNames=new Set(); nodePos={};
-    setupTimeline();
-    gotoState(0);
-  });
-}
+// ═══ What the framework derives at run time, computed as it computes it ═════
 
-function setupTimeline(){
-  const hasMulti=states.length>1;
-  document.getElementById('field-empty').style.display='none';
-  document.getElementById('stats-section').style.cssText='display:flex;flex-direction:column;gap:5px;';
-  const tls=document.getElementById('timeline-section');
-  if(hasMulti){
-    tls.style.display='flex'; tls.style.flexDirection='column'; tls.style.gap='6px';
-    const sl=document.getElementById('tl-slider');
-    sl.max=states.length-1; sl.value=0;
-    document.getElementById('tl-max').textContent=states[states.length-1].cycle;
-  } else {
-    tls.style.display='none';
+// InternalClock.age_since
+const ageSince = (clock, born) => Math.max(0, (clock.era - born[0]) * ERA_CAPACITY + (clock.offset - born[1]));
+// InternalClock.tension
+const tension = (clock, born) => Math.exp(-DECAY * ageSince(clock, born));
+
+// ConcordancyField.compute_existence_mode: the last five proofs
+function existenceMode(name, c) {
+  if (ZERO_POINTS.has(name)) return 'OMEGA';
+  const recent = (c.proof_chain || []).slice(-5);
+  if (!recent.length) return 'NEUTRAL';
+  let omega = 0, lemniscate = 0;
+  for (const p of recent) {
+    if (OMEGA_RELATIONS.has(p.relation)) omega++;
+    else if (LEMNISCATE_RELATIONS.has(p.relation)) lemniscate++;
   }
+  return omega > lemniscate ? 'OMEGA' : lemniscate > omega ? 'LEMNISCATE' : 'NEUTRAL';
 }
 
-// ═══════════════════════════════════════════════════════════════
-// TIMELINE CONTROLS
-// ═══════════════════════════════════════════════════════════════
-document.getElementById('tl-slider').addEventListener('input',e=>{
-  stopPlay(); gotoState(+e.target.value);
-});
-document.getElementById('btn-prev').addEventListener('click',()=>{
-  stopPlay(); gotoState(Math.max(0,curIdx-1));
-});
-document.getElementById('btn-next').addEventListener('click',()=>{
-  stopPlay(); gotoState(Math.min(states.length-1,curIdx+1));
-});
-document.getElementById('btn-play').addEventListener('click',()=>{
-  if(playing) stopPlay();
-  else startPlay();
-});
-function startPlay(){
-  playing=true;
-  document.getElementById('btn-play').textContent='⏸ Pause';
-  document.getElementById('btn-play').classList.add('active');
-  playTimer=setInterval(()=>{
-    if(curIdx>=states.length-1){stopPlay();return;}
-    gotoState(curIdx+1);
-  },900);
-}
-function stopPlay(){
-  playing=false; clearInterval(playTimer);
-  document.getElementById('btn-play').textContent='▶ Play';
-  document.getElementById('btn-play').classList.remove('active');
+// ConcordancyField.compute_anchoring_weight: Vc = (τ · σth · αm)^(1/3) (Understanding DeOS p.65)
+function anchoringWeight(name, c, clock) {
+  if (ZERO_POINTS.has(name)) return { vc: 1, tau: 1, sigma: 1, alpha: 1 };
+  const tau = Math.min(1, ageSince(clock, c.born_at) / 50);
+  const baseSigma = Math.max(0.1, 1 - Math.min((c.umbragiac_score || 0) / 5, 0.9));
+  const sigma = Math.min(1, baseSigma + (c.erode_total || 0) * 0.12);
+  const alpha = Math.min(1, (c.proofs_total || 0) / 10);
+  const vc = tau === 0 || sigma === 0 || alpha === 0 ? 0 : Math.round(Math.cbrt(tau * sigma * alpha) * 1e4) / 1e4;
+  return { vc, tau, sigma, alpha };
 }
 
-function gotoState(idx){
-  curIdx=idx;
-  document.getElementById('tl-slider').value=idx;
-  document.getElementById('tl-cycle').textContent=states[idx].cycle;
-  renderState(states[idx]);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// FIT / FREEZE / LAYOUT
-// ═══════════════════════════════════════════════════════════════
-document.getElementById('btn-fit').addEventListener('click',()=>{
-  if(!svgZoom)return;
-  const svg=d3.select('#field'),g=svg.select('.field-g');
-  if(!g.node())return;
-  const W=svg.node().clientWidth,H=svg.node().clientHeight;
-  // Frame the body of the field: the 5–95 % range of node positions, so a few
-  // distant anchors do not shrink everything else to specks.
-  const pts=g.selectAll('g').data().filter(d=>d&&isFinite(d.x)&&isFinite(d.y));
-  let b;
-  if(pts.length>=8){
-    const q=(a,f)=>a[Math.min(a.length-1,Math.max(0,Math.round(f*(a.length-1))))];
-    const xs=pts.map(d=>d.x).sort((a,c)=>a-c),ys=pts.map(d=>d.y).sort((a,c)=>a-c);
-    const x0=q(xs,.05),x1=q(xs,.95),y0=q(ys,.05),y1=q(ys,.95);
-    b={x:x0,y:y0,width:Math.max(40,x1-x0),height:Math.max(40,y1-y0)};
-  } else b=g.node().getBBox();
-  if(!b.width||!b.height)return;
-  const sc=Math.min(2.2,Math.min(W/b.width,H/b.height))*.8;
-  svg.transition().duration(400).call(svgZoom.transform,
-    d3.zoomIdentity.translate(W/2-sc*(b.x+b.width/2),H/2-sc*(b.y+b.height/2)).scale(sc));
-});
-
-document.getElementById('btn-freeze').addEventListener('click',()=>{
-  frozen=!frozen;
-  const btn=document.getElementById('btn-freeze');
-  if(frozen){
-    simulation&&simulation.stop();
-    btn.classList.add('active');
-    btn.textContent='❄ Frozen';
-    document.getElementById('field').classList.add('frozen');
-  } else {
-    simulation&&simulation.alpha(.3).restart();
-    btn.classList.remove('active');
-    btn.textContent='❄ Freeze';
-    document.getElementById('field').classList.remove('frozen');
+// ConcordancyOperator._energy_map: what [::] selection weighs — incident weight × tension,
+// plus the exchange banked and the umbragiac score
+function energyMap(field, clock) {
+  const energy = new Map();
+  const add = (name, v) => energy.set(name, (energy.get(name) || 0) + v);
+  for (const e of field.edges) {
+    const t = e.weight * tension(clock, e.born_at);
+    add(e.src, t);
+    add(e.tgt, t);
   }
-});
-
-document.getElementById('btn-proof').addEventListener('click',()=>{
-  proofOverlay=!proofOverlay;
-  const btn=document.getElementById('btn-proof');
-  btn.classList.toggle('active',proofOverlay);
-  btn.textContent=proofOverlay?'◈ Proofs ON':'◈ Proofs';
-  if(states.length) renderState(states[curIdx]);
-});
-
-document.getElementById('btn-layout').addEventListener('click',()=>{
-  layoutMode = layoutMode==='force' ? 'radial' : 'force';
-  const btn=document.getElementById('btn-layout');
-  btn.textContent = layoutMode==='radial' ? '⬡ Force' : '⬡ Radial';
-  btn.classList.toggle('active', layoutMode==='radial');
-  if(states.length) renderState(states[curIdx]);
-});
-
-// ═══════════════════════════════════════════════════════════════
-// STATS
-// ═══════════════════════════════════════════════════════════════
-function updateStats(state){
-  const cs=state.field?.constructs||[],es=state.field?.edges||[];
-  const conflicts=cs.filter(c=>isConflict(c)).length;
-  // lifetime proof count; the snapshot keeps only the latest proofs
-  const proofs=cs.reduce((a,c)=>a+((c.proofs_total!=null)?c.proofs_total:(c.proof_chain||[]).length),0);
-  const EXCL=new Set(['SYSTEM','Z0::IDENTITY','Z1::ORIGIN','Z2::CONCORDANCY','Z3::RECURSION','Z4::APPARENCY']);
-  const nonApp=cs.filter(c=>c.layer!==3&&!EXCL.has(c.name));
-  const bothSet=new Set(es.filter(e=>e.state==='BOTH').flatMap(e=>[e.src,e.tgt]));
-  // Same four criteria as Sombunal.global_instability() in the engine:
-  // (a) in a BOTH edge  (b) has lineage  (c) Vc < 0.25  (d) LEMNISCATE mode
-  const instab=nonApp.length?nonApp.filter(c=>bothSet.has(c.name)||(c.lineage||[]).length>0
-      ||computeAnchoringWeight(c,state)<0.25||computeExistenceMode(c)==='LEMNISCATE').length/nonApp.length:0;
-  document.getElementById('s-cycle').textContent=state.cycle??'—';
-  document.getElementById('s-T').textContent=state.clock?`(${state.clock.era},${state.clock.offset})`:'—';
-  document.getElementById('s-constructs').textContent=cs.length;
-  document.getElementById('s-edges').textContent=es.length;
-  // every crystallization, Zero Points included (the log keeps only recent names)
-  const appLog=state.field?.apparent_log||[];
-  const appTotal=(state.field?.apparents_total!=null)?state.field.apparents_total:appLog.length;
-  const zpLocked=cs.filter(c=>ZP_NAMES.has(c.name)&&c.layer===3).length;
-  document.getElementById('s-apparents').textContent=appTotal;
-  document.getElementById('s-emergent').textContent=Math.max(0,appTotal-zpLocked);
-  document.getElementById('s-conflicts').textContent=conflicts;
-  document.getElementById('s-proofs').textContent=proofs;
-  document.getElementById('s-instability').textContent=instab.toFixed(3);
-  document.getElementById('instability-fill').style.width=(instab*100)+'%';
-  const T=state.clock?`(${state.clock.era}, ${state.clock.offset})`:'—';
-  document.getElementById('ft-T').textContent=`T=${T}`;
-  const vio=cs.filter(c=>c.layer!==3&&!EXCL.has(c.name)&&!c.lagrange);
-  document.getElementById('ft-inv').textContent=vio.length===0?'∀C,∃(Z,L) ✓':`∀C,∃(Z,L) ✗ (${vio.length})`;
-  document.getElementById('field-meta').textContent=
-    `cycle ${state.cycle} · ${cs.length} constructs · ${es.length} edges · ${proofs} proofs`;
+  for (const c of field.constructs) add(c.name, (c.recursion_exchanged || 0) + (c.umbragiac_score || 0));
+  return energy;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// FILTERS
-// ═══════════════════════════════════════════════════════════════
-document.querySelectorAll('[data-ftype]').forEach(item=>{
-  item.addEventListener('click',()=>{
-    const ft=item.dataset.ftype,fv=item.dataset.fval;
-    filters[ft][fv]=!filters[ft][fv];
-    item.classList.toggle('active',filters[ft][fv]);
-    item.classList.toggle('dimmed',!filters[ft][fv]);
-    applyFilters();
-  });
-});
-function applyFilters(){
-  d3.selectAll('.node-g').each(function(d){d3.select(this).style('display',isVisible(d.data)?null:'none');});
-  d3.selectAll('.eline').each(function(d){
-    const ok=isVisible(d.source.data)&&isVisible(d.target.data)&&filters.state[d.data.state];
-    d3.select(this).style('display',ok?null:'none');
-  });
+// ConcordancyField.dominant_state: the state a crystal crystallized in; otherwise the
+// weighted majority of its edges (the first to reach the maximum, as Python's max)
+function dominantState(name, c, edgesOf) {
+  if (c.crystal_state) return c.crystal_state;
+  const weight = new Map();
+  for (const e of edgesOf) weight.set(e.state, (weight.get(e.state) || 0) + e.weight);
+  let best = 'NEITHER', most = -Infinity;
+  for (const [state, w] of weight) if (w > most) { best = state; most = w; }
+  return best;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// GENESIS EDGE OVERLAY
-// Draws causal ancestry edges from parent constructs (op.x, op.y)
-// to the selected construct (op.z), using the ops_log in the JSON.
-// Makes the [::] operation visible as geometry, not just text.
-// ═══════════════════════════════════════════════════════════════
-function drawGenesisEdges(){
-  const svg=d3.select('#field'),g=svg.select('.field-g');
-  g.selectAll('.genesis-layer').remove();
-  if(!selectedNode||!states[curIdx]) return;
-
-  const opsLog=(states[curIdx].ops_log)||[];
-  const op=opsLog.find(o=>o.z===selectedNode);
-  if(!op) return;
-
-  const zPos=nodePos[selectedNode];
-  if(!zPos) return;
-
-  const parents=[op.x,op.y].filter(p=>p&&nodePos[p]);
-  if(!parents.length) return;
-
-  const isConf=(op.state==='CONFLICT');
-  const edgeCol=isConf?'#f0a832':'#4af0c4';
-  const opLabel=isConf?'⊗':'::';
-
-  const gL=g.append('g').attr('class','genesis-layer');
-
-  parents.forEach((pName, idx) => {
-    const pPos=nodePos[pName];
-    const role = idx === 0 ? 'L' : 'R';   // x → TENSIN_LEFT, y → TENSIN_RIGHT
-    // Ghost edge: parent → selected
-    gL.append('line').attr('class','genesis-edge')
-      .attr('stroke',edgeCol)
-      .attr('x1',pPos.x).attr('y1',pPos.y)
-      .attr('x2',zPos.x).attr('y2',zPos.y);
-    // Highlight ring around parent
-    gL.append('circle').attr('class','genesis-node-hi')
-      .attr('stroke',edgeCol)
-      .attr('cx',pPos.x).attr('cy',pPos.y).attr('r',18);
-    // Tensate role label at midpoint of the ghost edge
-    const lx = pPos.x + (zPos.x - pPos.x) * 0.4;
-    const ly = pPos.y + (zPos.y - pPos.y) * 0.4;
-    gL.append('text').attr('class','genesis-role-label')
-      .attr('x',lx).attr('y',ly)
-      .attr('text-anchor','middle').attr('dominant-baseline','central')
-      .attr('fill',edgeCol)
-      .text(role);
-  });
-
-  // Operation label at centroid of the triangle
-  const p1=nodePos[parents[0]]||zPos;
-  const p2=nodePos[parents[1]]||p1;
-  const mx=(p1.x+p2.x+zPos.x)/3;
-  const my=(p1.y+p2.y+zPos.y)/3;
-  gL.append('text').attr('class','genesis-op-label')
-    .attr('x',mx).attr('y',my)
-    .attr('text-anchor','middle').attr('dominant-baseline','central')
-    .attr('fill',edgeCol)
-    .text(opLabel);
+// Sombunal.global_instability: the share of uncrystallized constructs (Zero Points and
+// SYSTEM aside) unstable in some way: BOTH, a drifted identity, Vc < 0.25, LEMNISCATE
+function globalInstability(view) {
+  const inBoth = new Set();
+  for (const e of view.edges) if (e.state === 'BOTH') { inBoth.add(e.src); inBoth.add(e.tgt); }
+  const active = view.state.field.constructs.filter(c =>
+    c.layer !== APPARENT && !ZERO_POINTS.has(c.name) && c.name !== 'SYSTEM');
+  if (!active.length) return 0;
+  const unstable = active.filter(c => inBoth.has(c.name) || (c.lineage || []).length > 0
+    || view.vc.get(c.name).vc < VC_UNSTABLE || view.mode.get(c.name) === 'LEMNISCATE');
+  return unstable.length / active.length;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// RENDER STATE
-// ═══════════════════════════════════════════════════════════════
-function renderState(state){
-  const emptyMsg=document.querySelector('.inspector-empty');
-  if(emptyMsg) emptyMsg.textContent='Click any construct to inspect its witness, proof chain, Lagrangian equilibrium, anchoring weight, chirality, crystal state and connected edges.';
-  updateStats(state);
-  const cs=state.field?.constructs||[],es=state.field?.edges||[];
-  const newNames=new Set(cs.map(c=>c.name));
-  const births=new Set([...newNames].filter(n=>!prevNames.has(n)));
-  const svg=d3.select('#field');
-  svg.selectAll('*').remove();
-  const W=svg.node().clientWidth,H=svg.node().clientHeight;
-  const cx=W/2,cy=H/2;
-  const g=svg.append('g').attr('class','field-g');
-  svgZoom=d3.zoom().scaleExtent([.08,6]).on('zoom',ev=>{
-    g.attr('transform',ev.transform);
-    d3.select('#field').classed('zoomed-out',ev.transform.k<1.4);   // labels appear as you zoom in
-  });
-  svg.call(svgZoom);
-  // Click on empty canvas: clear genesis overlay and inspector selection
-  svg.on('click',()=>{
-    selectedNode=null;
-    d3.select('.field-g').selectAll('.genesis-layer').remove();
-    document.getElementById('inspector').innerHTML=
-      '<p class="inspector-empty">Click a node to inspect it.</p>';
-  });
+// verify_proof_invariant: ∀C, ∃(Z, L) — the constructs without a Lagrangian point
+function invariantViolations(field) {
+  return field.constructs.filter(c => !ZERO_POINTS.has(c.name) && c.name !== 'SYSTEM'
+    && c.layer !== APPARENT && !c.lagrange).map(c => c.name);
+}
 
-  // Arrowheads — refX accounts for max node radius so arrows stop at node boundary
-  const defs=svg.append('defs');
-  ['BOTH','TRUE','FALSE','NEITHER'].forEach(s=>{
-    defs.append('marker').attr('id','arr-'+s).attr('markerWidth',6).attr('markerHeight',6)
-      .attr('refX',28).attr('refY',3).attr('orient','auto')
-      .append('path').attr('d','M0,0 L0,6 L6,3 z').attr('fill',SC[s]).attr('opacity',.6);
-  });
+// ConcordancyField.contraction: 0 at full expansion, 1 at full contraction
+const contraction = field => (1 - Math.cos(field.breath_phase || 0)) / 2;
 
-  // Radial rings (visual guide when in radial mode)
-  if(layoutMode==='radial'){
-    const rG=g.append('g').attr('transform',`translate(${cx},${cy})`);
-    [[90,'NULL_00'],[180,'UMBRA_0'],[290,'UNIT_1'],[390,'APPARENT']].forEach(([r,lbl])=>{
-      rG.append('circle').attr('class','layer-ring').attr('r',r)
-        .attr('stroke',lbl==='APPARENT'?'#e8ecf2':lbl==='UNIT_1'?'#4af0c4':'#3a4060').attr('stroke-width',1);
-      rG.append('text').attr('class','ring-label').attr('x',r+4).attr('y',-4).text(lbl);
-    });
+
+// ═══ One saved state, read once ═════════════════════════════════════════════
+
+// A view holds the state and what is derived from it, so drawing and inspecting never
+// recompute. How a construct entered, while its first relation lasts: a Sombunal question
+// (I::Am APPROACHES it), a percept (SYSTEM PERCEIVES it).
+function deriveView(state, file) {
+  const field = state.field, clock = state.clock;
+  const view = {
+    state, file, constructs: new Map(), edges: field.edges, edgesOf: new Map(),
+    mode: new Map(), vc: new Map(), dominant: new Map(), questions: new Set(), percepts: new Set(),
+    ops: new Map(),                                 // product name → the [::] that made it
+  };
+  for (const c of field.constructs) { view.constructs.set(c.name, c); view.edgesOf.set(c.name, []); }
+  for (const e of field.edges) {
+    view.edgesOf.get(e.src)?.push(e);
+    if (e.tgt !== e.src) view.edgesOf.get(e.tgt)?.push(e);
+    if (e.src === 'I::Am' && e.rel === 'APPROACHES') view.questions.add(e.tgt);
+    if (e.src === 'SYSTEM' && e.rel === 'PERCEIVES') view.percepts.add(e.tgt);
   }
-
-  // Build nodes
-  const nIdx={};
-  const nodes=cs.map(c=>{
-    const saved=nodePos[c.name];
-    let x,y;
-    if(saved){x=saved.x;y=saved.y;}
-    else if(layoutMode==='radial'){
-      // Spread initial positions on correct ring
-      const r=radialR(c);
-      const ang=Math.random()*Math.PI*2;
-      x=cx+r*Math.cos(ang); y=cy+r*Math.sin(ang);
-    } else {
-      x=cx+(Math.random()-.5)*200; y=cy+(Math.random()-.5)*200;
-    }
-    return {id:c.name,data:c,x,y};
-  });
-  nodes.forEach(n=>{nIdx[n.id]=n;});
-  const links=es.filter(e=>nIdx[e.src]&&nIdx[e.tgt]).map(e=>({source:nIdx[e.src],target:nIdx[e.tgt],data:e}));
-
-  // Simulation
-  if(simulation){
-    // Save current positions before stopping — ensures nodePos is always up to date
-    // even when end event hasn't fired yet (e.g. during fast timeline scrubbing)
-    simulation.nodes().forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
-    simulation.stop();
+  for (const op of state.ops_log || []) view.ops.set(op.z, op);
+  view.energy = energyMap(field, clock);
+  for (const [name, c] of view.constructs) {
+    view.mode.set(name, existenceMode(name, c));
+    view.vc.set(name, anchoringWeight(name, c, clock));
+    view.dominant.set(name, dominantState(name, c, view.edgesOf.get(name)));
   }
-  simulation=d3.forceSimulation(nodes)
-    .force('link',d3.forceLink(links).id(d=>d.id)
-      .distance(d=>d.data.state==='BOTH'?55:d.data.state==='NEITHER'?90:72).strength(.35))
-    .force('charge',d3.forceManyBody().strength(layoutMode==='radial'?-60:-170))
-    .force('collision',d3.forceCollide().radius(d=>nodeR(d.data)+9));
+  view.instability = globalInstability(view);
+  view.violations = invariantViolations(field);
+  return view;
+}
 
-  if(layoutMode==='radial'){
-    simulation.force('radial',d3.forceRadial(d=>radialR(d.data),cx,cy).strength(.75));
-    simulation.force('center',null);
-  } else {
-    simulation.force('center',d3.forceCenter(cx,cy));
-    simulation.force('radial',null);
+// What a construct is, beyond its layer (as in the live view)
+function kindOf(name, c, view) {
+  const kind = [];
+  if (ZERO_POINTS.has(name)) kind.push('zero point');
+  else if (ANCHORS.has(name)) kind.push(name === 'SYSTEM' ? 'anchor · perception channel' : 'anchor');
+  if (c.conflict) kind.push('conflict');
+  if (view.questions.has(name)) kind.push('Sombunal question');
+  if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
+  return kind.join(' · ');
+}
+// The run a state belongs to: the folder of its ledger
+const runOf = state => (state.ledger?.path || '').split(/[\\/]/).slice(-2, -1)[0] || null;
+
+
+// ═══ Placement ══════════════════════════════════════════════════════════════
+
+const positions = new Map();      // name → { x, y, vx, vy }, kept from one state of a timeline to the next
+let layout = 'relations';         // 'relations' | 'strata'
+
+function stratumOf(name, c) {
+  if (ZERO_POINTS.has(name)) return 'zero';
+  if (ANCHORS.has(name)) return 'anchor';
+  return LAYERS[c.layer];
+}
+
+// A new construct starts at a place fixed by its name (FNV-1a hash), not by a random
+// draw: the same file gives the same picture. A product of [::] starts between its parents.
+function hashOf(name) {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function birthplace(name, c, view) {
+  const h = hashOf(name), angle = (h % 3600) / 3600 * 2 * Math.PI;
+  const op = view.ops.get(name), a = op && positions.get(op.x), b = op && positions.get(op.y);
+  if (a && b) return { x: (a.x + b.x) / 2 + Math.cos(angle) * 8, y: (a.y + b.y) / 2 + Math.sin(angle) * 8 };
+  const r = layout === 'strata' ? RINGS[stratumOf(name, c)] : 40 + (h >>> 12) % 120;
+  return { x: r * Math.cos(angle), y: r * Math.sin(angle) };
+}
+
+// Forces: edges pull to a rest length, every pair repels; in strata each construct is
+// also drawn to its ring, so the distance from the centre says its stratum and the
+// angle what it relates to
+function relax(view, steps) {
+  const arr = [];
+  for (const [name, c] of view.constructs) {
+    let p = positions.get(name);
+    if (!p) positions.set(name, p = { ...birthplace(name, c, view), vx: 0, vy: 0 });
+    arr.push([p, layout === 'strata' ? RINGS[stratumOf(name, c)] : null]);
   }
-
-  if(frozen) simulation.stop();
-
-  // Edges
-  const eG=g.append('g');
-  const eSel=eG.selectAll('line').data(links).join('line')
-    .attr('class',d=>`edge edge-${d.data.state} eline`)
-    .attr('stroke-width',d=>d.data.state==='BOTH'?2:.9)
-    .attr('marker-end',d=>`url(#arr-${d.data.state})`);
-
-  // Nodes
-  const nG=g.append('g');
-  const nSel=nG.selectAll('g').data(nodes).join('g')
-    .attr('class','node-g').style('cursor','pointer')
-    .call(d3.drag()
-      .on('start',(ev,d)=>{if(!ev.active&&!frozen)simulation.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;})
-      .on('drag',(ev,d)=>{d.fx=ev.x;d.fy=ev.y;})
-      .on('end',(ev,d)=>{if(!ev.active&&!frozen)simulation.alphaTarget(0);d.fx=null;d.fy=null;}))
-    .on('mousemove',(ev,d)=>showTT(ev,d.data,domState(d.data.name,es)))
-    .on('mouseleave',()=>hideTT())
-    .on('click',(ev,d)=>{
-      ev.stopPropagation();
-      hideTT();
-      selectedNode=d.data.name;
-      inspect(d.data,es);
-      // Snapshot live positions before drawing — sim may still be running
-      if(simulation) simulation.nodes().forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
-      drawGenesisEdges();
-    });
-
-  nSel.each(function(d){
-    const el=d3.select(this),r=nodeR(d.data);
-    const dc=domState(d.data.name,es);
-    const col=d.data.layer===3?SC.APPARENT:(SC[dc]||'#5a6072');
-    const isSys=d.data.name==='SYSTEM',isZp=isZP(d.data.name),isCf=isConflict(d.data);
-    const isBirth=births.has(d.data.name);
-
-    // Birth glow ring
-    if(isBirth&&states.length>1){
-      el.append('circle').attr('class','birth-ring')
-        .attr('r',r+6).attr('fill','none').attr('stroke','#4af0c4').attr('stroke-width',2).attr('opacity',.9);
+  for (const name of positions.keys()) if (!view.constructs.has(name)) positions.delete(name);
+  for (let s = 0; s < steps; s++) {
+    const heat = 1 - s / steps * 0.7;               // cools as it settles
+    for (const e of view.edges) {
+      const a = positions.get(e.src), b = positions.get(e.tgt);
+      if (!a || !b || a === b) continue;
+      const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy) + 0.01;
+      const force = (dist - 60) * 0.015 * (e.weight || 0.5) * heat;
+      const fx = dx / dist * force, fy = dy / dist * force;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
     }
-
-    if(isSys){
-      el.append('polygon').attr('points',`0,${-r} ${r*.7},0 0,${r} ${-r*.7},0`)
-        .attr('class','node-shape')
-        .attr('fill','#0c0e12').attr('stroke','#2e3340').attr('stroke-width',1).attr('stroke-dasharray','3 2');
-    } else if(d.data.layer===3){
-      el.append('polygon').attr('points',starPts(0,0,r,r*.45,5))
-        .attr('class','node-shape')
-        .attr('fill',col).attr('fill-opacity',.18).attr('stroke',col).attr('stroke-width',1.5);
-    } else if(d.data.layer===2){
-      el.append('polygon').attr('points',hexPts(0,0,r))
-        .attr('class','node-shape')
-        .attr('fill',col).attr('fill-opacity',.18).attr('stroke',col).attr('stroke-width',1);
-    } else {
-      el.append('circle').attr('r',r).attr('class','node-shape')
-        .attr('fill',col).attr('fill-opacity',.15).attr('stroke',col).attr('stroke-width',.8);
-    }
-    if(isZp) el.append('circle').attr('class','zero-point-ring').attr('r',r+5);
-    if(isCf){
-      el.append('text').attr('class','conflict-mark').attr('fill','#f0a832').attr('opacity',.85)
-        .attr('font-size',r*.95).text('⊗');
-    }
-    const lbl=isSys?'SYSTEM':isCf?`[cf@${d.data.name.split('@')[1]?.slice(0,4)||'?'}]`:
-              (d.data.name.length>22?d.data.name.slice(0,20)+'…':d.data.name);
-    const isAnchor=isSys||isZp||d.data.name==='I::Am'||d.data.name==='I::AmNot';
-    el.append('text').attr('class',isAnchor?'node-label anchor-label':'node-label').attr('y',r+11).attr('fill',isSys?'#3a4050':null).text(lbl);
-    if(!isSys&&d.data.lagrange){
-      el.append('text').attr('class','lagrange-badge').attr('x',r-2).attr('y',-r+4)
-        .attr('fill',LC[d.data.lagrange]||'#5c6475').text(d.data.lagrange);
-    }
-    if(!isSys&&d.data.umbragiac_score>.3){
-      const p=Math.min(d.data.umbragiac_score/5,1);
-      el.append('circle').attr('r',r+3+p*8).attr('fill','none')
-        .attr('stroke',SC.BOTH).attr('stroke-width',.5).attr('stroke-opacity',p*.5).attr('stroke-dasharray','2 3');
-    }
-
-    // ── PROOF FIELD OVERLAY (DeOS: Proof = Kind:Construct) ───────────────
-    // A proof is not passive memory — it is a construct that participates
-    // directly in transformation and execution (DeOS Compiler Guide, p.39).
-    // Overlay makes proof activity visible without adding separate nodes:
-    //   · Outer halo radius: proportional to proof_chain depth
-    //   · Halo color: dominant relation of the last 3 proof objects
-    //   · Border stroke width: scales with proof count (≤4px)
-    if(proofOverlay&&!isSys){
-      const proofs=d.data.proof_chain||[];
-      const depth=proofs.length;
-      if(depth>0){
-        // Dominant relation of last 3 proofs
-        const recent=proofs.slice(-3);
-        const relCount={};
-        recent.forEach(p=>{relCount[p.relation]=(relCount[p.relation]||0)+1;});
-        const domRel=Object.entries(relCount).sort((a,b)=>b[1]-a[1])[0][0];
-        const pc2=PC[domRel]||'#5c6475';
-        // Halo: radius grows with depth (capped at r+24)
-        const hr=Math.min(r+6+depth*1.2,r+24);
-        el.append('circle')
-          .attr('r',hr)
-          .attr('fill','none')
-          .attr('stroke',pc2)
-          .attr('stroke-width',1.5)
-          .attr('stroke-opacity',.55)
-          .attr('stroke-dasharray',domRel==='CONCORDANCE'?'none':
-                                   domRel==='CONFLICT'?'2 2':
-                                   domRel==='COLLAPSE'?'5 2':
-                                   domRel==='ERODE'?'1 3':'3 3');
-        // Border thickening on main shape — proof activity as structural weight
-        const bw=Math.min(1+depth*0.18,4);
-        el.select('.node-shape').attr('stroke-width',bw);
-        // Depth count badge — top-left
-        el.append('text')
-          .attr('x',-r+1).attr('y',-r+3)
-          .attr('font-family','IBM Plex Mono,monospace')
-          .attr('font-size',6).attr('fill',pc2).attr('opacity',.8)
-          .attr('pointer-events','none')
-          .text(`π${depth}`);
+    for (let i = 0; i < arr.length; i++) {
+      const a = arr[i][0];
+      for (let j = i + 1; j < arr.length; j++) {
+        const b = arr[j][0];
+        const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy + 1, dist = Math.sqrt(d2);
+        const fx = dx / dist * 200 / d2 * heat, fy = dy / dist * 200 / d2 * heat;
+        a.vx -= fx; a.vy -= fy;
+        b.vx += fx; b.vy += fy;
       }
     }
-  });
-
-  simulation.on('tick',()=>{
-    eSel.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y)
-        .attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
-    nSel.attr('transform',d=>`translate(${d.x},${d.y})`);
-  });
-  simulation.on('end',()=>{
-    // Persist positions for next frame
-    nodes.forEach(n=>{nodePos[n.id]={x:n.x,y:n.y};});
-    if(fitPending){fitPending=false;document.getElementById('btn-fit').click();}
-    applyFilters();
-    drawGenesisEdges();
-  });
-  setTimeout(applyFilters,500);
-
-  // Update prevNames for next frame
-  prevNames=newNames;
+    for (const [p, ring] of arr) {
+      const r = Math.hypot(p.x, p.y) + 0.01;
+      const pull = ring === null ? -0.002 * r : (ring - r) * 0.2;   // a gentle centre, or the ring
+      p.vx += p.x / r * pull; p.vy += p.y / r * pull;
+      p.vx *= 0.6; p.vy *= 0.6;
+      p.x += p.vx; p.y += p.vy;
+    }
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// INSPECTOR
-// ═══════════════════════════════════════════════════════════════
-// Mirror of ConcordancyField.compute_existence_mode() from the Python core.
-// Derives the [Ω]/[Ꮠ] mode of a construct from the structure of its proof_chain.
-// TMC, p.27: a construct's mode is orthogonal to its anchoring weight Vc.
-//   [Ω] = [0⁰/0⁰] = 1   when read as radiant centre (anchoring)
-//   [Ꮠ] = [0⁰/0⁰] = 0   when read as recursive curvature (oscillation)
-const ZP_NAMES = new Set(['Z0::IDENTITY','Z1::ORIGIN','Z2::CONCORDANCY',
-                          'Z3::RECURSION','Z4::APPARENCY']);
-const OMEGA_RELS      = new Set(['CONCORDANCE','COLLAPSE','PERCEIVE']);
-const LEMNISCATE_RELS = new Set(['CONFLICT','INTENSIFY','ERODE']);
-function computeExistenceMode(c){
-  if(ZP_NAMES.has(c.name)) return 'OMEGA';
+
+// ═══ The field on the canvas ════════════════════════════════════════════════
+
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+const FILTERS = { layer: [true, true, true, true], edgeState: { BOTH: true, TRUE: true, FALSE: true, NEITHER: true } };
+let viewX = 0, viewY = 0, viewK = 1;
+let DPR = window.devicePixelRatio || 1;
+let view = null;                  // the state on screen, derived
+let previousNames = null;         // the constructs of the previous state of a timeline
+let selected = null;              // the construct in the inspector
+let proofOverlay = false;
+
+function resizeCanvas() {
+  DPR = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+const isShown = c => FILTERS.layer[c.layer];
+function shapeOf(name, layer) {
+  if (ZERO_POINTS.has(name)) return 'star';
+  if (ANCHORS.has(name)) return 'diamond';
+  if (layer === APPARENT) return 'hexagon';
+  return 'circle';
+}
+// The size a construct is drawn at: by layer, a little larger for the pointed shapes
+const SHAPE_GROWTH = { circle: 0, diamond: 2, hexagon: 1, star: 3 };
+const sizeOf = (name, c) => ([3, 4, 5, 7][c.layer] ?? 3) + SHAPE_GROWTH[shapeOf(name, c.layer)];
+
+function tracePolygon(cx, cy, points) {
+  points.forEach(([x, y], i) => i ? ctx.lineTo(cx + x, cy + y) : ctx.moveTo(cx + x, cy + y));
+  ctx.closePath();
+}
+function traceShape(shape, x, y, size) {
+  if (shape === 'diamond') {
+    tracePolygon(x, y, [[0, -size], [size, 0], [0, size], [-size, 0]]);
+  } else if (shape === 'hexagon') {
+    tracePolygon(x, y, [0, 1, 2, 3, 4, 5].map(i => [size * Math.cos(i * Math.PI / 3), size * Math.sin(i * Math.PI / 3)]));
+  } else if (shape === 'star') {
+    tracePolygon(x, y, Array.from({ length: 16 }, (_, i) => {
+      const a = i * Math.PI / 8 - Math.PI / 2, r = i % 2 ? size * 0.5 : size;
+      return [r * Math.cos(a), r * Math.sin(a)];
+    }));
+  } else {
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+  }
+}
+function line(a, b, color, alpha, width, dash) {
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  ctx.setLineDash(dash || []);
+  ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+function ring(x, y, r, color, alpha, width, dash) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.setLineDash(dash || []);
+  ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing from a to b
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+  const tipX = b.x - ux * size.gap, tipY = b.y - uy * size.gap;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(tipX - ux * size.len - uy * size.len * 0.5, tipY - uy * size.len + ux * size.len * 0.5);
+  ctx.lineTo(tipX - ux * size.len + uy * size.len * 0.5, tipY - uy * size.len - ux * size.len * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = color; ctx.globalAlpha = alpha;
+  ctx.fill();
+}
+// The relation a construct's saved proofs repeat most; on a tie, the most recent
+function dominantRelation(c) {
+  const count = new Map();
+  for (const p of c.proof_chain || []) count.set(p.relation, (count.get(p.relation) || 0) + 1);
+  let best = null, most = 0;
+  for (const p of c.proof_chain || []) if (count.get(p.relation) >= most) { best = p.relation; most = count.get(p.relation); }
+  return best;
+}
+
+function render() {
+  const W = canvas.width / DPR, H = canvas.height / DPR;
+  ctx.clearRect(0, 0, W, H);
+  if (!view) return;
+  ctx.save();
+  ctx.translate(viewX + W / 2, viewY + H / 2);
+  ctx.scale(viewK, viewK);
+  const px = 1 / viewK;                             // one screen pixel, in field units
+  const focus = selected && view.constructs.has(selected) ? selected : null;
+  const near = focus ? new Set([focus, ...view.edgesOf.get(focus).flatMap(e => [e.src, e.tgt])]) : null;
+
+  if (layout === 'strata') {                        // the rings that hold someone
+    const held = new Set(Array.from(view.constructs, ([name, c]) => stratumOf(name, c)));
+    ctx.font = `${9 * px}px ${FONT_MONO}`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    for (const [stratum, r] of Object.entries(RINGS)) {
+      if (!r || !held.has(stratum)) continue;
+      ring(0, 0, r, COLOR.layer[stratum] || COLOR.muted, 0.22, px, [4 * px, 4 * px]);
+      ctx.globalAlpha = 0.6; ctx.fillStyle = COLOR.muted;
+      ctx.fillText(stratum === 'anchor' ? 'anchors' : stratum, -r * Math.SQRT1_2 - 4 * px, -r * Math.SQRT1_2);
+    }
+  }
+
+  const drawEdge = (e, emphasis) => {
+    const a = positions.get(e.src), b = positions.get(e.tgt);
+    const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
+    if (!a || !b || !ca || !cb || !FILTERS.edgeState[e.state] || !isShown(ca) || !isShown(cb)) return;
+    const width = e.state === 'BOTH' ? 2 : 1, dim = near && !emphasis ? 0.25 : 1;
+    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
+    // A BOTH edge faces its fixed floor instead, into a crystal or not.
+    if (cb.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, width + 2);
+    const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
+    line(a, b, COLOR.state[e.state] || COLOR.dim, alpha, emphasis ? width + 0.5 : width);
+    if (emphasis) arrowhead(a, b, { gap: sizeOf(e.tgt, cb) + 2, len: 5 }, COLOR.state[e.state], 0.95);
+  };
+  for (const e of view.edges) if (!focus || (e.src !== focus && e.tgt !== focus)) drawEdge(e, false);
+  if (focus) for (const e of view.edgesOf.get(focus)) drawEdge(e, true);   // its relations, on top, with their direction
+
+  for (const [name, c] of view.constructs) {
+    const p = positions.get(name);
+    if (!p || !isShown(c)) continue;
+    const color = COLOR.layer[LAYERS[c.layer]] || '#888';
+    const shape = shapeOf(name, c.layer), size = sizeOf(name, c), dim = near && !near.has(name) ? 0.3 : 1;
+    if (c.layer === APPARENT) ring(p.x, p.y, size + 2, color, 0.4 * dim, 1.5);      // a crystal's halo
+    ctx.globalAlpha = dim;
+    ctx.beginPath();
+    traceShape(shape, p.x, p.y, size);
+    ctx.fillStyle = color;
+    ctx.fill();
+    if (shape !== 'circle') {
+      ctx.strokeStyle = 'rgba(238,241,246,0.6)'; ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    if (c.conflict) {                                 // ⊗: a conflict, a structure of its own
+      const k = size + 2, d = k * Math.SQRT1_2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, k, 0, Math.PI * 2);
+      ctx.moveTo(p.x - d, p.y - d); ctx.lineTo(p.x + d, p.y + d);
+      ctx.moveTo(p.x + d, p.y - d); ctx.lineTo(p.x - d, p.y + d);
+      ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7 * dim; ctx.lineWidth = 0.9;
+      ctx.stroke();
+    }
+    if (proofOverlay && !ZERO_POINTS.has(name)) {
+      const relation = dominantRelation(c);
+      if (relation) ring(p.x, p.y, size + 5, COLOR.relation[relation] || COLOR.dim, 0.75 * dim, 1.5 * px);
+    }
+    if (previousNames && !previousNames.has(name)) ring(p.x, p.y, size + 4, COLOR.accent, 0.7, 1.2 * px);
+  }
+
+  if (focus) drawGenesis(focus, px);
+  if (focus) {
+    const p = positions.get(focus), c = view.constructs.get(focus);
+    if (p && isShown(c)) ring(p.x, p.y, sizeOf(focus, c) + 9 * px, COLOR.bright, 0.9, 1.5 * px);
+  }
+  if (viewK >= LABEL_ZOOM || near) drawLabels(px, viewK >= LABEL_ZOOM ? null : near);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// The [::] that made the selected construct, when the file keeps it (the last 50
+// operations): its operands, the left and the right of the Tensin, and the operation
+function drawGenesis(name, px) {
+  const op = view.ops.get(name), z = positions.get(name);
+  if (!op || !z) return;
+  const color = op.state === 'CONFLICT' ? COLOR.warn : COLOR.accent;
+  const parents = [[op.x, 'L'], [op.y, 'R']].filter(([p]) => positions.has(p) && view.constructs.has(p));
+  ctx.font = `bold ${10 * px}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const [parent, side] of parents) {
+    const p = positions.get(parent);
+    line(p, z, color, 0.9, 1.2 * px, [5 * px, 4 * px]);
+    ring(p.x, p.y, 14 * px + sizeOf(parent, view.constructs.get(parent)), color, 0.8, 1.2 * px);
+    ctx.globalAlpha = 1; ctx.fillStyle = color;
+    ctx.fillText(side, p.x + (z.x - p.x) * 0.4, p.y + (z.y - p.y) * 0.4);
+  }
+  if (parents.length === 2) {
+    const [a, b] = parents.map(([p]) => positions.get(p));
+    ctx.font = `bold ${13 * px}px ${FONT_MONO}`;
+    ctx.fillText(op.state === 'CONFLICT' ? '⊗' : '::', (a.x + b.x + z.x) / 3, (a.y + b.y + z.y) / 3);
+  }
+}
+
+function drawLabels(px, only) {
+  ctx.font = `${9 * px}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = COLOR.muted; ctx.globalAlpha = 0.85;
+  for (const [name, c] of view.constructs) {
+    const p = positions.get(name);
+    if (!p || !isShown(c) || (only && !only.has(name))) continue;
+    ctx.fillText(name.length > 26 ? name.slice(0, 24) + '…' : name, p.x, p.y + sizeOf(name, c) + 3 * px);
+  }
+}
+
+let framePending = false;
+function requestDraw() {
+  if (!framePending) { framePending = true; requestAnimationFrame(() => { framePending = false; render(); }); }
+}
+
+// The view fitted to the constructs on show (all of them, when every layer is hidden)
+function fitView() {
+  if (!view) return;
+  const all = Array.from(view.constructs, ([name, c]) => [positions.get(name), c]).filter(([p]) => p);
+  const shown = all.filter(([, c]) => isShown(c));
+  const fit = (shown.length ? shown : all).map(([p]) => p);
+  if (!fit.length) return;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of fit) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }
+  const W = canvas.width / DPR, H = canvas.height / DPR;
+  viewK = Math.min(W, H) * 0.85 / Math.max(maxX - minX, maxY - minY, 100);
+  viewX = -(minX + maxX) / 2 * viewK;
+  viewY = -(minY + maxY) / 2 * viewK;
+  requestDraw();
+}
+
+// The construct under a point of the screen: the nearest one within its drawn size,
+// or within HOVER_PX at any zoom
+function constructAt(clientX, clientY) {
+  if (!view) return null;
+  const rect = canvas.getBoundingClientRect();
+  const wx = (clientX - rect.left - rect.width / 2 - viewX) / viewK;
+  const wy = (clientY - rect.top - rect.height / 2 - viewY) / viewK;
+  let found = null, nearest = Infinity;
+  for (const [name, c] of view.constructs) {
+    const p = positions.get(name);
+    if (!p || !isShown(c)) continue;
+    const d = Math.hypot(wx - p.x, wy - p.y);
+    if (d <= Math.max(sizeOf(name, c), HOVER_PX / viewK) && d < nearest) { found = name; nearest = d; }
+  }
+  return found;
+}
+
+// Pan by dragging, zoom with the wheel around the pointer; hover names, a click inspects
+let drag = null;                  // { x, y, viewX, viewY, moved } where the drag began
+canvas.addEventListener('mousedown', e => {
+  drag = { x: e.clientX, y: e.clientY, viewX, viewY, moved: false };
+  hideTooltip();
+});
+window.addEventListener('mouseup', e => {
+  if (drag && !drag.moved && e.target === canvas) select(constructAt(e.clientX, e.clientY));
+  drag = null;
+});
+canvas.addEventListener('mousemove', e => {
+  if (drag) {
+    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
+    viewX = drag.viewX + e.clientX - drag.x;
+    viewY = drag.viewY + e.clientY - drag.y;
+    requestDraw();
+    return;
+  }
+  const name = constructAt(e.clientX, e.clientY);
+  canvas.classList.toggle('over-construct', !!name);
+  if (name) showTooltip(name, e.clientX, e.clientY);
+  else hideTooltip();
+});
+canvas.addEventListener('mouseleave', () => { hideTooltip(); canvas.classList.remove('over-construct'); });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left - rect.width / 2, my = e.clientY - rect.top - rect.height / 2;
+  const wx = (mx - viewX) / viewK, wy = (my - viewY) / viewK;
+  viewK = Math.max(0.1, Math.min(8, viewK * (e.deltaY > 0 ? 0.9 : 1.1)));
+  viewX = mx - wx * viewK;
+  viewY = my - wy * viewK;
+  requestDraw();
+}, { passive: false });
+
+const tooltip = $('tooltip');
+function showTooltip(name, mx, my) {
+  const c = view.constructs.get(name), kind = kindOf(name, c, view);
+  setText('tt-name', c.conflict ? '⊗ ' + name : name);
+  setText('tt-line', [LAYERS[c.layer], kind, view.mode.get(name), 'Vc ' + view.vc.get(name).vc.toFixed(3)]
+    .filter(Boolean).join(' · '));
+  tooltip.style.left = tooltip.style.top = '0px';
+  tooltip.classList.add('visible');
+  const box = tooltip.offsetParent.getBoundingClientRect();
+  const px = mx - box.left, py = my - box.top, tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  const x = px + 14 + tw > box.width - 8 ? Math.max(8, px - tw - 14) : px + 14;
+  const y = py + 14 + th > box.height - 8 ? Math.max(8, py - th - 14) : py + 14;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+function hideTooltip() { tooltip.classList.remove('visible'); }
+
+
+// ═══ The header and the panels ══════════════════════════════════════════════
+
+// Rows of { label, count, color, title }, each with a bar as long as its share
+function renderBreakdown(id, rows) {
+  const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
+  $(id).replaceChildren(...rows.map(r => {
+    const pct = 100 * r.count / total;
+    const row = el('div', 'breakdown-row');
+    row.style.setProperty('--pct', pct.toFixed(2) + '%');
+    row.style.setProperty('--bar-color', r.color);
+    const swatch = el('span', 'swatch');
+    swatch.style.background = r.color;
+    const label = el('span', 'label', r.label);
+    if (r.title) label.title = r.title;
+    row.append(...spaced([swatch, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')]));
+    return row;
+  }));
+}
+
+function renderLagrangian(constructs) {
+  const counts = {};
+  for (const c of constructs) counts[c.lagrange || 'untagged'] = (counts[c.lagrange || 'untagged'] || 0) + 1;
+  const rank = k => k in LAGRANGE ? 0 : k === 'untagged' ? 2 : 1;      // L1–L5, any other, untagged
+  const keys = Object.keys(counts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  renderBreakdown('lagrangian-list', keys.map(k => ({
+    label: LAGRANGE[k] ? `${k} ${LAGRANGE[k][0]}` : k, title: LAGRANGE[k] ? LAGRANGE[k][1] : '',
+    count: counts[k], color: k === 'untagged' ? COLOR.dim : COLOR.accent,
+  })));
+}
+
+// The filters: one switch per layer and per edge state, built once
+const filterCounts = { layer: {}, state: {} };
+function filterSwitch(label, color, isOn, toggle) {
+  const row = el('button', 'filter-row'), count = el('span', 'count', '—'), swatch = el('span', 'swatch');
+  row.type = 'button';
+  swatch.style.background = color;
+  row.append(...spaced([el('span', 'checkbox', '✓'), swatch, el('span', 'label', label), count]));
+  row.setAttribute('aria-pressed', String(isOn()));
+  row.onclick = () => {
+    toggle();
+    row.setAttribute('aria-pressed', String(isOn()));
+    hideTooltip();
+    requestDraw();
+  };
+  return [row, count];
+}
+function buildFilters() {
+  $('filter-layer').replaceChildren(...LAYERS.map((name, i) => {
+    const [row, count] = filterSwitch(name, COLOR.layer[name],
+      () => FILTERS.layer[i], () => { FILTERS.layer[i] = !FILTERS.layer[i]; });
+    filterCounts.layer[name] = count;
+    return row;
+  }));
+  $('filter-edge').replaceChildren(...STATES.map(s => {
+    const [row, count] = filterSwitch(s, COLOR.state[s],
+      () => FILTERS.edgeState[s], () => { FILTERS.edgeState[s] = !FILTERS.edgeState[s]; });
+    filterCounts.state[s] = count;
+    return row;
+  }));
+}
+
+function renderPanels() {
+  const { state } = view, field = state.field, cs = field.constructs;
+  const layers = Object.fromEntries(LAYERS.map(l => [l, 0]));
+  const states = Object.fromEntries(STATES.map(s => [s, 0]));
+  const modes = Object.fromEntries(MODES.map(m => [m, 0]));
+  for (const c of cs) { layers[LAYERS[c.layer]]++; modes[view.mode.get(c.name)]++; }
+  for (const e of view.edges) if (e.state in states) states[e.state]++;
+  let diamonds = 0, stars = 0, hexagons = 0;
+  for (const c of cs) {
+    if (ZERO_POINTS.has(c.name)) stars++;
+    else if (ANCHORS.has(c.name)) diamonds++;
+    else if (c.layer === APPARENT) hexagons++;
+  }
+
+  // Header
+  const T = atT([state.clock.era, state.clock.offset]);
+  setText('header-cycles', state.cycle ?? '—');
+  setText('header-T', T);
+  $('header-n').replaceChildren(cs.length + ' ', el('span', 'n-breakdown', `(${diamonds}◆·${stars}✦·${hexagons}⬢)`));
+  const ledger = state.ledger || {};
+  $('header-ledger').replaceChildren((ledger.count ?? '—') + ' ',
+    el('span', 'n-breakdown', ledger.head ? ledger.head.slice(0, 12) + '…' : ''));
+  const where = [view.file, runOf(state) && 'run ' + runOf(state)].filter(Boolean).join(' · ');
+  setText('header-file', where);
+  $('header-file').title = where + (ledger.path ? '\nledger: ' + ledger.path : '');
+
+  // Counters
+  setText('s-cycles', state.cycle ?? '—');
+  setText('s-T', T);
+  setText('s-constructs', cs.length);
+  setText('s-edges', view.edges.length);
+  // the apparent log also counts the Zero Points, crystals from birth: both figures
+  const zeroPoints = cs.filter(c => ZERO_POINTS.has(c.name) && c.layer === APPARENT).length;
+  setText('s-apparents', `${field.apparents_total} (${Math.max(0, field.apparents_total - zeroPoints)} emergent)`);
+  setText('s-concluded', field.terminations_total ?? '—');
+  setText('s-conflicts', cs.filter(c => c.conflict).length);
+  setText('s-both', states.BOTH);
+  setText('s-reinc', field.reincarnations ?? '—');
+  const energies = Array.from(view.energy.values()).sort((a, b) => b - a);
+  setText('s-energy3', energies.slice(0, 3).reduce((sum, e) => sum + e, 0).toFixed(2));
+  setText('s-instability', view.instability.toFixed(3));
+  $('inst-bar').style.width = view.instability * 100 + '%';
+  const holds = !view.violations.length;
+  setText('s-invariant', holds ? 'holds' : `${view.violations.length} without L`);
+  $('s-invariant').className = 'stat-val ' + (holds ? '' : 'warn');
+  $('s-invariant').title = holds ? '' : view.violations.join('\n');
+
+  // Breathing
+  const breath = contraction(field);
+  setText('b-breath', field.breaths ?? '—');
+  setText('b-contraction', breath.toFixed(2));
+  $('b-bar').style.width = breath * 100 + '%';
+  setText('b-tolerance', fixed(field.tolerance, 2));
+
+  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: modes[m], color: COLOR.mode[m], title: MODE_MEANING[m] })));
+  renderBreakdown('layers-list', LAYERS.map(l => ({ label: l, count: layers[l], color: COLOR.layer[l] })));
+  renderLagrangian(cs);
+  for (const l of LAYERS) filterCounts.layer[l].textContent = layers[l];
+  for (const s of STATES) filterCounts.state[s].textContent = states[s];
+  $('names').replaceChildren(...Array.from(view.constructs.keys()).sort().map(name => {
+    const option = el('option'); option.value = name; return option;
+  }));
+}
+
+
+// ═══ The construct: what the inspector shows ════════════════════════════════
+
+function kv(key, value, title) {
+  const row = el('div', 'kv');
+  if (title) row.title = title;
+  const v = el('span', 'v');
+  v.append(value instanceof Node ? value : String(value ?? '—'));
+  row.append(...spaced([el('span', 'k', key), v]));
+  return row;
+}
+// A construct named in the inspector: a link when it is in the field; otherwise its
+// name, and, where it could be expected there, that it no longer is
+function nameRef(name, sayGone = true) {
+  if (view.constructs.has(name)) {
+    const link = el('button', 'link', name);
+    link.type = 'button';
+    link.onclick = () => select(name, true);
+    return link;
+  }
+  return el('span', 'gone', sayGone ? `${name} (no longer in the field)` : name);
+}
+
+function select(name, center) {
+  selected = name && view && view.constructs.has(name) ? name : null;
+  renderInspector();
+  if (selected && center) {
+    const p = positions.get(selected), W = canvas.width / DPR, H = canvas.height / DPR;
+    if (p && (Math.abs(p.x * viewK + viewX) > W / 2 - 40 || Math.abs(p.y * viewK + viewY) > H / 2 - 40)) {
+      viewX = -p.x * viewK; viewY = -p.y * viewK;
+    }
+  }
+  requestDraw();
+}
+
+function renderInspector() {
+  const box = $('inspector');
+  if (!view) { box.replaceChildren(el('p', 'note', 'Open a state.json to inspect its constructs.')); return; }
+  if (!selected) { box.replaceChildren(...overviewParts()); return; }
+  const name = selected, c = view.constructs.get(name), clock = view.state.clock;
+  const { vc, tau, sigma, alpha } = view.vc.get(name), mode = view.mode.get(name);
+  const parts = [];
+
+  const head = el('div', 'construct-name'), dot = el('span', 'dot');
+  dot.style.background = COLOR.layer[LAYERS[c.layer]];
+  head.append(dot, el('span', null, c.conflict ? '⊗ ' + name : name));
+  parts.push(head);
+  const kind = kindOf(name, c, view);
+  if (kind) parts.push(el('div', 'construct-kind', kind));
+
+  parts.push(el('h3', null, 'Identity'),
+    kv('layer', LAYERS[c.layer]),
+    kv('witness', c.witness, 'its genesis witness: it never changes'),
+    kv('identity', c.identity_hash || '—', 'the identity hash: the Sombunal shifts it after each [::], the witness stays'),
+    kv('version · shifts', `${c.version ?? 0} · ${(c.lineage || []).length}`, 'identity version, and the shifts kept in its lineage'),
+    kv('born at T', `${atT(c.born_at)} · ${ticks(ageSince(clock, c.born_at))} ago`),
+    kv('chirality', c.chirality === 1 ? '+' : c.chirality === -1 ? '−' : '—', 'born with it, handed on to its products when it leads'),
+    kv('crystallized as', c.crystal_state || '—', 'the tetralemmic state it crystallized in: fixed for good'),
+    kv('lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—'));
+
+  const bar = el('div', 'vc-bar'), fill = el('div');
+  fill.style.width = vc * 100 + '%';
+  bar.append(fill);
+  parts.push(el('h3', null, 'Measures'),
+    kv('energy', fixed(view.energy.get(name), 3), 'what [::] selection weighs: incident weight × tension, plus banked and umbragiac'),
+    kv('umbragiac', fixed(c.umbragiac_score, 3), 'contradiction stress, accumulated by the UCO'),
+    kv('banked', fixed(c.recursion_exchanged, 2), 'recursion exchanged through BOTH channels, banked as tension toward crystallization'),
+    kv('Vc', vc.toFixed(4), 'anchoring weight: Vc = (τ · σth · αm)^(1/3) (Understanding DeOS p.65)'),
+    bar,
+    kv('τ · σth · αm', `${tau.toFixed(2)} · ${sigma.toFixed(2)} · ${alpha.toFixed(2)}`,
+       'τ age (full at 50 ticks) · σth persistence under erosion · αm witnessing (full at 10 proofs)'),
+    kv('mode', `${mode === 'OMEGA' ? '[Ω] ' : mode === 'LEMNISCATE' ? '[Ꮠ] ' : ''}${mode}`, MODE_MEANING[mode]),
+    kv('dominant state', view.dominant.get(name), 'a crystal: the state it crystallized in; otherwise its edges, by weight'));
+
   const proofs = c.proof_chain || [];
-  if(!proofs.length) return 'NEUTRAL';
-  const recent = proofs.slice(-5);
-  let omega=0, lemn=0;
-  recent.forEach(p=>{
-    if(OMEGA_RELS.has(p.relation))      omega++;
-    else if(LEMNISCATE_RELS.has(p.relation)) lemn++;
-  });
-  if(omega > lemn) return 'OMEGA';
-  if(lemn > omega) return 'LEMNISCATE';
-  return 'NEUTRAL';
+  parts.push(el('h3', null, 'Proofs'),
+    kv('in its life', `${c.proofs_total ?? proofs.length} · ${c.erode_total ?? 0} ERODE`, 'every proof it received, and how many were erosions'));
+  if (proofs.length) {
+    const total = c.proofs_total ?? proofs.length;
+    parts.push(el('p', 'note', proofs.length < total
+      ? `the last ${proofs.length} of ${total}, newest first (this file keeps five; the ledger keeps them all):`
+      : `newest first:`));
+    for (const p of [...proofs].reverse()) {
+      const entry = el('div', 'proof');
+      entry.style.setProperty('--rel', COLOR.relation[p.relation] || COLOR.dim);
+      entry.append(el('div', 'rel', p.relation + (p.tensate_role ? ' · ' + p.tensate_role : '')),
+        el('div', 'meta', `anchor ${p.anchor} · ${p.lagrange || '—'} · T${atT(p.time)}`),
+        el('div', 'meta', p.id));
+      parts.push(entry);
+    }
+  }
+
+  parts.push(el('h3', null, 'Genesis'));
+  const op = view.ops.get(name);
+  if (op) {
+    // x :: y → z: the older operand on the left of the Tensin leads (TMC Law 6, p.35)
+    const conflict = op.state === 'CONFLICT', g = el('div', 'genesis'), operand = n => {
+      const line = el('div'); line.append(nameRef(n)); return line;
+    };
+    g.append(operand(op.x), el('div', 'op ' + (conflict ? 'conflict' : 'concordance'), conflict ? '⊗  conflict' : '::'),
+             operand(op.y), el('div', 'note', ['→ at cycle ' + op.cycle, op.depth != null && 'depth ' + op.depth,
+                                              op.weight != null && 'weight ' + fixed(op.weight, 3)].filter(Boolean).join(' · ')));
+    parts.push(g);
+  } else {
+    parts.push(el('p', 'note', ANCHORS.has(name) ? 'An anchor: present from the start.'
+      : view.questions.has(name) ? 'A question the intermediary put to the Sombunal: it entered the field as a construct.'
+      : view.percepts.has(name) ? 'A percept: it entered the field from SYSTEM.'
+      : 'Not among the last 50 operations this file keeps.'));
+  }
+
+  const relations = [...view.edgesOf.get(name)].sort((a, b) => b.weight - a.weight);
+  parts.push(el('h3', null, `Relations (${relations.length})`));
+  for (const e of relations) {
+    const out = e.src === name, row = el('div', 'relation'), body = el('div', 'body');
+    const dir = el('span', 'dir', out ? '→' : '←');
+    dir.style.color = COLOR.state[e.state];
+    const meta = el('div', 'meta', `${e.rel} · `);
+    const state = el('span', null, e.state);
+    state.style.color = COLOR.state[e.state];
+    meta.append(state, ` · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}${e.both_age ? ' · BOTH age ' + e.both_age : ''}`);
+    body.append(nameRef(out ? e.tgt : e.src), meta);
+    row.append(dir, body);
+    parts.push(row);
+  }
+  box.replaceChildren(...parts);
 }
-const MODE_COLOR = {OMEGA:'#4af0c4', LEMNISCATE:'#f0a832', NEUTRAL:'#5a6072'};
-const MODE_LABEL = {
-  OMEGA:      'densifying toward Apparency',
-  LEMNISCATE: 'oscillating in recursion',
-  NEUTRAL:    'no proof history, or concordance and conflict balanced',
+
+// With nothing selected: how to inspect, and the field's last crystallizations and conclusions
+function overviewParts() {
+  const field = view.state.field, parts = [el('p', 'note', 'Click a construct, or find it by name.')];
+  const crystals = (field.apparent_log || []).slice(-12).reverse();
+  if (crystals.length) {
+    parts.push(el('h3', null, 'Last crystallized'));
+    for (const name of crystals) {
+      const entry = el('div', 'list-entry');
+      entry.append(nameRef(name));
+      parts.push(entry);
+    }
+  }
+  const concluded = (field.termination_log || []).slice(-12).reverse();
+  if (concluded.length) {
+    parts.push(el('h3', null, 'Last concluded'));
+    for (const t of concluded) {
+      const m = t.meta || {}, entry = el('div', 'list-entry');
+      entry.append(nameRef(m.name || t.id, false),
+        el('div', 'meta', `${m.final_layer || '?'} · ${m.final_mode || '?'} · Vc ${fixed(m.final_Vc, 3)} · `
+                          + `${ticks(m.lifetime)} · ${m.cause || ''} · T${atT(t.time)}`));
+      parts.push(entry);
+    }
+  }
+  return parts;
+}
+
+
+// ═══ Files and the timeline ═════════════════════════════════════════════════
+
+let timeline = [];                // [{ state, file }], by cycles run
+let current = -1;
+let playTimer = null;
+
+async function openFiles(files) {
+  const read = await Promise.all(Array.from(files).map(async file => {
+    try {
+      const state = JSON.parse(await file.text());
+      return state && state.field && Array.isArray(state.field.constructs) && state.clock
+        ? { state, file: file.name } : { error: file.name };
+    } catch (err) {
+      return { error: file.name };
+    }
+  }));
+  const loaded = read.filter(r => r.state).sort((a, b) => (a.state.cycle ?? 0) - (b.state.cycle ?? 0));
+  const rejected = read.filter(r => r.error).map(r => r.error);
+  const runs = new Set(loaded.map(r => runOf(r.state)).filter(Boolean));
+  const note = $('files-note');
+  note.className = 'note' + (rejected.length || runs.size > 1 ? ' warn' : '');
+  note.textContent = [
+    loaded.length ? `${loaded.length} file${loaded.length === 1 ? '' : 's'}` + (runs.size === 1 ? ` of run ${[...runs][0]}` : '') : '',
+    runs.size > 1 ? `from ${runs.size} different runs: a timeline compares one instance with itself` : '',
+    rejected.length ? `not a SIRISYS state: ${rejected.join(', ')}` : '',
+  ].filter(Boolean).join(' · ') || 'or drop them anywhere on the page';
+  if (!loaded.length) return;
+  stopPlaying();
+  timeline = loaded;
+  positions.clear(); view = null; current = -1; selected = null;
+  $('timeline').hidden = timeline.length < 2;
+  $('tl-slider').max = timeline.length - 1;
+  $('empty-state').hidden = true;
+  show(0);
+  fitView();
+}
+
+// A state of the timeline. Stepping forward by one, a ring marks what the field did not
+// hold the state before; positions carry over, so a construct stays where it was.
+function show(index) {
+  previousNames = view && index === current + 1 ? new Set(view.constructs.keys()) : null;
+  current = index;
+  const { state, file } = timeline[index];
+  view = deriveView(state, file);
+  relax(view, positions.size === 0 ? LAYOUT_STEPS : CONTINUE_STEPS);
+  if (selected && !view.constructs.has(selected)) selected = null;
+  renderPanels();
+  renderInspector();
+  $('tl-slider').value = index;
+  setText('tl-position', `${index + 1} / ${timeline.length} · ${file}`);
+  setText('tl-cycles', `${state.cycle ?? '—'} cycles`);
+  $('btn-prev').disabled = index === 0;
+  $('btn-next').disabled = index === timeline.length - 1;
+  requestDraw();
+}
+
+function stopPlaying() {
+  clearInterval(playTimer); playTimer = null;
+  setText('btn-play', 'Play');
+  $('btn-play').setAttribute('aria-pressed', 'false');
+}
+function togglePlaying() {
+  if (playTimer) { stopPlaying(); return; }
+  if (current >= timeline.length - 1) show(0);
+  setText('btn-play', 'Pause');
+  $('btn-play').setAttribute('aria-pressed', 'true');
+  playTimer = setInterval(() => {
+    if (current >= timeline.length - 1) stopPlaying();
+    else show(current + 1);
+  }, PLAY_MS);
+}
+const step = delta => {
+  if (timeline.length < 2) return;
+  stopPlaying();
+  show(Math.max(0, Math.min(timeline.length - 1, current + delta)));
 };
 
-// Mirror of ConcordancyField.compute_anchoring_weight() from the Python core.
-// Understanding_DeOS p.65 — Vc = f(τ, σth, αm) — ontological gravity.
-//   τ    — born_at age (clock ticks), saturates at 50
-//   σth  — base ∈ [0.1, 1.0] from umbragiac_score; ERODE proofs increase it
-//   αm   — proof_chain length, saturates at 10
-//   Collapse rule: any dimension = 0 → Vc = 0
-//   ZP always returns 1.0 (primordially anchored).
-function computeAnchoringWeight(c, state){
-  if(ZP_NAMES.has(c.name)) return 1.0;
 
-  const clockEra    = state?.clock?.era    ?? 0;
-  const clockOffset = state?.clock?.offset ?? 0;
-  const bornEra     = c.born_at?.[0] ?? 0;
-  const bornOffset  = c.born_at?.[1] ?? 0;
+// ═══ The controls, and the start ════════════════════════════════════════════
 
-  // age in clock ticks — mirrors InternalClock.age_since()
-  // ERA_CAPACITY is 10_000 (one era = 10_000 offsets); cross-era ages compose accordingly.
-  const ERA_CAPACITY = 10000;
-  const age = Math.max(0,
-    (clockEra - bornEra) * ERA_CAPACITY + (clockOffset - bornOffset)
-  );
-  const tau = Math.min(1.0, age / 50.0);
+const fileInput = $('file-input');
+$('btn-open').onclick = $('btn-open-empty').onclick = () => fileInput.click();
+fileInput.onchange = () => { openFiles(fileInput.files); fileInput.value = ''; };
+// Files dropped anywhere on the page
+let dragDepth = 0;
+window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0; document.body.classList.remove('dragging');
+  if (e.dataTransfer.files.length) openFiles(e.dataTransfer.files);
+});
 
-  const proofs = c.proof_chain || [];
-  // lifetime counts: the saved chain keeps only the latest proofs.
-  const erodeCount = (c.erode_total != null) ? c.erode_total
-                     : proofs.filter(p => p.relation === 'ERODE').length;
-  const umbragiac  = c.umbragiac_score || 0;
-  const baseSigma  = Math.max(0.1, 1.0 - Math.min(umbragiac / 5.0, 0.9));
-  const sigmaTh    = Math.min(1.0, baseSigma + erodeCount * 0.12);
-
-  const alphaM = Math.min(1.0, ((c.proofs_total != null) ? c.proofs_total : proofs.length) / 10.0);
-
-  if(tau === 0.0 || sigmaTh === 0.0 || alphaM === 0.0) return 0.0;
-  return Math.round(Math.pow(tau * sigmaTh * alphaM, 1.0/3.0) * 10000) / 10000;
+function setLayout(next) {
+  if (next === layout) return;
+  layout = next;
+  $('btn-relations').setAttribute('aria-pressed', String(layout === 'relations'));
+  $('btn-strata').setAttribute('aria-pressed', String(layout === 'strata'));
+  if (!view) return;
+  relax(view, LAYOUT_STEPS);
+  fitView();
 }
-
-// Mirror of ConcordancyField.compute_coherence() from the Python core.
-// WALL E — coherence describes HOW a construct exists in the field, never WHETHER.
-// Mean of edge weights modulated by clock tension. ZP → 1.0, orphan → 0.0.
-// Presented numerically only — visual saturation/glow on nodes is deferred design work.
-function computeCoherence(c, state, allEdges){
-  if(ZP_NAMES.has(c.name)) return 1.0;
-  const myEdges = (allEdges || []).filter(e => e.src === c.name || e.tgt === c.name);
-  if(!myEdges.length) return 0.0;
-
-  const clockEra    = state?.clock?.era    ?? 0;
-  const clockOffset = state?.clock?.offset ?? 0;
-  const ERA_CAPACITY = 10000;
-  const DECAY = 0.08;
-
-  // tension(born) = exp(-decay * max(0, age_in_ticks))
-  const tension = (born) => {
-    const bornEra    = born?.[0] ?? 0;
-    const bornOffset = born?.[1] ?? 0;
-    const delta = Math.max(0,
-      (clockEra - bornEra) * ERA_CAPACITY + (clockOffset - bornOffset)
-    );
-    return Math.exp(-DECAY * delta);
-  };
-
-  let weightedSum = 0;
-  for(const e of myEdges){
-    weightedSum += (e.weight || 0) * tension(e.born_at);
-  }
-  const coherence = weightedSum / myEdges.length;
-  return Math.round(Math.min(1.0, Math.max(0.0, coherence)) * 10000) / 10000;
+function setProofOverlay(on) {
+  proofOverlay = on;
+  $('btn-proofs').setAttribute('aria-pressed', String(on));
+  $('proof-legend').hidden = !on;
+  requestDraw();
 }
+$('proof-legend').replaceChildren(...PROOF_RELATIONS.map(r => {
+  const item = el('div', 'item'), mark = el('span', 'line');
+  mark.style.borderColor = COLOR.relation[r];
+  item.append(mark, el('span', null, r.toLowerCase()));
+  return item;
+}));
+$('btn-relations').onclick = () => setLayout('relations');
+$('btn-strata').onclick = () => setLayout('strata');
+$('btn-proofs').onclick = () => setProofOverlay(!proofOverlay);
+$('btn-fit').onclick = fitView;
+$('btn-prev').onclick = () => step(-1);
+$('btn-next').onclick = () => step(1);
+$('btn-play').onclick = togglePlaying;
+$('tl-slider').oninput = () => { stopPlaying(); show(Number($('tl-slider').value)); };
 
-function inspect(c,allEdges){
-  const el=document.getElementById('inspector');
-  const dc=domState(c.name,allEdges);
-  const ln=LN[c.layer]||'?';
-  const col=c.layer===3?SC.APPARENT:(SC[dc]||'#5c6475');
-  const isSys=c.name==='SYSTEM',isCf=isConflict(c);
-  const lc={NULL_00:'#5a6072',UMBRA_0:'#4a5080',UNIT_1:'#4af0c4',APPARENT:'#e8ecf2'}[ln]||'#5c6475';
-  let h=`<div class="inspect-field"><div class="inspect-key">Name</div>
-    <div class="inspect-val" style="color:${col};word-break:break-all;font-family:var(--font-mono)">${esc(c.name)}</div></div>`;
-  if(isSys) h+=`<div class="inspect-field"><div class="inspect-val" style="color:var(--text-dim);font-size:10px">◈ Infrastructure — perception channel. Excluded from ∀C,∃(Z,L).</div></div>`;
-  if(isCf)  h+=`<div class="inspect-field"><div class="inspect-val" style="color:#f0a832;font-size:10px">⊗ Conflict construct — first-class proof object (L2·Z1::ORIGIN). Irresolvability materialized.</div></div>`;
-  h+=`<div class="inspect-field"><div class="inspect-key">Layer</div>
-    <div class="inspect-val"><span class="layer-badge" style="background:${lc}22;color:${lc};border:1px solid ${lc}44">${ln}</span></div></div>
-    <div class="inspect-field"><div class="inspect-key">Dominant State</div><div class="inspect-val" style="color:${col}">${dc}</div></div>
-    <div class="inspect-field"><div class="inspect-key">Witness (genesis · immutable)</div>
-    <div class="inspect-val" style="color:var(--text-dim);font-family:var(--font-mono)">${c.witness||'—'}</div></div>
-    <div class="inspect-field"><div class="inspect-key">Identity (mutable · runtime)</div>
-    <div class="inspect-val" style="color:var(--text-dim);font-family:var(--font-mono)">${
-      c.identity||c.identity_hash
-        ? (c.identity||c.identity_hash)
-        : '<span style="color:var(--text-dim);font-style:italic;font-size:9px">derived at runtime — not in snapshot.<br>See proof_chain for transformation history.</span>'
-    }</div></div>
-    <div class="inspect-field"><div class="inspect-key">Version · Energy</div>
-    <div class="inspect-val">v${c.version||0} · u=${(c.umbragiac_score||0).toFixed(3)}</div></div>`;
-  if(c.lagrange){const lcc=LC[c.lagrange]||'#5c6475';h+=`<div class="inspect-field"><div class="inspect-key">Lagrangian Point</div><div class="inspect-val">
-    <span class="lagrange-tag" style="color:${lcc};border-color:${lcc}44">${c.lagrange}</span>
-    <div style="color:var(--text-dim);font-size:10px;margin-top:3px">${LD[c.lagrange]||''}</div>
-  </div></div>`;}
-  // Existence Mode — TMC p.27 [Ω]/[Ꮠ] duality, derived from proof_chain
-  const mode = computeExistenceMode(c);
-  const mc   = MODE_COLOR[mode];
-  const ms   = mode==='OMEGA' ? '[Ω]' : mode==='LEMNISCATE' ? '[Ꮠ]' : '·';
-  h+=`<div class="inspect-field"><div class="inspect-key">Existence Mode</div>
-    <div class="inspect-val">
-      <span style="color:${mc};font-family:var(--font-mono);font-weight:600;letter-spacing:.06em">${ms} ${mode}</span>
-      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">${MODE_LABEL[mode]}</div>
-    </div></div>`;
-
-  // Anchoring Weight Vc — Understanding_DeOS p.65, Vc = f(τ, σth, αm)
-  // Bar gradient transitions: red (fragile) → amber (intermediate) → teal (anchored)
-  const vc = computeAnchoringWeight(c, states[curIdx]);
-  const vcPct = (vc * 100).toFixed(1);
-  // Color tint reflects the value: low = red, mid = amber, high = teal (matches accent)
-  const vcColor = vc < 0.25 ? '#f05050' : vc < 0.6 ? '#f0a832' : '#4af0c4';
-  h+=`<div class="inspect-field"><div class="inspect-key">Anchoring Weight  Vc = f(τ, σth, αm)</div>
-    <div class="inspect-val">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="color:${vcColor};font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums">Vc = ${vc.toFixed(4)}</span>
-        <span style="color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums">${vcPct}%</span>
-      </div>
-      <div style="height:4px;background:var(--bg-2);border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${vcPct}%;background:linear-gradient(90deg,#f05050 0%,#f0a832 35%,#4af0c4 70%);transition:width var(--dur-slow) var(--ease)"></div>
-      </div>
-      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">ontological gravity — capacity to persist as real</div>
-    </div></div>`;
-
-  // Coherence — WALL E, field alignment (numerical only, REGLA DE ORO respected)
-  // Visual saturation/glow on nodes is deferred design work.
-  const coh = computeCoherence(c, states[curIdx], allEdges);
-  const cohPct = (coh * 100).toFixed(1);
-  h+=`<div class="inspect-field"><div class="inspect-key">Coherence  (field alignment)</div>
-    <div class="inspect-val">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="color:var(--text);font-family:var(--font-mono);font-weight:600;font-variant-numeric:tabular-nums">${coh.toFixed(4)}</span>
-        <span style="color:var(--text-dim);font-size:10px;font-variant-numeric:tabular-nums">${cohPct}%</span>
-      </div>
-      <div style="color:var(--text-dim);font-size:10px;margin-top:3px">describes HOW the construct exists, never WHETHER</div>
-    </div></div>`;
-
-  const proofs=c.proof_chain||[];
-  if(proofs.length){
-    h+=`<div class="inspect-field"><div class="inspect-key">Proof Chain (${(c.proofs_total!=null && c.proofs_total>proofs.length) ? `${c.proofs_total} witnessed · last ${proofs.length} kept in this file` : `${proofs.length}`} — irreversible)</div><div class="proof-chain">`;
-    proofs.slice(-8).forEach(p=>{const rc=PC[p.relation]||'var(--text-dim)';
-      // tensate_role tag — only present on lemniscate triplet proofs (Ꮠ = 2Ꮙ)
-      const roleTag = p.tensate_role
-        ? ` <span style="color:var(--text-dim);font-size:9px;font-weight:400;letter-spacing:.06em">· ${p.tensate_role}</span>`
-        : '';
-      h+=`<div class="proof-entry"><div class="proof-relation" style="color:${rc}">${p.relation}${roleTag}</div>
-      <div class="proof-meta">anchor: ${p.anchor}</div>
-      <div class="proof-meta">lagrange: ${p.lagrange} · ${LD[p.lagrange]||''}</div>
-      <div class="proof-meta">w: ${p.witness} · T=[${p.time}]</div></div>`;});
-    if(proofs.length>8)h+=`<div style="color:var(--text-dim);font-size:10px;margin-top:3px">…and ${proofs.length-8} earlier proofs</div>`;
-    h+=`</div></div>`;}
-  const conn=allEdges.filter(e=>e.src===c.name||e.tgt===c.name);
-  if(conn.length){
-    h+=`<div class="inspect-field"><div class="inspect-key">Edges (${conn.length})</div>`;
-    conn.slice(0,8).forEach(e=>{
-      const sc2=SC[e.state]||'var(--text-dim)',other=e.src===c.name?e.tgt:e.src,dir=e.src===c.name?'→':'←';
-      const elc=e.lagrange?(LC[e.lagrange]||'var(--text-dim)'):null;
-      h+=`<div class="edge-entry"><div style="color:${sc2}">${dir} <span style="color:var(--text-bright)">${esc(other.slice(0,30))}</span></div>
-      <div style="color:var(--text-dim);font-size:9px">${e.rel}·${e.state}·w=${e.weight.toFixed(2)}${elc?` · <span style="color:${elc}">${e.lagrange}</span>`:''}</div></div>`;});
-    if(conn.length>8)h+=`<div style="color:var(--text-dim);font-size:10px;margin-top:4px">…and ${conn.length-8} more</div>`;
-    h+=`</div>`;}
-  // ── GENESIS OPERATION DIAGRAM ────────────────────────────────────────────
-  // Show the [x] :: [y] → [z] operation that produced this construct,
-  // sourced from ops_log. Makes causal process visible in the inspector.
-  if(states[curIdx]){
-    const opsLog=(states[curIdx].ops_log)||[];
-    const op=opsLog.find(o=>o.z===c.name);
-    if(op){
-      const isConf=(op.state==='CONFLICT');
-      const opCol=isConf?'#f0a832':'#4af0c4';
-      const symb=isConf?'⊗':'::';
-      const px=esc((op.x||'').slice(0,30));
-      const py=esc((op.y||'').slice(0,30));
-      const pz=esc((op.z||'').slice(0,30));
-      h+=`<div class="inspect-field">
-        <div class="inspect-key">Genesis · cycle ${op.cycle}</div>
-        <div style="background:var(--bg);border:1px solid var(--border);border-radius:4px;
-          padding:9px 11px;margin-top:2px;font-family:var(--font-mono);font-size:10px;
-          line-height:2.0;letter-spacing:.02em;">
-          <div><span style="color:var(--text-dim)">[ </span><span style="color:var(--text-bright)">${px}</span><span style="color:var(--text-dim)"> ]</span></div>
-          <div style="padding-left:10px;color:${opCol};font-weight:700">${symb}</div>
-          <div><span style="color:var(--text-dim)">[ </span><span style="color:var(--text-bright)">${py}</span><span style="color:var(--text-dim)"> ]</span></div>
-          <div style="padding-left:10px;color:var(--text-dim)">↓</div>
-          <div><span style="color:${opCol};font-weight:700">[ </span><span style="color:${opCol};font-weight:700">${pz}</span><span style="color:${opCol};font-weight:700"> ]</span>
-            ${op.depth!=null?`<span style="color:var(--text-dim);font-size:9px;margin-left:6px">depth=${op.depth}</span>`:''}
-            ${op.weight!=null?`<span style="color:var(--text-dim);font-size:9px;margin-left:4px">w=${op.weight}</span>`:''}
-          </div>
-        </div>
-      </div>`;}
-  }
-
-  el.innerHTML=h;
+// Find: an exact name, or the first that contains what was typed
+const search = $('search');
+function find() {
+  if (!view) return;
+  const text = search.value.trim();
+  if (!text) return;
+  const names = Array.from(view.constructs.keys());
+  const found = view.constructs.has(text) ? text : names.find(n => n.toLowerCase().includes(text.toLowerCase()));
+  if (found) select(found, true);
 }
+search.addEventListener('change', find);
+search.addEventListener('keydown', e => { if (e.key === 'Enter') find(); });
+
+// F fits, V changes the layout, P shows the proofs, O opens, ← → move in the timeline,
+// Esc clears the selection; a focused control keeps its own keys
+window.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'Escape') { if (e.target === search) search.blur(); select(null); return; }
+  if (e.target instanceof Element && e.target.closest('button, input, summary')) return;
+  const act = {
+    f: fitView, v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
+    p: () => setProofOverlay(!proofOverlay), o: () => fileInput.click(),
+    arrowleft: () => step(-1), arrowright: () => step(1),
+  }[e.key.toLowerCase()];
+  if (act) { e.preventDefault(); act(); }
+});
+window.addEventListener('resize', () => { resizeCanvas(); requestDraw(); });
+
+buildFilters();
+renderInspector();
+resizeCanvas();
 </script>
-
 </body>
 </html>
