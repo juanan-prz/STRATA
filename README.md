@@ -21,7 +21,7 @@ Author: Juan A. Pérez-Gómez.
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live visualizer |
 | `Sirisys_Live_Visualizer.html` | Live topology in the browser (experiment mode) |
 | `Sirisys_Static_Visualizer.html` | Opens a saved `state.json` in the browser, no server needed |
-| `run_report.py` | Instrumented runs: a model arm against a control arm on the same synthetic streams; writes `sirisys_report.json` |
+| `run_report.py` | Instrumented runs on the same synthetic streams: the model, the model asking only the Sombunal questions, and a control without a model; writes `sirisys_report.json` |
 | `field_topology.py` | Read-only topology and depth of the field, recorded by `run_report.py` and `live_c2.py` |
 | `sirisys_measures.py` | Shared measurements: the self-adjustment criteria, and the model-health watch that stops a run whose model does not answer |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Test suites |
@@ -48,7 +48,9 @@ A model is optional. Without one everything runs and constructs get synthetic na
 
 Select the backend with `SIRISYS_LLM_BACKEND=ollama|anthropic|none` (or `--backend` in `run_report.py`), the model with `SIRISYS_LLM_MODEL`, and a non-default Ollama address with `OLLAMA_HOST`. Keep the same backend, model and profile across runs you intend to compare.
 
-A model that fails or answers empty would leave the field on synthetic names without notice. With a model, `run_report.py` and `live_c2.py` first make two real calls and stop if the answers are missing or empty; during the run they stop (exit code 3) when 3 calls in a row fail or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason.
+A model that fails or answers empty would leave the field on synthetic names without notice. With a model, `run_report.py` and `live_c2.py` first make two real calls and stop if the answers are missing or empty; during the run they stop (exit code 3) when 3 calls in a row fail or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason. The probe also records which model exactly answered (for Ollama: digest, size, parameters and quantization), and the health report keeps the first answers of each kind.
+
+The model reaches the field through two channels: the names it gives (they become construct keys, and so enter every orientation) and the Sombunal questions (they enter the field as constructs). `run_report.py` separates them with a third arm in which the model only asks the questions while the names stay the control's; withholding the questions too gives the control bit for bit, which `test_phase1.py` checks.
 
 -----
 
@@ -127,7 +129,7 @@ python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3
 python3 live_c2.py 3000 ollama minimal > live_ollama.json    # real percepts, local model
 ```
 
-Each suite ends with a `SUMMARY` line; every check should pass. `test_ontology.py` checks what the field must be, from the primary source: Zero Points are never operands, the older operand leads and hands its chirality on, a crystal is never demoted or altered, nothing leaves without a termination proof, no crystal concludes in the cycle it forms, and with a model in the loop every request carries a seed oriented by the history. One case is known and allowed only during the first breath: a new crystal whose `BOTH` support is eroded by UCO in the same cycle.
+Each suite ends with a `SUMMARY` line; every check should pass. `test_ontology.py` checks what the field must be, from the primary source: Zero Points are never operands, the older operand leads and hands its chirality on, a crystal is never demoted or altered, nothing leaves without a termination proof, no crystal concludes in the cycle it forms, and with a model in the loop every request carries a seed oriented by the history; also the Stop Chasm and Adsurdic caps on conflicts (TMC p.41), anchors that never conclude, and the tolerance within its bounds. One case is known and allowed only during the first breath: a new crystal whose `BOTH` support is eroded by UCO in the same cycle.
 
 `run_report.py` and `live_c2.py` judge every run by the self-adjustment criteria (durable crystals in every 1000-cycle window, flicker ≤ 5 %, no growth trend, flat cost of the cycle itself, bounded top-3 energy), with the code `measure_phase3.py` uses. `live_c2.py` also records what the field perceived (counts per 1000 cycles and the whole sequence) and the Sombunal questions that entered it. Real percepts read the machine: leave it idle during a `live_c2.py` run whose results you intend to compare.
 

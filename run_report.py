@@ -25,8 +25,10 @@ COST
   purpose, with failures, empty answers and latency.
 
 WHAT THE REPORT COMPARES
-  The model arm against a control arm without a model, on the same percept
-  streams. Each run is judged by the Phase 3 criteria (sirisys_measures.
+  Three arms on the same percept streams: the model (it names constructs and
+  asks the Sombunal questions), the model asking only the Sombunal questions
+  (names stay the control's), and a control without a model. The model reaches
+  the field through those two channels; the middle arm separates them. Each run is judged by the Phase 3 criteria (sirisys_measures.
   LifeCriteria, the same code as measure_phase3.py): durable crystals in every
   1000-cycle window, flicker <= 5 %, no growth trend, flat cost of the cycle
   itself (model time excluded), bounded top-3 energy; with the tolerance the
@@ -128,10 +130,21 @@ def integrity_check():
 
 class CountingLLM(S.LLMIntermediary):
     """Wraps the real Intermediary to record every call and output; `health`
-    watches failures, empty answers and latency (sirisys_measures.ModelHealth)."""
+    watches failures, empty answers and latency (sirisys_measures.ModelHealth).
 
-    def __init__(self, force_degraded=False, model=None, backend=None):
+    `channels` separates the two ways the model enters the field:
+      "all"        names (construct keys, hence orientation) and Sombunal questions;
+      "questions"  Sombunal questions only: names are the control's own synthetic
+                   ones, and the model budget is spent exactly as in "all", so the
+                   questions arrive at the same cadence;
+      "none"       nothing reaches the model, yet the model path is taken: the
+                   control, reached the long way (it checks the ablation itself).
+    """
+
+    def __init__(self, force_degraded=False, model=None, backend=None, channels="all"):
         self.force_degraded = force_degraded
+        self.channels = channels
+        self.cycle = 0                          # set by run_arm; the control's names carry it
         self.by_kind = Counter()
         self.empty_by_kind = Counter()
         self.samples = defaultdict(list)
@@ -154,15 +167,23 @@ class CountingLLM(S.LLMIntermediary):
             self.samples[kind].append(str(out)[:160])
         return out
 
+    # The control's synthetic names (ConcordancyOperator.execute, model unavailable).
+    # If the framework changes them, the "none" check in test_phase1.py fails.
     def propose_emergent(self, x, y, xs, ys):
+        if self.channels != "all":
+            return f"[{x[:18]}]::[{y[:18]}]@c{self.cycle}"
         return self._record("propose_emergent",
                             super().propose_emergent(x, y, xs, ys))
 
     def interpret_conflict(self, x, y):
+        if self.channels != "all":
+            return f"CONFLICT::{x[:14]}⊗{y[:14]}"
         return self._record("interpret_conflict",
                             super().interpret_conflict(x, y))
 
     def question_sombunal(self, instability):
+        if self.channels == "none":
+            return ""
         return self._record("question_sombunal",
                             super().question_sombunal(instability))
 
@@ -228,13 +249,14 @@ PROFILES = {"standard": {"narrate": True,  "include_hour": True},
 
 
 def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="standard",
-            percepts="synthetic"):
+            percepts="synthetic", channels="all"):
     # The framework has no PRNG: `seed` selects the synthetic percept
     # stream (reproducible); with percepts="live" runs read this machine.
     S.set_ledger(S.ProofLedger(None))          # each arm: its own in-memory ledger
     quiet = io.StringIO()
     with contextlib.redirect_stdout(quiet):
-        llm = CountingLLM(force_degraded=not llm_active, model=model, backend=backend)
+        llm = CountingLLM(force_degraded=not llm_active, model=model, backend=backend,
+                          channels=channels)
         ss = S.new_session(llm=llm)
     clock, field, conc, cuss = ss.clock, ss.field, ss.concordancy, ss.cussive
 
@@ -256,6 +278,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
                 prof = PROFILES[profile]
                 ev = (S.synthetic_percepts(cyc, seed, prof["include_hour"])
                       if percepts == "synthetic" else None)
+                llm.cycle = cyc
                 t_cycle, t_model = time.perf_counter(), llm.health.model_seconds
                 r = S.run_cycle(ss, cyc, percepts=ev, **prof)
                 field_seconds = ((time.perf_counter() - t_cycle)
@@ -315,6 +338,8 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
 
     return {
         "seed": seed,
+        "channels": channels if llm_active else None,
+        "ledger_head": S.get_ledger().head,
         "aborted": aborted,
         "criteria": criteria,
         "criteria_pass": LifeCriteria.verdict(criteria),
@@ -421,6 +446,8 @@ def main():
     ap.add_argument("--cycles", type=int, default=150)
     ap.add_argument("--seeds", type=int, default=3)
     ap.add_argument("--skip-degraded", action="store_true")
+    ap.add_argument("--skip-questions-arm", action="store_true",
+                    help="skip the arm in which the model only asks the Sombunal questions")
     ap.add_argument("--model", default=None,
                     help="model id, e.g. claude-haiku-4-5-20251001. "
                          "Default: the backend's own (anthropic: claude-sonnet-4-6; "
@@ -462,13 +489,17 @@ def main():
     explicit = args.backend in ("ollama", "anthropic")
     health_probe = None
     if llm_ok:
+        # full arm: at most MAX calls per cycle; questions arm: one every third cycle
+        per_cycle = S.MAX_LLM_CALLS_PER_CYCLE + (0 if args.skip_questions_arm else 1 / 3)
         health_probe = ModelHealth.probe(probe, cycles=args.cycles * args.seeds,
-                                         calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE)
+                                         calls_per_cycle=per_cycle)
         if health_probe["ok"]:
             log(f"  model probe        : ok · {health_probe['call_s']} s per call "
                 f"(first call, with loading: {health_probe['load_s']} s)")
             log(f"  model time, at most: ~{health_probe['estimated_model_hours_max']} h "
-                f"for the model arm ({args.cycles} cycles x {args.seeds} seeds)")
+                f"for the model arms ({args.cycles} cycles x {args.seeds} seeds)")
+            if health_probe.get("model"):
+                log(f"  model identity     : {health_probe['model']}")
             log(f"  sample names       : {' | '.join(a[:40] for a in health_probe['answers'])}")
         else:
             log("")
@@ -530,13 +561,17 @@ def main():
     }
 
     aborted = None
-    plan = ([("llm", True)] if llm_ok else []) + ([] if args.skip_degraded else [("degraded", False)])
-    for name, active in plan:
-        log(f"\n  --- arm: {'LLM active' if active else 'degraded control'} ---")
+    plan = ([("llm", True, "all")] if llm_ok else []) \
+        + ([("llm_questions", True, "questions")] if llm_ok and not args.skip_questions_arm else []) \
+        + ([] if args.skip_degraded else [("degraded", False, "all")])
+    titles = {"llm": "LLM active", "llm_questions": "LLM, Sombunal questions only",
+              "degraded": "degraded control"}
+    for name, active, channels in plan:
+        log(f"\n  --- arm: {titles[name]} ---")
         arm = []
         for s in range(args.seeds):
             arm.append(run_arm(s, args.cycles, active, log, args.model, args.backend,
-                               args.profile, args.percepts))
+                               args.profile, args.percepts, channels))
             if arm[-1]["aborted"]:
                 aborted = f"arm {name}, seed {s}, {arm[-1]['aborted']}"
                 break

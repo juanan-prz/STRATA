@@ -7,7 +7,7 @@
 | `Sirisys_Framework_v13_3.py` | El sistema. Contiene el ciclo canónico, la continuidad y el ledger. |
 | `Sirisys_Server.py` | Arranca el modo experimento y sirve el campo al visualizador en vivo. |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework. |
-| `run_report.py` | Ejecuciones instrumentadas: un brazo con modelo frente a un brazo de control, con los mismos flujos sintéticos. Escribe `sirisys_report.json`. |
+| `run_report.py` | Ejecuciones instrumentadas con los mismos flujos sintéticos en tres brazos: el modelo, el modelo que solo hace las preguntas al Sombunal, y un control sin modelo. Escribe `sirisys_report.json`. |
 | `field_topology.py` | Topología y profundidad del campo, de solo lectura. La registran `run_report.py` y `live_c2.py`. |
 | `sirisys_measures.py` | Mediciones compartidas: los criterios de autoajuste y la vigilancia del modelo, que detiene una ejecución si el modelo no responde. |
 | `Sirisys_Live_Visualizer.html` | Visualizador en vivo. |
@@ -62,13 +62,13 @@ Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a c
 - coste plano del ciclo (sin contar el tiempo del modelo);
 - energía de los 3 constructos más cargados, acotada.
 
-El informe compara los dos brazos sobre los mismos flujos.
+El informe compara los tres brazos sobre los mismos flujos. El modelo entra en el campo por dos vías: los nombres que pone (son las claves de los constructos y entran en cada orientación) y las preguntas al Sombunal (entran en el campo como constructos). El brazo intermedio las separa: el modelo solo hace las preguntas y los nombres son los del control. Si además se retiran las preguntas, el brazo coincide bit a bit con el control; lo comprueba `test_phase1.py`.
 
 **Vigilancia del modelo.** Un modelo que falla o responde vacío deja el campo con nombres sintéticos sin avisar. Con modelo, `run_report.py` y `live_c2.py`:
 - hacen antes dos llamadas reales y no empiezan si las respuestas faltan o llegan vacías;
 - se detienen (código 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50.
 
-El resultado se escribe igualmente, marcado como `aborted` y con el motivo.
+El resultado se escribe igualmente, marcado como `aborted` y con el motivo. La prueba inicial registra además qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
 
 **Perceptos reales.** `live_c2.py` registra lo que percibió el campo (recuentos por cada 1.000 ciclos y la secuencia completa) y las preguntas al Sombunal que entraron. Los perceptos reales leen la máquina: no la uses mientras corre una ejecución que quieras comparar.
 
@@ -109,6 +109,9 @@ python3 live_c2.py 3000 ollama minimal > live_ollama.json  # perceptos reales, c
 - un cristal nunca se degrada ni se altera;
 - nada desaparece sin prueba de terminación;
 - ningún cristal concluye en el ciclo en que se forma;
-- con modelo, cada petición lleva una semilla orientada por la historia.
+- con modelo, cada petición lleva una semilla orientada por la historia;
+- los conflictos respetan los límites de la Stop Chasm y la profundidad Adsurdic (TMC p.41);
+- las anclas nunca concluyen;
+- la tolerancia se mantiene entre su suelo y 1.
 
 Hay un caso conocido, que solo se admite durante la primera respiración: un cristal nuevo cuyo soporte `BOTH` erosiona la UCO en ese mismo ciclo.

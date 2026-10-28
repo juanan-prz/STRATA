@@ -10,6 +10,11 @@ one guards what the field must be, from the primary source:
     crystal state never changes and its identity never shifts (TMC p.14).
   - Nothing vanishes silently: every construct that leaves the field leaves a
     TERMINATE proof (Compiler Guide pp.203-204).
+  - The Stop Chasm and the Adsurdic threshold (TMC p.41): never more than
+    MAX_CONFLICTS_PER_CYCLE conflicts in a cycle, and conflict recursion never
+    deeper than MAX_CF_DEPTH.
+  - The anchors (Zero Points, I::Am, I::AmNot, SYSTEM) never conclude.
+  - The field's own tolerance stays between its floor and 1.
   - "all [Apparents] must be [Existents]" (TMC p.22): no crystal concludes in
     the cycle it forms. Known exception, to be closed in the next framework
     version: during the first breath, UCO can erode a new crystal's BOTH support
@@ -41,7 +46,9 @@ def life(stream, cycles, llm, profile=(False, False)):
     """Run `cycles` on synthetic stream `stream`; count every violation."""
     S.set_ledger(S.ProofLedger(None))
     v = {k: [] for k in ("zp_operand", "leader_not_older", "chirality_not_leader",
-                         "crystal_changed", "vanished_silently", "crystal_concluded_at_birth")}
+                         "crystal_changed", "vanished_silently", "crystal_concluded_at_birth",
+                         "stop_chasm", "adsurdic", "anchor_concluded", "tolerance_out")}
+    CO = S.ConcordancyOperator
     narrate, hour = profile
     with contextlib.redirect_stdout(io.StringIO()):
         ss = S.new_session(llm)
@@ -67,6 +74,17 @@ def life(stream, cycles, llm, profile=(False, False)):
             for name in present - set(f.constructs):
                 if name not in ended:
                     v["vanished_silently"].append(c)
+            conflicts = [op for op in ss.concordancy.ops_log
+                         if op["cycle"] == c and op.get("state") == "CONFLICT"]
+            if len(conflicts) > CO.MAX_CONFLICTS_PER_CYCLE:
+                v["stop_chasm"].append(c)
+            if any(op.get("depth", 0) > CO.MAX_CF_DEPTH for op in conflicts) or \
+                    any(e.concordancy_depth > CO.MAX_CF_DEPTH for e in f.edges):
+                v["adsurdic"].append(c)
+            if any(a not in f.constructs for a in S.ANCHORS):
+                v["anchor_concluded"].append(c)
+            if not S.TOLERANCE_FLOOR <= f.tolerance <= 1.0:
+                v["tolerance_out"].append(c)
             for op in ss.concordancy.ops_log:
                 if op["cycle"] != c:
                     continue
@@ -103,6 +121,10 @@ check("the product inherits the leader's handedness (TMC p.50)", not total["chir
 check("a crystal is never demoted, restated or shifted (TMC p.14)", not total["crystal_changed"],
       f"{crystals_formed} crystals formed")
 check("nothing leaves the field without a TERMINATE proof", not total["vanished_silently"])
+check("at most MAX_CONFLICTS_PER_CYCLE conflicts in a cycle (Stop Chasm, TMC p.41)", not total["stop_chasm"])
+check("conflict recursion never passes MAX_CF_DEPTH (Adsurdic threshold, TMC p.41)", not total["adsurdic"])
+check("the anchors never conclude", not total["anchor_concluded"])
+check("the tolerance stays between its floor and 1", not total["tolerance_out"])
 births = total["crystal_concluded_at_birth"]
 check("no crystal concludes in the cycle it forms after the first breath (TMC p.22)",
       all(c < S.BREATH_PERIOD for c in births),
@@ -110,7 +132,7 @@ check("no crystal concludes in the cycle it forms after the first breath (TMC p.
 
 # ── a deterministic model in the loop ────────────────────────────────
 class FakeModel(BaseHTTPRequestHandler):
-    seeds = []
+    seeds, sent = [], 0
     def log_message(self, *a): pass
     def _send(self, obj):
         b = json.dumps(obj).encode(); self.send_response(200)
@@ -122,6 +144,7 @@ class FakeModel(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         seed = body.get("options", {}).get("seed")
         FakeModel.seeds.append(seed)
+        FakeModel.sent = max(FakeModel.sent, len(body["messages"]))
         # the answer depends on the prompt and the seed only: a model with no randomness of its own
         h = hashlib.sha256(f"{body['messages'][-1]['content']}::{seed}".encode()).hexdigest()[:8]
         self._send({"message": {"role": "assistant", "content": f"Construct {h}"}})
@@ -133,11 +156,12 @@ host = f"http://127.0.0.1:{httpd.server_port}"
 print(f"\n== A model in the loop (fake, deterministic; {N // 2} cycles, profile minimal)")
 runs = []
 for _ in range(2):
-    FakeModel.seeds = []
+    FakeModel.seeds, FakeModel.sent = [], 0
     with contextlib.redirect_stdout(io.StringIO()):
         llm = S.LLMIntermediary(backend="ollama", host=host)
     v, head, _ = life(0, N // 2, llm)
     runs.append((head, list(FakeModel.seeds), v))
+kept = len(llm.history)
 httpd.shutdown()
 (h1, s1, v1), (h2, s2, _) = runs
 check("every model request carries a seed", s1 and all(isinstance(x, int) for x in s1),
@@ -145,6 +169,11 @@ check("every model request carries a seed", s1 and all(isinstance(x, int) for x 
 check("the seeds follow the history, not a generator", len(set(s1)) == len(s1) and s1 == s2,
       f"{len(set(s1))} distinct of {len(s1)}; the same sequence in both runs: {s1 == s2}")
 check("two identical runs with the model seal the same ledger", h1 == h2, h1[:16])
+check("a request carries the system prompt and at most the last 12 messages",
+      FakeModel.sent <= 13, f"largest request: {FakeModel.sent} messages")
+print(f"  [KNOWN] the intermediary keeps its whole conversation in memory: {kept} entries after "
+      f"{N // 2} cycles, about {round(kept * 1000 / max(1, N // 2))} per 1000. Harmless in an experiment; "
+      f"to be bounded in the next framework version, before any life of months.")
 check("the invariants hold with the model in the loop",
       not any(v1[k] for k in v1 if k != "crystal_concluded_at_birth")
       and all(c < S.BREATH_PERIOD for c in v1["crystal_concluded_at_birth"]))

@@ -232,6 +232,21 @@ check("run_report feeds the synthetic stream when asked, reproducibly",
       a1["percept_catalog"]["distinct_targets"] > 2 and a1["trace"] == a2["trace"] and a1["trace"] != b1["trace"],
       f"{a1['percept_catalog']['distinct_targets']} distinct percepts; seed 0 twice identical: "
       f"{a1['trace'] == a2['trace']}; seed 1 different: {a1['trace'] != b1['trace']}")
+# The arm that keeps only the Sombunal questions: exact by construction
+fake("ok")
+os.environ["OLLAMA_HOST"] = HF
+with contextlib.redirect_stdout(io.StringIO()):
+    ctrl = RR.run_arm(0, 60, False, lambda m: None, backend="ollama", profile="minimal")
+    none = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="none")
+    ques = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="questions")
+    full = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="all")
+del os.environ["OLLAMA_HOST"]
+asked = lambda r: sum(t["sombunal_question"] for t in r["trace"])
+check("withholding every channel through the model path gives the control, bit for bit",
+      none["ledger_head"] == ctrl["ledger_head"] and none["llm"]["health"]["calls"] == 0)
+check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
+      set(ques["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"} and asked(ques) == asked(full) > 0,
+      f"{asked(ques)} questions in both")
 hf.shutdown()
 
 httpd.shutdown()

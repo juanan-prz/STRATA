@@ -45,7 +45,7 @@ if BACKEND != "none":
         print(json.dumps(out, indent=1))
         say(f"\n  STOP: the model does not answer properly — {probe['reason']}.\n  Nothing was run.\n")
         sys.exit(3)
-    say(f"  model ok · {probe['call_s']} s per call · model time at most "
+    say(f"  model ok · {probe['model']['name']} · {probe['call_s']} s per call · model time at most "
         f"~{probe['estimated_model_hours_max']} h for {N} cycles")
 
 life, genealogy = LifeCriteria(S), field_topology.Genealogy()

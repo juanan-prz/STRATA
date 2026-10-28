@@ -16,7 +16,7 @@ ModelHealth
     empty.
 """
 import time
-from collections import Counter, deque
+from collections import Counter, defaultdict, deque
 
 
 class LifeCriteria:
@@ -122,6 +122,7 @@ class ModelHealth:
         self.calls, self.ok, self.failures, self.empty = 0, 0, 0, 0
         self.by_kind, self.empty_by_kind = Counter(), Counter()
         self.errors, self.latencies = [], []
+        self.samples = defaultdict(list)            # the first answers of each kind, to judge them
         self.model_seconds = 0.0
         self.recent = deque(maxlen=self.WINDOW)
         self.consecutive_failures = 0
@@ -140,6 +141,8 @@ class ModelHealth:
                 self._record(kind, time.perf_counter() - t, failed=True, error=ex)
                 raise
             self._record(kind, time.perf_counter() - t, empty=not str(out).strip())
+            if str(out).strip() and len(self.samples[kind]) < 10:
+                self.samples[kind].append(str(out).strip()[:120])
             return out
 
         llm._complete = watched
@@ -182,7 +185,22 @@ class ModelHealth:
                 "empty_by_kind": dict(self.empty_by_kind),
                 "latency_s": {"median": q(0.5), "p95": q(0.95), "max": q(1.0)},
                 "model_seconds": round(self.model_seconds, 1),
-                "tripped": self.tripped, "reason": self.reason, "errors": self.errors}
+                "tripped": self.tripped, "reason": self.reason, "errors": self.errors,
+                "samples": dict(self.samples)}
+
+    @staticmethod
+    def identity(llm):
+        """Which model exactly: for Ollama, the installed entry (digest, size,
+        parameters, quantization), since one tag can name different builds."""
+        ident = {"backend": llm.backend, "name": llm.model}
+        if llm.backend == "ollama":
+            try:
+                for m in llm._http_json("GET", "/api/tags", timeout=5).get("models", []):
+                    if m.get("name") == llm.model or m.get("model") == llm.model:
+                        ident.update({k: m[k] for k in ("digest", "size", "details") if k in m})
+            except Exception as ex:                              # identity is a record, not a gate
+                ident["error"] = repr(ex)[:120]
+        return ident
 
     @staticmethod
     def probe(llm, cycles=None, calls_per_cycle=None):
@@ -205,7 +223,8 @@ class ModelHealth:
             return {"ok": False, "answers": answers,
                     "reason": "the model answered empty (a reasoning model can spend its short "
                               "budget thinking; choose a general-purpose model)"}
-        out = {"ok": True, "answers": answers, "load_s": round(secs[0], 2), "call_s": round(secs[1], 2)}
+        out = {"ok": True, "answers": answers, "load_s": round(secs[0], 2), "call_s": round(secs[1], 2),
+               "model": ModelHealth.identity(llm)}
         if cycles and calls_per_cycle:
             out["estimated_model_hours_max"] = round(cycles * calls_per_cycle * secs[1] / 3600, 1)
         return out
