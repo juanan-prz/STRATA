@@ -13,6 +13,7 @@
 | `Sirisys_Live_Visualizer.html` | Visualizador en vivo. |
 | `Sirisys_Static_Visualizer.html` | Abre en el navegador un `state.json` guardado y muestra su topología (sin servidor). |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Pruebas. Ejecútalas tras cada cambio. |
+| `sirisys_testkit.py` | Lo que comparten las pruebas: las comprobaciones y su resumen, copias nuevas del framework y un modelo de Ollama simulado. |
 | `measure_phase3.py` | Mide los criterios de autoajuste (3 flujos × 5.000 ciclos: cristalización, crecimiento, energía, coste). |
 | `soak.py`, `live_c2.py` | Pruebas de resistencia: una vida larga (50.000 ciclos) y perceptos reales. |
 | `requirements.txt` | Dependencias de pip. |
@@ -98,7 +99,7 @@ Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su
 
 ```bash
 python3 test_sirisys.py      # integridad, determinismo sin azar, memoria acotada
-python3 test_phase1.py       # motor del experimento, backends del modelo y capa web (no necesita Ollama ni FastAPI)
+python3 test_phase1.py       # motor del experimento, backends del modelo, capa web, salud del modelo y herramientas de experimento
 python3 test_phase2_guarantee.py   # medir topología y profundidad no altera el ledger ni el campo
 python3 test_phase4.py       # ledger por segmentos, manipulación, cortes durante una rotación, disco
 python3 test_ontology.py     # invariantes del campo, ciclo a ciclo, con y sin modelo

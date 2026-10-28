@@ -25,6 +25,7 @@ Author: Juan A. Pérez-Gómez.
 | `field_topology.py` | Read-only topology and depth of the field, recorded by `run_report.py` and `live_c2.py` |
 | `sirisys_measures.py` | Shared measurements: the self-adjustment criteria, and the model-health watch that stops a run whose model does not answer |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Test suites |
+| `sirisys_testkit.py` | What the test suites share: the checks and their summary, fresh copies of the framework, a local stand-in for an Ollama model |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Measurements: self-adjustment criteria, a long life, real percepts |
 | `requirements.txt` | Python dependencies |
 | `Guia_SIRISYS_Mac.pdf` | Step-by-step setup on a Mac for first-time users (Spanish) |
@@ -118,7 +119,7 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
 
 ```bash
 python3 test_sirisys.py              # integrity, determinism, bounded memory
-python3 test_phase1.py               # experiment engine, model backends, web layer (no Ollama or FastAPI needed)
+python3 test_phase1.py               # experiment engine, model backends, web layer, model health, experiment tools
 python3 test_phase2_guarantee.py     # measuring topology and depth leaves the ledger and the field unchanged
 python3 test_phase4.py               # segmented ledger, tampering, crash during rotation, disk
 python3 test_ontology.py             # invariants of the field, cycle by cycle, with and without a model

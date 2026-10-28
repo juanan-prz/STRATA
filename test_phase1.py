@@ -1,128 +1,136 @@
-"""Experiment engine, LLM backends, model health, the report's percepts and the web layer.
-Run next to Sirisys_Server.py, sirisys_loader.py and the newest framework:
-    python3 test_phase1.py
-No API key, no Ollama and no FastAPI needed (a fake Ollama is started)."""
-import io, json, os, sys, time, hashlib, tempfile, subprocess, threading, contextlib
-from pathlib import Path
-from http.server import BaseHTTPRequestHandler, HTTPServer
+"""Everything around the field: the experiment engine, the model backends, the
+profiles, the web layer, the model-health watch, and the experiment tools
+(run_report.py, live_c2.py).
+No API key, no Ollama and no FastAPI needed: a local fake model, and a stub in
+place of the web framework.
+Usage: python3 test_phase1.py"""
+import json
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import time
+from types import SimpleNamespace
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-results = []
-def check(name, cond, detail=""):
-    results.append(bool(cond))
-    print(f"  [{'PASS' if cond else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
+from sirisys_measures import ModelHealth
+from sirisys_testkit import HERE, Checks, FakeModel, environment, quiet, raises, read_jsonl, scratch
 
-sys.argv = [sys.argv[0]]
-with contextlib.redirect_stdout(io.StringIO()):
-    import Sirisys_Server as srv
-S = srv.S
+with quiet():
+    import Sirisys_Server as server
+server.log.setLevel(logging.WARNING)                 # the server's own progress lines
+S = server.S
+check = Checks()
 
-def ledger_recs(p):
-    return [json.loads(l) for l in open(p, encoding="utf-8")]
 
-# ─────────────────────────────────────────────────────────────── experiment
-print("\n== E · Experiment engine (no web server needed)")
-runs = Path(tempfile.mkdtemp())
-with contextlib.redirect_stdout(io.StringIO()):
-    eng = srv.ExperimentEngine(stream=0, delay_ms=0, runs_dir=runs)
-    eng.running = True
-    t0 = time.time()
-    while eng.cycle < 30 and time.time() - t0 < 60:
+def wait_for(condition, timeout=60):
+    end = time.time() + timeout
+    while time.time() < end:
+        if condition():
+            return True
         time.sleep(0.05)
-    eng.running = False
-    time.sleep(0.2)
-snaps = eng.drain()
-first_run = eng.run_dir
-keys = {"cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded",
-        "field", "ledger", "instability", "modes", "layers", "action"}
-check("cycles stream as snapshots", len(snaps) >= 30 and keys <= snaps[-1].keys(), f"{len(snaps)} snapshots")
-check("snapshot is JSON-serializable", bool(json.dumps(snaps[-1])))
-res = eng.control("reset", stream="live")
-check("reset opens a new run folder, old one kept", res["ok"] and first_run.exists() and eng.run_dir != first_run
-      and (first_run / "state.json").exists(), f"{first_run.name} → {eng.run_dir.name}")
-check("old run's ledger verifies", S.verify_ledger(first_run / "ledger.jsonl")["ok"])
-check("live-percept reset recorded", eng.stream is None and eng.run_dir.name.endswith("_live"))
-eng.shutdown()
-check("shutdown saves the current run", (eng.run_dir / "state.json").exists())
-
-# ─────────────────────────────────────────────────────────────── fake ollama
-class FakeOllama(BaseHTTPRequestHandler):
-    calls = []
-    def log_message(self, *a): pass
-    def _send(self, obj):
-        b = json.dumps(obj).encode(); self.send_response(200)
-        self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
-        self.end_headers(); self.wfile.write(b)
-    def do_GET(self):
-        self._send({"models": [{"name": "fake-model:latest"}]})
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        FakeOllama.calls.append(body)
-        self._send({"message": {"role": "assistant", "content": f"echo {len(FakeOllama.calls)}"}})
-httpd = HTTPServer(("127.0.0.1", 0), FakeOllama)
-threading.Thread(target=httpd.serve_forever, daemon=True).start()
-OLLAMA = f"http://127.0.0.1:{httpd.server_port}"
-
-print("\n== L · LLM backends")
-with contextlib.redirect_stdout(io.StringIO()):
-    llm = S.LLMIntermediary(backend="ollama", host=OLLAMA)
-q = llm.question_sombunal(0.5)
-body = FakeOllama.calls[-1] if FakeOllama.calls else {}
-check("ollama backend: discovers model and completes", llm.available and llm.model == "fake-model:latest" and q == "echo 1")
-check("ollama request carries system prompt, history and options",
-      body.get("messages", [{}])[0].get("role") == "system" and body.get("stream") is False
-      and body["options"]["temperature"] == 1.10, f"temperature {body.get('options', {}).get('temperature')}")
-check("ollama on loopback is local", llm.is_local)
-with contextlib.redirect_stdout(io.StringIO()):
-    remote = S.LLMIntermediary(backend="ollama", host="http://10.0.0.5:11434")
-check("ollama on another host is NOT local", not remote.is_local)
-class FakeMessages:
-    def create(self, **kw): self.kw = kw; return type("R", (), {"content": [type("C", (), {"text": " ok "})()]})()
-with contextlib.redirect_stdout(io.StringIO()):
-    a = S.LLMIntermediary(backend="anthropic")
-a._client = type("Cl", (), {"messages": FakeMessages()})(); a._available = True
-a.question_sombunal(0.3)
-check("anthropic temperature clamped to [0, 1] (was 1.10)", a._client.messages.kw["temperature"] == 1.0)
-try:
-    S.LLMIntermediary(backend="openai"); bad = False
-except ValueError:
-    bad = True
-check("unknown backend refused", bad)
-
-print("\n== R · Profiles, framework check, web layer")
-def wait_for(pred, timeout=60):
-    t0 = time.time()
-    while time.time() - t0 < timeout:
-        if pred(): return True
-        time.sleep(0.1)
     return False
 
-# The minimal profile: no narration, no time-of-day percept
-runs2 = Path(tempfile.mkdtemp())
-with contextlib.redirect_stdout(io.StringIO()):
-    e2 = srv.ExperimentEngine(stream=1, delay_ms=0, runs_dir=runs2, profile="minimal")
+
+def no_log(line):
+    pass
+
+
+def perceived_the_hour(run_dir):
+    """A PERCEIVE proof names its percept in its id: perceive::<target>."""
+    return any(r["relation"] == "PERCEIVE" and r["id"].startswith("perceive::time::")
+               for r in read_jsonl(run_dir / "ledger.jsonl"))
+
+
+def run(args, folder, timeout=300, **env):
+    """A tool run as the user runs it: a separate process in `folder`."""
+    return subprocess.run([sys.executable, *args], cwd=folder, capture_output=True, text=True,
+                          timeout=timeout, env={**os.environ, **env})
+
+
+check.section("1 · Experiment engine (no web server needed)")
+with quiet():
+    engine = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    engine.running = True
+    wait_for(lambda: engine.cycle >= 30)
+    engine.running = False
+    time.sleep(0.2)
+snapshots, first_run = engine.drain(), engine.run_dir
+expected = {"cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded",
+            "field", "ledger", "instability", "modes", "layers", "action"}
+check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys(),
+      f"{len(snapshots)} snapshots")
+check("snapshot is JSON-serializable", bool(json.dumps(snapshots[-1])))
+with quiet():
+    reset = engine.control("reset", stream="live")
+check("reset opens a new run folder, old one kept",
+      reset["ok"] and first_run.exists() and (first_run / "state.json").exists()
+      and engine.run_dir != first_run,
+      f"{first_run.name} → {engine.run_dir.name}")
+check("old run's ledger verifies", S.verify_ledger(first_run / "ledger.jsonl")["ok"])
+check("live-percept reset recorded", engine.stream is None and engine.run_dir.name.endswith("_live"))
+with quiet():
+    engine.shutdown()
+check("shutdown saves the current run", (engine.run_dir / "state.json").exists())
+
+check.section("2 · Model backends")
+with FakeModel("counter") as model:
+    with quiet():
+        llm = S.LLMIntermediary(backend="ollama", host=model.url)
+        answer = llm.question_sombunal(0.5)
+    request = model.requests[-1] if model.requests else {}
+check("ollama backend: discovers model and completes",
+      llm.available and llm.model == FakeModel.MODEL and answer == "Name 1")
+check("ollama request carries system prompt, history and options",
+      request.get("messages", [{}])[0].get("role") == "system" and request.get("stream") is False
+      and request.get("options", {}).get("temperature") == 1.10,
+      f"temperature {request.get('options', {}).get('temperature')}")
+check("ollama on loopback is local", llm.is_local)
+with quiet():
+    remote = S.LLMIntermediary(backend="ollama", host="http://10.0.0.5:11434")
+check("ollama on another host is NOT local", not remote.is_local)
+
+
+class FakeMessages:
+    """Stands in for anthropic.Anthropic().messages and keeps what it was asked."""
+
+    def create(self, **request):
+        self.request = request
+        return SimpleNamespace(content=[SimpleNamespace(text=" ok ")])
+
+
+with quiet():
+    claude = S.LLMIntermediary(backend="anthropic")
+    claude._client, claude._available = SimpleNamespace(messages=FakeMessages()), True
+    claude.question_sombunal(0.3)                   # asks at 1.10
+check("anthropic temperature clamped to [0, 1] (was 1.10)",
+      claude._client.messages.request["temperature"] == 1.0)
+check("unknown backend refused", raises(lambda: S.LLMIntermediary(backend="openai"), ValueError))
+
+check.section("3 · Profiles, framework check, web layer")
+with quiet():
+    minimal = server.ExperimentEngine(stream=1, delay_ms=0, runs_dir=scratch(), profile="minimal")
     for _ in range(15):
-        e2.step_once = True
-        wait_for(lambda: not e2.step_once, 20)
-    e2.shutdown()
-recs_e2 = ledger_recs(e2.run_dir / "ledger.jsonl")
-check("experiment --profile minimal perceives no time of day",
-      e2.cycle >= 10 and not any(r["relation"] == "PERCEIVE" and "time::" in r["object"] for r in recs_e2)
-      and e2.run_dir.name.endswith("_minimal"), f"{e2.cycle} cycles, run {e2.run_dir.name}")
+        minimal.step_once = True
+        wait_for(lambda: not minimal.step_once, 20)
+    minimal.shutdown()
+check("experiment --profile minimal perceives no time of day (the standard run of section 1 does)",
+      minimal.cycle >= 10 and not perceived_the_hour(minimal.run_dir) and perceived_the_hour(first_run)
+      and minimal.run_dir.name.endswith("_minimal"), f"{minimal.cycle} cycles, run {minimal.run_dir.name}")
 
-# Old framework refused by the server
-old_fw = HERE / "Sirisys_Framework_v12_9.py"
-if old_fw.exists():
-    p = subprocess.run([sys.executable, str(HERE / "Sirisys_Server.py"), "--help"],
-                       capture_output=True, text=True, cwd=HERE,
-                       env=dict(os.environ, SIRISYS_FRAMEWORK=old_fw.name), timeout=60)
-    check("server refuses a pre-v13.1 framework with a clear message",
-          p.returncode != 0 and "predates v13.1" in (p.stdout + p.stderr))
+old = scratch()                                     # a framework without the canonical cycle
+for f in ("Sirisys_Server.py", "sirisys_loader.py"):
+    shutil.copy(HERE / f, old / f)
+(old / "Sirisys_Framework_v12_9.py").write_text('"""A framework older than v13.1."""\n', encoding="utf-8")
+p = run(["Sirisys_Server.py", "--help"], old, 60, SIRISYS_FRAMEWORK="Sirisys_Framework_v12_9.py")
+check("server refuses a pre-v13.1 framework with a clear message",
+      p.returncode != 0 and "predates v13.1" in p.stdout + p.stderr)
 
-# Web layer with stub FastAPI (never starts a real server)
-stub = Path(tempfile.mkdtemp())
-(stub / "fastapi").mkdir(); (stub / "websockets").mkdir(); (stub / "websockets" / "__init__.py").write_text("")
+# The web layer with a stub in place of FastAPI and uvicorn: no server is ever started
+stub = scratch()
+(stub / "fastapi").mkdir()
+(stub / "websockets").mkdir()
+(stub / "websockets" / "__init__.py").write_text("")
 (stub / "fastapi" / "__init__.py").write_text(
     "class WebSocketDisconnect(Exception): pass\nclass WebSocket: pass\nclass Request: pass\n"
     "class FastAPI:\n def __init__(self,title=None,lifespan=None): self.routes={}; self.lifespan=lifespan\n"
@@ -130,147 +138,117 @@ stub = Path(tempfile.mkdtemp())
     " def get(self,p,**k): return self._r(('GET',p))\n def post(self,p,**k): return self._r(('POST',p))\n"
     " def websocket(self,p): return self._r(('WS',p))\n")
 (stub / "fastapi" / "responses.py").write_text(
-    "class HTMLResponse:\n def __init__(self,content='',status_code=200): self.content=content; self.status_code=status_code\n"
-    "class JSONResponse:\n def __init__(self,content): self.content=content\n")
+    "class HTMLResponse:\n def __init__(self,content='',status_code=200): self.content=content; "
+    "self.status_code=status_code\nclass JSONResponse:\n def __init__(self,content): self.content=content\n")
 (stub / "uvicorn.py").write_text("APP=None\ndef run(app,**k):\n global APP; APP=app\n")
-web = stub / "web.py"
-web.write_text(f"""
-import sys, asyncio, json, io, contextlib
-sys.path.insert(0, {str(stub)!r}); sys.path.insert(0, {str(HERE)!r}); sys.argv=['x']
+(stub / "web.py").write_text(f"""
+import sys, asyncio, io, contextlib, pathlib
+sys.path.insert(0, {str(stub)!r}); sys.path.insert(0, {str(HERE)!r}); sys.argv = ['web']
 import Sirisys_Server as srv, uvicorn, fastapi
-srv.HERE = __import__('pathlib').Path({str(stub)!r})
+srv.log.setLevel('WARNING')
+srv.HERE = pathlib.Path({str(stub)!r})
 with contextlib.redirect_stdout(io.StringIO()):
-    srv.serve_experiment(srv.parse_args(['--delay-ms','0']))
-R = uvicorn.APP.routes
+    srv.serve_experiment(srv.parse_args(['--delay-ms', '0']))
+routes = uvicorn.APP.routes
 async def go():
-    class MockReq:
-        async def json(self): return dict()
-    await R[('POST','/api/control/{{action}}')]('play', MockReq())
-    msgs = []
-    class WS:
-        n = 0
+    class Request:
+        async def json(self): return {{}}
+    await routes[('POST', '/api/control/{{action}}')]('play', Request())
+    sent = []
+    class Socket:                                   # the client has already gone
+        received = 0
         async def accept(self): pass
-        async def send_json(self, o): msgs.append(o)
+        async def send_json(self, o): sent.append(o)
         async def receive_text(self):
-            WS.n += 1
-            raise fastapi.WebSocketDisconnect()     # the client has already gone
-    await asyncio.wait_for(R[('WS','/ws')](WS()), 10)
+            Socket.received += 1
+            raise fastapi.WebSocketDisconnect()
+    await asyncio.wait_for(routes[('WS', '/ws')](Socket()), 10)
     async with uvicorn.APP.lifespan(uvicorn.APP): pass
-    print('WS_EXITED', len(msgs), WS.n)
+    print('WS_EXITED', len(sent), Socket.received)
 asyncio.run(go())
 """)
-p = subprocess.run([sys.executable, str(web)], capture_output=True, text=True, timeout=60, cwd=stub)
+p = run(["web.py"], stub, 60)
+output = (p.stdout + p.stderr).strip()
 check("WebSocket handler exits on disconnect (no busy loop on a dead socket)",
-      "WS_EXITED" in p.stdout, (p.stdout + p.stderr).strip().splitlines()[-1][:90] if (p.stdout + p.stderr).strip() else "")
+      "WS_EXITED" in p.stdout, output.splitlines()[-1][:90] if output else "")
 
-# ─────────────────────────────────────────────────────────────── model health
-print("\n== H · Model health and the report's percepts")
-from sirisys_measures import ModelHealth
-import shutil
+check.section("4 · Model health")
+model = FakeModel("counter")
 
-class HealthFake(BaseHTTPRequestHandler):
-    # ok: "Name <n>", n counting every call (a model whose answers carry state);
-    # alike: the answer depends on the prompt and the seed only; empty | error after `after` answers
-    mode, after, n = "ok", 0, 0
-    def log_message(self, *a): pass
-    def _send(self, obj, code=200):
-        b = json.dumps(obj).encode(); self.send_response(code)
-        self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
-        self.end_headers(); self.wfile.write(b)
-    def do_GET(self):
-        self._send({"models": [{"name": "fake-model:latest"}]})
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-        HealthFake.n += 1
-        if HealthFake.n > HealthFake.after and HealthFake.mode == "error":
-            return self._send({"error": "model crashed"}, 500)
-        if HealthFake.mode == "alike":
-            key = f"{body['messages'][-1]['content']}::{body.get('options', {}).get('seed')}"
-            text = "Name " + hashlib.sha256(key.encode()).hexdigest()[:6]
-        else:
-            text = "" if HealthFake.n > HealthFake.after and HealthFake.mode == "empty" else f"Name {HealthFake.n}"
-        self._send({"message": {"role": "assistant", "content": text}})
-hf = HTTPServer(("127.0.0.1", 0), HealthFake)
-threading.Thread(target=hf.serve_forever, daemon=True).start()
-HF = f"http://127.0.0.1:{hf.server_port}"
-def fake(mode, after=0):
-    HealthFake.mode, HealthFake.after, HealthFake.n = mode, after, 0
 
-def model():
-    with contextlib.redirect_stdout(io.StringIO()):
-        return S.LLMIntermediary(backend="ollama", host=HF)
-fake("ok")
-pr = ModelHealth.probe(model(), cycles=100, calls_per_cycle=4)
-check("the probe accepts a model that answers", pr["ok"] and all(pr["answers"]), str(pr.get("answers")))
-fake("empty")
-pr = ModelHealth.probe(model())
-check("the probe refuses a model that answers empty", not pr["ok"] and "empty" in pr["reason"])
-fake("error")
-llm, h = model(), ModelHealth()
-h.attach(llm)
-with contextlib.redirect_stdout(io.StringIO()):
+def intermediary():
+    with quiet():
+        return S.LLMIntermediary(backend="ollama", host=model.url)
+
+
+probe = ModelHealth.probe(intermediary(), cycles=100, calls_per_cycle=4)
+check("the probe accepts a model that answers", probe["ok"] and all(probe["answers"]),
+      str(probe.get("answers")))
+model.reset("empty")
+probe = ModelHealth.probe(intermediary())
+check("the probe refuses a model that answers empty", not probe["ok"] and "empty" in probe["reason"])
+model.reset("error")
+llm, health = intermediary(), ModelHealth()
+health.attach(llm)
+with quiet():
     names = [llm.propose_emergent("a", "b", "TRUE", "TRUE") for _ in range(4)]
 check("watching trips after 3 failed calls in a row (the field itself only sees empty names)",
-      h.tripped and h.failures >= 3 and not any(names), h.reason)
+      health.tripped and health.failures >= 3 and not any(names), health.reason)
 
-# Copies of the tools in a scratch folder: nothing here touches the user's reports
-tools = Path(tempfile.mkdtemp())
-for f in ["run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
-          S.__sirisys_file__]:
+check.section("5 · The experiment tools: run_report.py and live_c2.py")
+tools = scratch()                                   # copies: nothing here touches the user's reports
+for f in ("run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
+          S.__sirisys_file__):
     shutil.copy(HERE / f, tools / f)
-fake("error", after=30)
-p = subprocess.run([sys.executable, "live_c2.py", "60", "ollama", "minimal"], capture_output=True, text=True,
-                   cwd=tools, env=dict(os.environ, OLLAMA_HOST=HF), timeout=300)
+model.reset("error", after=30)
+p = run(["live_c2.py", "60", "ollama", "minimal"], tools, OLLAMA_HOST=model.url)
 out = json.loads(p.stdout) if p.stdout.strip() else {}
 check("live_c2 stops (exit 3) when the model starts failing mid-run, and says so",
       p.returncode == 3 and out.get("aborted") and "STOPPED" in p.stderr, str(out.get("aborted"))[:80])
-p = subprocess.run([sys.executable, "run_report.py", "--backend", "ollama", "--cycles", "5", "--seeds", "1"],
-                   capture_output=True, text=True, cwd=tools,
-                   env=dict(os.environ, OLLAMA_HOST="http://127.0.0.1:9"), timeout=120)
+p = run(["run_report.py", "--backend", "ollama", "--cycles", "5", "--seeds", "1"], tools, 120,
+        OLLAMA_HOST="http://127.0.0.1:9")
 check("run_report --backend ollama stops before running when the model is not there",
       p.returncode == 3 and "Nothing was run" in p.stdout and not (tools / "sirisys_report.json").exists())
-# The determinism check: a model that answers alike to the same request and seed, and one that does not
-det = {}
-for mode in ("alike", "ok"):
-    fake(mode)
-    (tools / "sirisys_determinism.json").unlink(missing_ok=True)
-    p = subprocess.run([sys.executable, "run_report.py", "--backend", "ollama", "--profile", "minimal",
-                        "--cycles", "40", "--determinism"], capture_output=True, text=True, cwd=tools,
-                       env=dict(os.environ, OLLAMA_HOST=HF), timeout=300)
-    f = tools / "sirisys_determinism.json"
-    det[mode] = json.loads(f.read_text()).get("determinism") if p.returncode == 0 and f.exists() else None
-same, other = det["alike"] or {}, det["ok"] or {}
-check("the determinism check tells a model that answers alike from one that does not, in its own file",
-      same.get("same") is True and other.get("same") is False and other.get("diverged_at_cycle") is not None
-      and not (tools / "sirisys_report.json").exists(),
-      f"alike: same ledger {same.get('same')}; stateful: same ledger {other.get('same')}, "
-      f"parted at cycle {other.get('diverged_at_cycle')}")
-sys.argv = ["run_report.py"]
-with contextlib.redirect_stdout(io.StringIO()):
-    import run_report as RR
-    a1, a2 = (RR.run_arm(0, 30, False, lambda m: None, profile="minimal") for _ in range(2))
-    b1 = RR.run_arm(1, 30, False, lambda m: None, profile="minimal")
-check("run_report feeds the synthetic stream when asked, reproducibly",
-      a1["percept_catalog"]["distinct_targets"] > 2 and a1["trace"] == a2["trace"] and a1["trace"] != b1["trace"],
-      f"{a1['percept_catalog']['distinct_targets']} distinct percepts; seed 0 twice identical: "
-      f"{a1['trace'] == a2['trace']}; seed 1 different: {a1['trace'] != b1['trace']}")
-# The arm that keeps only the Sombunal questions: exact by construction
-fake("ok")
-os.environ["OLLAMA_HOST"] = HF
-with contextlib.redirect_stdout(io.StringIO()):
-    ctrl = RR.run_arm(0, 60, False, lambda m: None, backend="ollama", profile="minimal")
-    none = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="none")
-    ques = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="questions")
-    full = RR.run_arm(0, 60, True, lambda m: None, backend="ollama", profile="minimal", channels="all")
-del os.environ["OLLAMA_HOST"]
-asked = lambda r: sum(t["sombunal_question"] for t in r["trace"])
-check("withholding every channel through the model path gives the control, bit for bit",
-      none["ledger_head"] == ctrl["ledger_head"] and none["llm"]["health"]["calls"] == 0)
-check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
-      set(ques["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"} and asked(ques) == asked(full) > 0,
-      f"{asked(ques)} questions in both")
-hf.shutdown()
 
-httpd.shutdown()
-print(f"\nSUMMARY: {sum(results)}/{len(results)} passed")
-sys.exit(0 if all(results) else 1)
+determinism = {}
+for mode in ("alike", "counter"):          # answers alike to the same request and seed, or carrying state
+    model.reset(mode)
+    (tools / "sirisys_determinism.json").unlink(missing_ok=True)
+    p = run(["run_report.py", "--backend", "ollama", "--profile", "minimal", "--cycles", "40",
+             "--determinism"], tools, OLLAMA_HOST=model.url)
+    written = tools / "sirisys_determinism.json"
+    determinism[mode] = (json.loads(written.read_text()).get("determinism") or {}
+                         if p.returncode == 0 and written.exists() else {})
+alike, stateful = determinism["alike"], determinism["counter"]
+check("the determinism check tells a model that answers alike from one that does not, in its own file",
+      alike.get("same") is True and stateful.get("same") is False
+      and stateful.get("diverged_at_cycle") is not None and not (tools / "sirisys_report.json").exists(),
+      f"alike: same ledger {alike.get('same')}; stateful: same ledger {stateful.get('same')}, "
+      f"parted at cycle {stateful.get('diverged_at_cycle')}")
+
+with quiet():
+    import run_report
+    first, again = (run_report.run_arm(0, 30, False, no_log, profile="minimal") for _ in range(2))
+    other = run_report.run_arm(1, 30, False, no_log, profile="minimal")
+distinct = first["percept_catalog"]["distinct_targets"]
+check("run_report feeds the synthetic stream when asked, reproducibly",
+      distinct > 2 and first["trace"] == again["trace"] and first["trace"] != other["trace"],
+      f"{distinct} distinct percepts; seed 0 twice identical: {first['trace'] == again['trace']}; "
+      f"seed 1 different: {first['trace'] != other['trace']}")
+
+# The arm that keeps only the Sombunal questions: exact by construction
+model.reset("counter")
+with quiet(), environment(OLLAMA_HOST=model.url):
+    control = run_report.run_arm(0, 60, False, no_log, backend="ollama", profile="minimal")
+    arms = {channels: run_report.run_arm(0, 60, True, no_log, backend="ollama", profile="minimal",
+                                         channels=channels)
+            for channels in ("none", "questions", "all")}
+model.close()
+asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels, r in arms.items()}
+check("withholding every channel through the model path gives the control, bit for bit",
+      arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
+check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
+      set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
+      and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")
+
+check.finish()
