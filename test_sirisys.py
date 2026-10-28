@@ -3,7 +3,7 @@ torn writes, single writer, determinism without a PRNG, bounded memory.
 Put this file next to the newest Sirisys_Framework_v13_X.py.
 Run: python3 test_sirisys.py   (STEPS=40 by default). No API key needed:
 degraded model mode with deterministic perception."""
-import importlib.util, io, os, sys, json, tempfile, shutil, time, contextlib
+import importlib.util, io, os, sys, json, tempfile, shutil, statistics, time, contextlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -170,9 +170,11 @@ if hasattr(m10, "run_cycle"):
         ss = m10.new_session(m10.LLMIntermediary(backend="none")); ts = []
         for c in range(900):
             t = time.perf_counter(); m10.run_cycle(ss, c); ts.append(time.perf_counter() - t)
-    early, late = sum(ts[300:450]) / 150, sum(ts[750:900]) / 150
+    # Medians: a cost that grows moves the median; a pause of the machine
+    # (another program, the garbage collector) does not.
+    early, late = statistics.median(ts[300:450]), statistics.median(ts[750:900])
     check("compute cost per cycle flat (late/early < 1.3)", late / early < 1.3,
-          f"{1000*early:.2f} → {1000*late:.2f} ms/cycle")
+          f"{1000*early:.2f} → {1000*late:.2f} ms/cycle (medians)")
 
 print("\n== T12 · A resumed instance equals an uninterrupted one")
 if hasattr(m_new, "synthetic_percepts"):

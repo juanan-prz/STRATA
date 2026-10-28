@@ -7,11 +7,12 @@
 | `Sirisys_Framework_v13_3.py` | El sistema. Contiene el ciclo canónico, la continuidad y el ledger. |
 | `Sirisys_Server.py` | Arranca el modo experimento y sirve el campo al visualizador en vivo. |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework. |
-| `run_report.py` | Ejecuciones instrumentadas y el informe `sirisys_report.json`. |
-| `field_topology.py` | Topología del campo, de solo lectura. La registran `run_report.py` y `live_c2.py`. |
+| `run_report.py` | Ejecuciones instrumentadas: un brazo con modelo frente a un brazo de control, con los mismos flujos sintéticos. Escribe `sirisys_report.json`. |
+| `field_topology.py` | Topología y profundidad del campo, de solo lectura. La registran `run_report.py` y `live_c2.py`. |
+| `sirisys_measures.py` | Mediciones compartidas: los criterios de autoajuste y la vigilancia del modelo, que detiene una ejecución si el modelo no responde. |
 | `Sirisys_Live_Visualizer.html` | Visualizador en vivo. |
 | `Sirisys_Static_Visualizer.html` | Abre en el navegador un `state.json` guardado y muestra su topología (sin servidor). |
-| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py` | Pruebas. Ejecútalas tras cada cambio. |
+| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Pruebas. Ejecútalas tras cada cambio. |
 | `measure_phase3.py` | Mide los criterios de autoajuste (3 flujos × 5.000 ciclos: cristalización, crecimiento, energía, coste). |
 | `soak.py`, `live_c2.py` | Pruebas de resistencia: una vida larga (50.000 ciclos) y perceptos reales. |
 | `requirements.txt` | Dependencias de pip. |
@@ -46,13 +47,30 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 ## Informes
 
 ```bash
-python3 run_report.py --cycles 150 --seeds 3                     # 3 flujos sintéticos reproducibles
+python3 run_report.py --cycles 150 --seeds 3 --backend none     # 3 flujos sintéticos reproducibles, sin modelo
 python3 run_report.py --backend ollama                           # con el modelo local
 python3 run_report.py --percepts live                            # perceptos reales
 python3 run_report.py --backend ollama --profile minimal         # sin narración ni hora del día
 ```
 
 Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a comparar.
+
+**Criterios.** Cada ejecución se juzga con los criterios de autoajuste, con el mismo código que `measure_phase3.py`:
+- cristales duraderos en cada ventana de 1.000 ciclos;
+- parpadeo ≤ 5 %;
+- sin tendencia de crecimiento;
+- coste plano del ciclo (sin contar el tiempo del modelo);
+- energía de los 3 constructos más cargados, acotada.
+
+El informe compara los dos brazos sobre los mismos flujos.
+
+**Vigilancia del modelo.** Un modelo que falla o responde vacío deja el campo con nombres sintéticos sin avisar. Con modelo, `run_report.py` y `live_c2.py`:
+- hacen antes dos llamadas reales y no empiezan si las respuestas faltan o llegan vacías;
+- se detienen (código 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50.
+
+El resultado se escribe igualmente, marcado como `aborted` y con el motivo.
+
+**Perceptos reales.** `live_c2.py` registra lo que percibió el campo (recuentos por cada 1.000 ciclos y la secuencia completa) y las preguntas al Sombunal que entraron. Los perceptos reales leen la máquina: no la uses mientras corre una ejecución que quieras comparar.
 
 **Topología.** `run_report.py` y `live_c2.py` guardan además un `topology_trace`: dos muestras por respiración, una en expansión y otra en contracción. Cada muestra recoge la forma del campo:
 - componentes débiles y ciclos dirigidos;
@@ -63,7 +81,7 @@ Usa siempre el mismo backend, modelo y perfil para las ejecuciones que vayas a c
 - la profundidad de cada conflicto, que el campo limita en el umbral Adsurdic;
 - la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, preguntas).
 
-Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración y su contracción. La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella.
+Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su contracción y su tolerancia. La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella.
 
 ## Continuidad y disco
 
@@ -78,8 +96,19 @@ python3 test_sirisys.py      # integridad, determinismo sin azar, memoria acotad
 python3 test_phase1.py       # motor del experimento, backends del modelo y capa web (no necesita Ollama ni FastAPI)
 python3 test_phase2_guarantee.py   # medir topología y profundidad no altera el ledger ni el campo
 python3 test_phase4.py       # ledger por segmentos, manipulación, cortes durante una rotación, disco
+python3 test_ontology.py     # invariantes del campo, ciclo a ciclo, con y sin modelo
 python3 measure_phase3.py    # criterios de autoajuste (≈1 min)
-python3 soak.py 50000 > soak_result.json            # vida larga (≈3 min)
-python3 live_c2.py 3000 none > live_none.json       # perceptos reales, sin modelo (≈3 min)
-python3 live_c2.py 3000 ollama > live_ollama.json   # perceptos reales, con el modelo local
+python3 soak.py 50000 > soak_result.json                   # vida larga (≈3 min)
+python3 live_c2.py 10000 none minimal > live_none.json     # perceptos reales, sin modelo (≈10 min)
+python3 live_c2.py 3000 ollama minimal > live_ollama.json  # perceptos reales, con el modelo local
 ```
+
+`test_ontology.py` comprueba lo que el campo debe ser según la fuente primaria:
+- los Zero Points nunca son operandos;
+- el operando mayor lidera y transmite su quiralidad;
+- un cristal nunca se degrada ni se altera;
+- nada desaparece sin prueba de terminación;
+- ningún cristal concluye en el ciclo en que se forma;
+- con modelo, cada petición lleva una semilla orientada por la historia.
+
+Hay un caso conocido, que solo se admite durante la primera respiración: un cristal nuevo cuyo soporte `BOTH` erosiona la UCO en ese mismo ciclo.

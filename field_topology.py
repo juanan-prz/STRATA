@@ -208,11 +208,12 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
     if genealogy is not None:
         result["genealogy"] = genealogy.summary(field, nodes)
 
-    # Annotate with cycle info — read contraction/breaths from field, not cycle math
+    # Annotate with cycle info — breath, contraction and tolerance read from the field
     if cycle is not None:
         result["cycle"] = cycle
         result["breath"] = field.breaths
         result["contraction"] = round(field.contraction, 3)
+        result["tolerance"] = round(field.tolerance, 3)
 
     return result
 

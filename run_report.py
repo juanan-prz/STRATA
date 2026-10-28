@@ -19,19 +19,25 @@ WHAT TO DO
   Keep the SAME backend and model for every run you intend to compare.
 
 COST
-  The framework caps itself at 4 model calls per cycle. 150 cycles x 3 seeds
-  is at most ~1800 short calls. The report states the actual number, broken
-  down by purpose, and counts failures separately.
+  The framework caps itself at 4 model calls per cycle. Before the arms run,
+  two real calls prove the model answers and give an upper estimate of the
+  model time. The report states the actual number of calls, broken down by
+  purpose, with failures, empty answers and latency.
 
-THE PREDICTION UNDER TEST  (written before the run, from degraded calibration)
-  A real model should put the field in the "rich" regime measured
-  synthetically, not the "open" one:
-      steady-state crystallization  ~1 new Apparent per 10 cycles (cycle 100+)
-      tail growth                   under ~10 constructs over cycles 100-150
-      BOTH fraction                 roughly 0.25-0.45, not climbing past 0.5
-  The refuting outcome is unbounded growth (100+ constructs in the tail) with
-  BOTH climbing back above 0.5: the model would then be supplying novelty
-  faster than the field can consolidate it.
+WHAT THE REPORT COMPARES
+  The model arm against a control arm without a model, on the same percept
+  streams. Each run is judged by the Phase 3 criteria (sirisys_measures.
+  LifeCriteria, the same code as measure_phase3.py): durable crystals in every
+  1000-cycle window, flicker <= 5 %, no growth trend, flat cost of the cycle
+  itself (model time excluded), bounded top-3 energy; with the tolerance the
+  field sets for itself. Each run also carries the topology trace.
+
+MODEL HEALTH
+  A model that fails or answers empty leaves the field on synthetic names
+  without notice. With --backend ollama|anthropic the run stops (exit code 3)
+  if the model does not answer before the arms start, or if during the run
+  3 calls in a row fail or more than 10 % of the last 50 fail or come back
+  empty. The report is still written, marked "aborted", with the reason.
 
 NOTE ON REPRODUCIBILITY
   The framework has no PRNG. With --percepts synthetic (default)
@@ -51,6 +57,7 @@ import traceback
 from collections import Counter, defaultdict
 from pathlib import Path
 import field_topology  # read-only topology (pure Python, no networkx)
+from sirisys_measures import LifeCriteria, ModelHealth
 
 HERE = Path(__file__).resolve().parent
 OUTPUT = HERE / "sirisys_report.json"
@@ -120,15 +127,18 @@ def integrity_check():
 
 
 class CountingLLM(S.LLMIntermediary):
-    """Wraps the real Intermediary to record every call, output and failure."""
+    """Wraps the real Intermediary to record every call and output; `health`
+    watches failures, empty answers and latency (sirisys_measures.ModelHealth)."""
 
     def __init__(self, force_degraded=False, model=None, backend=None):
         self.force_degraded = force_degraded
         self.by_kind = Counter()
         self.empty_by_kind = Counter()
-        self.failures = []
         self.samples = defaultdict(list)
+        self.health = ModelHealth()
         super().__init__(model=model, backend=backend)
+        if self.available:
+            self.health.attach(self)
 
     def _init(self):
         if self.force_degraded:
@@ -143,13 +153,6 @@ class CountingLLM(S.LLMIntermediary):
         elif len(self.samples[kind]) < 25:
             self.samples[kind].append(str(out)[:160])
         return out
-
-    def _call(self, prompt, temperature=0.85):
-        try:
-            return super()._call(prompt, temperature)
-        except Exception as ex:                                  # noqa: BLE001
-            self.failures.append(repr(ex)[:200])
-            return ""
 
     def propose_emergent(self, x, y, xs, ys):
         return self._record("propose_emergent",
@@ -235,8 +238,10 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         ss = S.new_session(llm=llm)
     clock, field, conc, cuss = ss.clock, ss.field, ss.concordancy, ss.cussive
 
-    trace, percepts, promoted, errors, topo_trace = [], Counter(), [], [], []
+    # `percepts` is the source ("synthetic" or "live"); what arrives is counted apart
+    trace, perceived, promoted, errors, topo_trace = [], Counter(), [], [], []
     genealogy, zero_points = field_topology.Genealogy(), set(S.ZERO_POINTS.keys())
+    life, aborted = LifeCriteria(S), None
     born_names, total_closures = [], 0
     prev = set(field.constructs)
     birth, lifespans = {n: 0 for n in prev}, []
@@ -251,9 +256,12 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
                 prof = PROFILES[profile]
                 ev = (S.synthetic_percepts(cyc, seed, prof["include_hour"])
                       if percepts == "synthetic" else None)
+                t_cycle, t_model = time.perf_counter(), llm.health.model_seconds
                 r = S.run_cycle(ss, cyc, percepts=ev, **prof)
+                field_seconds = ((time.perf_counter() - t_cycle)
+                                 - (llm.health.model_seconds - t_model))
             for e in r["percepts"]:
-                percepts[e["tgt"]] += 1
+                perceived[e["tgt"]] += 1
         except Exception:                                        # noqa: BLE001
             errors.append({"cycle": cyc,
                            "traceback": traceback.format_exc()[-900:]})
@@ -285,7 +293,8 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "new_apparents": field.apparents_total - before_a,
         })
         trace.append(m)
-        # Read-only: genealogy every cycle, topology once per half-breath
+        # Read-only: criteria and genealogy every cycle, topology once per half-breath
+        life.after_cycle(ss, cyc, field_seconds)
         genealogy.update(conc, cyc, field)
         if cyc % (S.BREATH_PERIOD // 2) == 0:
             topo_trace.append(field_topology.field_topology(
@@ -297,9 +306,18 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             log(f"    cycle {cyc:4}  constructs {m['constructs']:4}  "
                 f"apparents {m['apparents']:4}  conflicts {m['conflicts']:3}  "
                 f"BOTH {m['both_frac']:.3f}  calls {llm.call_count}")
+        if llm.health.tripped:
+            aborted = f"cycle {cyc}: {llm.health.reason}"
+            log(f"    MODEL HEALTH — {aborted}")
+            break
+
+    criteria = life.result()
 
     return {
         "seed": seed,
+        "aborted": aborted,
+        "criteria": criteria,
+        "criteria_pass": LifeCriteria.verdict(criteria),
         "trace": trace,
         "topology_trace": topo_trace,
         "errors": errors,
@@ -310,13 +328,14 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             "total_calls": llm.call_count,
             "calls_by_kind": dict(llm.by_kind),
             "empty_responses_by_kind": dict(llm.empty_by_kind),
-            "failure_count": len(llm.failures),
-            "failures": llm.failures[:20],
+            "failure_count": llm.health.failures,
+            "failures": llm.health.errors,
+            "health": llm.health.report(),
             "output_samples": {k: v for k, v in llm.samples.items()},
         },
         "percept_catalog": {
-            "distinct_targets": len(percepts),
-            "counts": dict(percepts.most_common(40)),
+            "distinct_targets": len(perceived),
+            "counts": dict(perceived.most_common(40)),
         },
         "lifespans": {
             "n": len(lifespans),
@@ -359,13 +378,22 @@ def summarize(arm):
         "total_closures": round(statistics.mean(
             r["total_closures"] for r in arm), 1),
         "total_llm_calls": sum(r["llm"]["total_calls"] for r in arm),
-        "llm_failures": sum(r["llm"]["failure_count"] for r in arm),
         "distinct_percepts": round(statistics.mean(
             r["percept_catalog"]["distinct_targets"] for r in arm), 1),
         "median_lifespan": round(statistics.mean(
             [r["lifespans"]["median"] for r in arm
              if r["lifespans"]["median"] is not None] or [0]), 2),
         "errors": sum(len(r["errors"]) for r in arm),
+        "criteria_pass": [r["criteria_pass"] for r in arm],
+        "durable_per_1000": [r["criteria"]["durable_per_1000"] for r in arm],
+        "flicker_share": [r["criteria"]["flicker_share"] for r in arm],
+        "constructs_trend": [r["criteria"]["constructs_trend"] for r in arm],
+        "top3_energy_trend": [r["criteria"]["top3_energy_trend"] for r in arm],
+        "tolerance_first_last": [r["criteria"]["tolerance_first_last"] for r in arm],
+        "model_calls": sum(r["llm"]["health"]["calls"] for r in arm),
+        "model_failures": sum(r["llm"]["health"]["failures"] for r in arm),
+        "model_empty": sum(r["llm"]["health"]["empty"] for r in arm),
+        "aborted": [r["aborted"] for r in arm if r["aborted"]],
     }
     if n > TAIL_START:
         out["steady_rate_per_10cyc"] = round(statistics.mean(
@@ -431,9 +459,30 @@ def main():
     log(f"  cycles x seeds     : {args.cycles} x {args.seeds}")
     log(f"  both_floor {BOTH_FLOOR}  min_references {MIN_REFERENCES}  "
         f"quantum {EXCHANGE_QUANTUM}")
+    explicit = args.backend in ("ollama", "anthropic")
+    health_probe = None
+    if llm_ok:
+        health_probe = ModelHealth.probe(probe, cycles=args.cycles * args.seeds,
+                                         calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE)
+        if health_probe["ok"]:
+            log(f"  model probe        : ok · {health_probe['call_s']} s per call "
+                f"(first call, with loading: {health_probe['load_s']} s)")
+            log(f"  model time, at most: ~{health_probe['estimated_model_hours_max']} h "
+                f"for the model arm ({args.cycles} cycles x {args.seeds} seeds)")
+            log(f"  sample names       : {' | '.join(a[:40] for a in health_probe['answers'])}")
+        else:
+            log("")
+            log(f"  STOP: the model does not answer properly — {health_probe['reason']}.")
+            log(f"  Answers received: {health_probe.get('answers')}")
+            log("  Nothing was run. Fix the model (ollama list; try a general-purpose")
+            log("  model with --model) and run again.")
+            sys.exit(3)
     if not llm_ok:
         log("")
-        log("  WARNING: model NOT active — this run cannot test the prediction.")
+        if explicit:
+            log(f"  STOP: --backend {args.backend} was asked for, but the model is not available.")
+        else:
+            log("  WARNING: model NOT active — this run cannot compare model and control.")
         if probe.backend == "ollama":
             log(f"  Open the Ollama app (it must answer at {probe.host}), check the")
             log("  model is installed with: ollama list — then re-run.")
@@ -443,6 +492,9 @@ def main():
             log('      export ANTHROPIC_API_KEY="sk-ant-..."')
         else:
             log("  Backend 'none' selected: the run uses no model.")
+        if explicit:
+            log("  Nothing was run.")
+            sys.exit(3)
 
     report = {
         "config": {
@@ -457,6 +509,7 @@ def main():
             "seeds": args.seeds,
             "tail_start": TAIL_START,
             "llm_active": llm_ok,
+            "model_probe": health_probe,
             "backend": probe.backend,
             "profile": args.profile,
             "percepts": args.percepts,
@@ -469,44 +522,56 @@ def main():
                 "With --percepts synthetic a run is bit-reproducible (the "
                 "framework has no PRNG); with live percepts it reads this machine."),
         },
-        "prediction_under_test": {
-            "regime_expected": "rich",
-            "steady_rate_per_10cyc": "~1",
-            "tail_growth_constructs": "<10",
-            "both_frac": "0.25-0.45, not climbing above 0.5",
-            "refuting_outcome": "tail growth >100 constructs with BOTH > 0.5",
-        },
+        "acceptance_criteria": (
+            "Phase 3, per run: durable crystals (life >= one breath) in every "
+            "1000-cycle window, flicker <= 5 %, constructs trend <= 1.2, cost of the "
+            "cycle itself flat (late <= 1.5 x early + 0.5 ms), top-3 energy trend <= 1.2"),
         "arms": {},
     }
 
-    if llm_ok:
-        log("\n  --- arm: LLM active ---")
-        arm = [run_arm(s, args.cycles, True, log, args.model, args.backend, args.profile, args.percepts) for s in range(args.seeds)]
-        report["arms"]["llm"] = {"runs": arm, "summary": summarize(arm)}
-
-    if not args.skip_degraded:
-        log("\n  --- arm: degraded control ---")
-        arm = [run_arm(s, args.cycles, False, log, args.model, args.backend, args.profile, args.percepts) for s in range(args.seeds)]
-        report["arms"]["degraded"] = {"runs": arm, "summary": summarize(arm)}
+    aborted = None
+    plan = ([("llm", True)] if llm_ok else []) + ([] if args.skip_degraded else [("degraded", False)])
+    for name, active in plan:
+        log(f"\n  --- arm: {'LLM active' if active else 'degraded control'} ---")
+        arm = []
+        for s in range(args.seeds):
+            arm.append(run_arm(s, args.cycles, active, log, args.model, args.backend,
+                               args.profile, args.percepts))
+            if arm[-1]["aborted"]:
+                aborted = f"arm {name}, seed {s}, {arm[-1]['aborted']}"
+                break
+        report["arms"][name] = {"runs": arm, "summary": summarize(arm)}
+        if aborted:
+            break
+    report["aborted"] = aborted
 
     log("\n" + "=" * 70)
     for name, a in report["arms"].items():
         s = a["summary"]
+        if "error" in s:
+            log(f"  {name:9} {s['error']}")
+            continue
         log(f"  {name:9} constructs {s['final_constructs']:7}  "
             f"apparents {s['final_apparents']:6}  "
             f"conflicts {s['final_conflicts']:5}  "
             f"BOTH {s['final_both_frac']:.3f}")
-        log(f"  {'':9} steady rate {s['steady_rate_per_10cyc']}  "
-            f"tail growth {s['tail_growth_constructs']}  "
-            f"calls {s['total_llm_calls']}  failures {s['llm_failures']}  "
-            f"errors {s['errors']}")
+        log(f"  {'':9} criteria {['PASS' if v else 'FAIL' if v is False else 'n/a' for v in s['criteria_pass']]}  "
+            f"durable/1000 {s['durable_per_1000']}  flicker {s['flicker_share']}")
+        log(f"  {'':9} model calls {s['model_calls']}  failures {s['model_failures']}  "
+            f"empty {s['model_empty']}  errors {s['errors']}")
 
+    if aborted:
+        log("")
+        log(f"  STOPPED — model health: {aborted}")
+        log("  The report below is partial. Check Ollama and the model, then run again.")
     report["console"] = lines
     OUTPUT.write_text(json.dumps(report, indent=1, ensure_ascii=False),
                       encoding="utf-8")
     print(f"\n  written: {OUTPUT.name}   ({OUTPUT.stat().st_size // 1024} KB)")
     print("  Send that file for analysis.")
     print("=" * 70)
+    if aborted:
+        sys.exit(3)
 
 
 if __name__ == "__main__":

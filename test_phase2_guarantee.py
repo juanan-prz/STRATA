@@ -5,6 +5,9 @@ Runs N cycles with synthetic percepts, no model — once with metrics enabled
 (topology every half-breath, genealogy every cycle), once disabled — and
 proves the ledger head is identical bit-for-bit.
 
+The same with a (fake, deterministic) model in the loop, with every observer
+on: topology, genealogy, the Phase 3 criteria and the model-health watch.
+
 Also checks the genealogical depth (percepts and anchors at depth 0, each
 product one generation below its deeper parent) and verifies the proof
 invariant every cycle.
@@ -12,7 +15,8 @@ invariant every cycle.
 Usage: python3 test_phase2_guarantee.py [cycles]
        default: 200 cycles (same as T12 resume equivalence)
 """
-import contextlib, io, importlib.util, json, os, shutil, sys, tempfile, time
+import contextlib, hashlib, io, importlib.util, json, os, shutil, sys, tempfile, threading, time
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -38,23 +42,29 @@ def load_mod(tag):
     return m
 
 
-def run_cycles(m, workdir, cycles, topo=True):
-    """Run `cycles` with synthetic percepts, no model.
+def run_cycles(m, workdir, cycles, topo=True, host=None):
+    """Run `cycles` with synthetic percepts; no model, or the fake one at `host`.
     Return (ledger_head, field_dict, session, genealogy)."""
     import field_topology as ft
+    from sirisys_measures import LifeCriteria, ModelHealth
     m.set_ledger(m.ProofLedger(workdir / "l.jsonl"))
     genealogy = ft.Genealogy() if topo else None
+    life = LifeCriteria(m) if topo else None
     cwd = os.getcwd(); os.chdir(workdir)
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            llm = m.LLMIntermediary(backend="none")
+            llm = (m.LLMIntermediary(backend="ollama", host=host) if host
+                   else m.LLMIntermediary(backend="none"))
+            if topo and host:
+                ModelHealth().attach(llm)
             ss = m.new_session(llm=llm)
             for c in range(cycles):
                 percepts = m.synthetic_percepts(c, stream=0)
                 m.run_cycle(ss, c, percepts=percepts, narrate=False, include_hour=True)
-                # Read-only, as in run_report.py and live_c2.py: genealogy
-                # every cycle, topology every half-breath
+                # Read-only, as in run_report.py and live_c2.py: criteria and
+                # genealogy every cycle, topology every half-breath
                 if topo:
+                    life.after_cycle(ss, c, 0.0)
                     genealogy.update(ss.concordancy, c, ss.field)
                     if c % (m.BREATH_PERIOD // 2) == 0:
                         ft.field_topology(ss.field, cycle=c, zero_points=set(m.ZERO_POINTS.keys()),
@@ -88,6 +98,31 @@ check("ledger head identical with topology on/off",
 # Field dict identical
 check("field state identical with topology on/off",
       json.dumps(field_on, sort_keys=True, default=str) == json.dumps(field_off, sort_keys=True, default=str))
+
+# ── With a model in the loop ──────────────────────────────────────────
+class FakeModel(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _send(self, obj):
+        b = json.dumps(obj).encode(); self.send_response(200)
+        self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(b)))
+        self.end_headers(); self.wfile.write(b)
+    def do_GET(self):
+        self._send({"models": [{"name": "fake-model:latest"}]})
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        key = f"{body['messages'][-1]['content']}::{body.get('options', {}).get('seed')}"
+        self._send({"message": {"role": "assistant",
+                                "content": "Construct " + hashlib.sha256(key.encode()).hexdigest()[:8]}})
+httpd = ThreadingHTTPServer(("127.0.0.1", 0), FakeModel)
+threading.Thread(target=httpd.serve_forever, daemon=True).start()
+host = f"http://127.0.0.1:{httpd.server_port}"
+d_mon, d_moff = Path(tempfile.mkdtemp()), Path(tempfile.mkdtemp())
+hm_on, *_  = run_cycles(load_mod("model_on"),  d_mon,  N // 2, topo=True,  host=host)
+hm_off, *_ = run_cycles(load_mod("model_off"), d_moff, N // 2, topo=False, host=host)
+httpd.shutdown()
+check("with a model in the loop, every observer on: the same ledger head",
+      hm_on == hm_off, f"on={hm_on[:16]}  off={hm_off[:16]}")
+shutil.rmtree(d_mon, ignore_errors=True); shutil.rmtree(d_moff, ignore_errors=True)
 
 # ── Genealogical depth ────────────────────────────────────────────────
 print("\n== Genealogical depth")

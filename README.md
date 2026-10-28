@@ -21,9 +21,10 @@ Author: Juan A. Pérez-Gómez.
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live visualizer |
 | `Sirisys_Live_Visualizer.html` | Live topology in the browser (experiment mode) |
 | `Sirisys_Static_Visualizer.html` | Opens a saved `state.json` in the browser, no server needed |
-| `run_report.py` | Instrumented runs; writes `sirisys_report.json` |
-| `field_topology.py` | Read-only topology of the field, recorded by `run_report.py` and `live_c2.py` |
-| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py` | Test suites |
+| `run_report.py` | Instrumented runs: a model arm against a control arm on the same synthetic streams; writes `sirisys_report.json` |
+| `field_topology.py` | Read-only topology and depth of the field, recorded by `run_report.py` and `live_c2.py` |
+| `sirisys_measures.py` | Shared measurements: the self-adjustment criteria, and the model-health watch that stops a run whose model does not answer |
+| `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Test suites |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Measurements: self-adjustment criteria, a long life, real percepts |
 | `requirements.txt` | Python dependencies |
 | `Guia_SIRISYS_Mac.pdf` | Step-by-step setup on a Mac for first-time users (Spanish) |
@@ -46,6 +47,8 @@ A model is optional. Without one everything runs and constructs get synthetic na
 - **Anthropic API**: `export ANTHROPIC_API_KEY="sk-ant-..."` in the terminal session. Never store the key in a file in this folder.
 
 Select the backend with `SIRISYS_LLM_BACKEND=ollama|anthropic|none` (or `--backend` in `run_report.py`), the model with `SIRISYS_LLM_MODEL`, and a non-default Ollama address with `OLLAMA_HOST`. Keep the same backend, model and profile across runs you intend to compare.
+
+A model that fails or answers empty would leave the field on synthetic names without notice. With a model, `run_report.py` and `live_c2.py` first make two real calls and stop if the answers are missing or empty; during the run they stop (exit code 3) when 3 calls in a row fail or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason.
 
 -----
 
@@ -116,15 +119,19 @@ python3 test_sirisys.py              # integrity, determinism, bounded memory
 python3 test_phase1.py               # experiment engine, model backends, web layer (no Ollama or FastAPI needed)
 python3 test_phase2_guarantee.py     # measuring topology and depth leaves the ledger and the field unchanged
 python3 test_phase4.py               # segmented ledger, tampering, crash during rotation, disk
+python3 test_ontology.py             # invariants of the field, cycle by cycle, with and without a model
 python3 measure_phase3.py            # self-adjustment criteria (3 streams × 5,000 cycles)
 python3 soak.py 50000 > soak_result.json
-python3 live_c2.py 3000 none > live_none.json        # real percepts, no model
-python3 live_c2.py 3000 ollama > live_ollama.json    # real percepts, local model
+python3 live_c2.py 10000 none minimal > live_none.json       # real percepts, no model
+python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3
+python3 live_c2.py 3000 ollama minimal > live_ollama.json    # real percepts, local model
 ```
 
-Each suite ends with a `SUMMARY` line; every check should pass.
+Each suite ends with a `SUMMARY` line; every check should pass. `test_ontology.py` checks what the field must be, from the primary source: Zero Points are never operands, the older operand leads and hands its chirality on, a crystal is never demoted or altered, nothing leaves without a termination proof, no crystal concludes in the cycle it forms, and with a model in the loop every request carries a seed oriented by the history. One case is known and allowed only during the first breath: a new crystal whose `BOTH` support is eroded by UCO in the same cycle.
 
-`run_report.py` and `live_c2.py` also write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field (weak components, directed cycles, reciprocity, clustering, the most connected construct, edges by tetralemmic state and by layer pair, and how much of the `BOTH` lies in the largest component) and two depths: the conflict depth of each conflict, which the field caps at the Adsurdic threshold, and the genealogical depth of every construct by layer, the number of `[::]` generations that separate it from what the field did not produce itself (percepts, anchors, questions). Zero Points are left out, and each sample carries its cycle, breath and contraction. The measurement only reads the field: the ledger head is identical with and without it.
+`run_report.py` and `live_c2.py` judge every run by the self-adjustment criteria (durable crystals in every 1000-cycle window, flicker ≤ 5 %, no growth trend, flat cost of the cycle itself, bounded top-3 energy), with the code `measure_phase3.py` uses. `live_c2.py` also records what the field perceived (counts per 1000 cycles and the whole sequence) and the Sombunal questions that entered it. Real percepts read the machine: leave it idle during a `live_c2.py` run whose results you intend to compare.
+
+`run_report.py` and `live_c2.py` also write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field (weak components, directed cycles, reciprocity, clustering, the most connected construct, edges by tetralemmic state and by layer pair, and how much of the `BOTH` lies in the largest component) and two depths: the conflict depth of each conflict, which the field caps at the Adsurdic threshold, and the genealogical depth of every construct by layer, the number of `[::]` generations that separate it from what the field did not produce itself (percepts, anchors, questions). Zero Points are left out, and each sample carries its cycle, breath, contraction and tolerance. The measurement only reads the field: the ledger head is identical with and without it.
 
 -----
 
