@@ -49,7 +49,7 @@ A model is optional. Without one everything runs and constructs get synthetic na
 
 Select the backend with `SIRISYS_LLM_BACKEND=ollama|anthropic|none` (or `--backend` in `run_report.py`), the model with `SIRISYS_LLM_MODEL`, and a non-default Ollama address with `OLLAMA_HOST`. Keep the same backend, model and profile across runs you intend to compare.
 
-A model that fails or answers empty would leave the field on synthetic names without notice. With a model, `run_report.py` and `live_c2.py` first make two real calls and stop if the answers are missing or empty; during the run they stop (exit code 3) when 3 calls in a row fail or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason. The probe also records which model exactly answered (for Ollama: digest, size, parameters and quantization), and the health report keeps the first answers of each kind.
+A model that fails or answers empty would leave the field on synthetic names without notice. With a model, `run_report.py` and `live_c2.py` first make two real calls and stop if the answers are missing or empty; during the run they stop (exit code 3) when 3 calls in a row fail or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason. The probe also records which model exactly answered (for Ollama: digest, size, parameters and quantization), and the health report keeps the first answers of each kind. Experiment mode watches the model the same way: when the watch trips it pauses once, and the live visualizer says why.
 
 The model reaches the field through two channels: the names it gives (they become construct keys, and so enter every orientation) and the Sombunal questions (they enter the field as constructs). `run_report.py` separates them with a third arm in which the model only asks the questions while the names stay the control's; withholding the questions too gives the control bit for bit, which `test_phase1.py` checks.
 
@@ -83,7 +83,7 @@ For calibration and refinement. Every start and every Reset is a new instance in
 | `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
 | `--port` | Web port (default 8000) |
 
-The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". The server can be left cycling with no browser open: it keeps only the latest 200 snapshots for the next viewer. The interface (the routes and the control actions) is described at the top of `Sirisys_Server.py`; details are in `Sirisys_Guia_v13.md`.
+The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". Its header shows the ledger (proofs sealed and the head) and the model with its watch; the event log can be filtered by kind of entry. The server can be left cycling with no browser open: it keeps only the latest 200 snapshots for the next viewer. The interface (the routes and the control actions) is described at the top of `Sirisys_Server.py`; details are in `Sirisys_Guia_v13.md`.
 
 -----
 

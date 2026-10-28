@@ -54,11 +54,16 @@ with quiet():
     engine.running = False
     time.sleep(0.2)
 snapshots, first_run = engine.drain(), engine.run_dir
-expected = {"cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded",
-            "field", "ledger", "instability", "modes", "layers", "action"}
-check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys(),
-      f"{len(snapshots)} snapshots")
+expected = {"run", "cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded", "field",
+            "ledger", "instability", "modes", "layers", "action", "breath", "crystallized", "model_watch"}
+check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys()
+      and all("energy" in c for c in snapshots[-1]["field"]["constructs"]), f"{len(snapshots)} snapshots")
 check("snapshot is JSON-serializable", bool(json.dumps(snapshots[-1])))
+crystallized = sum(len(s["crystallized"]) for s in snapshots)
+check("a snapshot says which of the cycle's promotions crystallized, from the field's own record",
+      all(set(s["crystallized"]) <= set(s["promoted_names"]) for s in snapshots) and 0 < crystallized
+      == snapshots[-1]["apparents"] - snapshots[0]["apparents"] + len(snapshots[0]["crystallized"]),
+      f"{crystallized} of {sum(s['promoted'] for s in snapshots)} promotions")
 with quiet():                                       # the visualizer's buttons
     engine.control("pause")
     time.sleep(0.1)
@@ -175,8 +180,10 @@ async def go():
     control = routes[('POST', '/api/control/{{action}}')]
     replies = [(await control(action, Request(body))).content
                for action, body in (('play', None), ('reset', {{'stream': 'abc'}}), ('pause', [1, 2]))]
-    # two malformed messages, one step, half a second for its snapshot, then the client goes
-    sent, script = [], ['[1]', 'not json', json.dumps({{'action': 'step'}}), 0.5]
+    # two malformed messages, one step, half a second for its snapshot; then play, and a step
+    # while playing: one more cycle and the engine pauses itself; then the client goes
+    sent, script = [], ['[1]', 'not json', json.dumps({{'action': 'step'}}), 0.5,
+                        json.dumps({{'action': 'play'}}), 0.3, json.dumps({{'action': 'step'}}), 0.5]
     class Socket:
         async def accept(self): pass
         async def send_json(self, o): sent.append(o)
@@ -189,7 +196,9 @@ async def go():
     await asyncio.wait_for(routes[('WS', '/ws')](Socket()), 10)
     async with uvicorn.APP.lifespan(uvicorn.APP): pass
     print(json.dumps({{'replies': replies, 'sent': [m.get('type') for m in sent],
-                      'acks': [m.get('stepping') for m in sent if m.get('type') == 'ack']}}))
+                      'acks': [m.get('stepping') for m in sent if m.get('type') == 'ack'],
+                      'told': [m['running'] if m.get('type') == 'status' else m['status']['running']
+                               for m in sent if m.get('type') in ('status', 'ack')]}}))
 asyncio.run(go())
 """)
 p = run(["web.py"], stub, 60)
@@ -201,8 +210,12 @@ check("malformed control requests get an answer, not an error (a bad stream, a b
       and replies[2] == {"ok": True, "running": False}, str(replies)[:90] if web else output[-90:])
 check("WebSocket: status first, malformed messages ignored, a step acknowledged and its snapshot sent, "
       "exits when the client goes",
-      sent[:1] == ["status"] and web.get("acks") == [True] and "cycle" in sent[sent.index("ack"):],
+      sent[:1] == ["status"] and web.get("acks", [])[:1] == [True] and "cycle" in sent[sent.index("ack"):],
       f"{len(sent)} messages, {sent.count('cycle')} snapshot(s)" if web else output[-90:])
+told = web.get("told", [])
+check("WebSocket: when the engine pauses itself (a step while playing), the client is told",
+      web.get("acks") == [True, None, True] and True in told and told[-1] is False,
+      f"running as told: {told}" if web else output[-90:])
 
 # Nobody reading: the queue keeps only the latest snapshots, so memory stays flat
 with quiet():
@@ -239,6 +252,22 @@ with quiet():
     names = [llm.propose_emergent("a", "b", "TRUE", "TRUE") for _ in range(4)]
 check("watching trips after 3 failed calls in a row (the field itself only sees empty names)",
       health.tripped and health.failures >= 3 and not any(names), health.reason)
+model.reset("error", after=20)                      # experiment mode: a model that starts failing
+server.log.disabled = True                          # its warning, on the console, is for the user
+with quiet(), environment(SIRISYS_LLM_BACKEND="ollama", OLLAMA_HOST=model.url):
+    watched = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    watched.running = True
+    paused = wait_for(lambda: not watched.running)
+    paused_at, status = watched.cycle, watched.status()
+    watched.control("play")
+    went_on = wait_for(lambda: watched.cycle >= paused_at + 5)
+    watched.shutdown()
+server.log.disabled = False
+said = (status["model"]["watch"] or {}).get("reason") or ""
+check("experiment mode pauses once when the model watch trips, says why in its status and "
+      "snapshots, and Play goes on",
+      paused and status["model"]["active"] and "in a row failed" in said and went_on
+      and watched.drain()[-1]["model_watch"]["tripped"], f"paused at cycle {paused_at}: {said[:50]}")
 
 check.section("5 · The experiment tools: run_report.py and live_c2.py")
 tools = scratch()                                   # copies: nothing here touches the user's reports

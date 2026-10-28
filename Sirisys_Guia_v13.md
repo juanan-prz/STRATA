@@ -43,6 +43,7 @@ python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del d
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.
 - `--host` fija la dirección en la que escucha el servidor. Por defecto es `127.0.0.1`: solo se puede abrir desde la misma máquina.
 - El visualizador se conecta por WebSocket. Si el entorno lo bloquea, consulta al servidor por HTTP y muestra «connected (polling)»; cada 30 s vuelve a probar el WebSocket.
+- La cabecera muestra el ledger (pruebas selladas y cabeza) y el modelo con su vigilancia. El registro de eventos se filtra por tipo de entrada: productos de `[::]`, colapsos cúsicos, conclusiones, narración, preguntas al Sombunal y avisos del modelo.
 - El servidor puede quedarse ciclando sin ningún navegador abierto: guarda solo las 200 instantáneas más recientes para quien abra el visualizador después. Las rutas y las acciones de control están descritas al principio de `Sirisys_Server.py`.
 - Modelo: `SIRISYS_LLM_BACKEND=anthropic|ollama|none`, `SIRISYS_LLM_MODEL`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`.
 
@@ -73,7 +74,7 @@ El informe compara los tres brazos sobre los mismos flujos. El modelo entra en e
 - hacen antes dos llamadas reales y no empiezan si las respuestas faltan o llegan vacías;
 - se detienen (código 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50.
 
-El resultado se escribe igualmente, marcado como `aborted` y con el motivo. La prueba inicial registra además qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
+El resultado se escribe igualmente, marcado como `aborted` y con el motivo. El modo experimento vigila igual: si la vigilancia salta, se pausa una vez y el visualizador dice por qué; Play continúa. La prueba inicial registra además qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
 
 **Determinismo.** El framework no usa azar, pero el motor de un modelo puede tenerlo aunque cada petición lleve una semilla derivada de la historia. Con `--determinism`, el brazo con modelo recorre dos veces el primer flujo y el informe dice si las dos ejecuciones sellaron el mismo ledger y, si no, en qué ciclo se separaron, con un ejemplo de respuestas distintas. Escribe `sirisys_determinism.json` y no toca `sirisys_report.json`. Todos los informes imprimen además la cabeza del ledger de cada ejecución.
 

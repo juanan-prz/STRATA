@@ -129,7 +129,14 @@
     animation: heartbeat 1.4s ease-in-out infinite;
   }
   @keyframes heartbeat { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+  .header-status > * { flex-shrink: 0; }
   .stat-inline strong { margin-left: 4px; color: var(--text-bright); font-weight: 600; }
+  .stat-inline.warn, .stat-inline.warn strong { color: var(--warn); }
+  .stat-inline.err, .stat-inline.err strong { color: var(--err); }
+  .stat-inline.run-info {                       /* the first to give way on a narrow screen */
+    flex-shrink: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis;
+  }
   .n-breakdown { color: var(--text-dim); font-size: 10px; }
 
   /* ───── Side panels ───── */
@@ -303,8 +310,8 @@
   .shape-legend {
     position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
     max-width: calc(100% - 240px);              /* the connection status keeps the left corner */
-    overflow: hidden;
-    display: flex; align-items: center; gap: var(--sp-4);
+    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
+    gap: 6px var(--sp-4);
     padding: 7px 14px;
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide);
     color: var(--text-muted);
@@ -362,10 +369,28 @@
   .tt-layer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .tt-name { flex: 1; font-size: 11px; font-weight: 600; color: var(--text-bright); word-break: break-all; }
   .tt-row { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 2px 0; }
+  .tt-row[hidden] { display: none; }
   .tt-row .k { color: var(--text-muted); letter-spacing: var(--ls-wide); }
   .tt-row .v { text-align: right; color: var(--text); overflow-wrap: anywhere; }
 
   /* ───── Event log ───── */
+  .log-filters {                                /* one chip per kind of entry: a click hides or shows it */
+    flex-shrink: 0;
+    display: flex; flex-wrap: wrap; gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--border);
+  }
+  .log-chip {
+    padding: 2px 7px;
+    font-family: var(--font-mono); font-size: 9.5px; letter-spacing: var(--ls-wide);
+    color: var(--text-muted);
+    background: var(--bg-2);
+    border: 1px solid var(--border-hi); border-left: 2px solid var(--chip, var(--border-hi));
+    border-radius: var(--r-sm);
+    cursor: pointer; user-select: none;
+  }
+  .log-chip:hover { color: var(--text-bright); border-color: var(--border-focus); border-left-color: var(--chip); }
+  .log-chip[aria-pressed="false"] { opacity: 0.4; text-decoration: line-through; }
   .log-list { padding: var(--sp-2) 0; font-family: var(--font-mono); font-size: 10.5px; line-height: 1.55; }
   .log-entry {
     margin: 0 var(--sp-2) 2px var(--sp-2);
@@ -375,10 +400,18 @@
     border-radius: 0 var(--r-sm) var(--r-sm) 0;
   }
   .log-entry.event { border-left-color: var(--accent); }
-  .log-entry.cussive { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+  .log-entry.event summary { cursor: pointer; }
+  .log-entry.event summary::marker { color: var(--text-dim); }
+  .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; white-space: pre-line; }
+  .log-entry.cussive { border-left-color: var(--layer-UNIT_1); color: var(--layer-UNIT_1); }
+  .log-entry.cussive.crystal { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
   .log-entry.terminate { border-left-color: var(--err); background: var(--err-soft); }
-  .log-entry.voice { border-left-color: var(--text-dim); color: var(--text-muted); font-style: italic; }
+  .log-entry.narration { border-left-color: var(--text-dim); color: var(--text-muted); font-style: italic; }
   .log-entry.sombunal { border-left-color: var(--sombunal); background: rgba(155, 135, 245, 0.10); color: #c9bfff; }
+  .log-entry.model { border-left-color: var(--warn); color: var(--warn); }
+  .log-list.hide-event .log-entry.event, .log-list.hide-cussive .log-entry.cussive,
+  .log-list.hide-terminate .log-entry.terminate, .log-list.hide-narration .log-entry.narration,
+  .log-list.hide-sombunal .log-entry.sombunal, .log-list.hide-model .log-entry.model { display: none; }
   .cycle-tag { margin-right: var(--sp-2); font-size: 9.5px; color: var(--text-dim); }
   .log-empty {
     padding: var(--sp-4);
@@ -395,10 +428,12 @@
   <div class="brand">SIRISYS<span class="brand-tag">live</span></div>
   <div class="header-status">
     <div class="running-indicator" id="header-running"><span class="ind-dot"></span><span id="header-run-text">paused</span></div>
-    <span class="stat-inline" id="header-run-info" title="server mode · framework version · language model">—</span>
     <span class="stat-inline">cycle<strong id="header-cycle">—</strong></span>
-    <span class="stat-inline">T<strong id="header-T">—</strong></span>
-    <span class="stat-inline">n<strong id="header-n">—</strong></span>
+    <span class="stat-inline" title="internal time (era, offset): it never moves backwards">T<strong id="header-T">—</strong></span>
+    <span class="stat-inline" title="constructs (◆ anchors · ✦ Zero Points · ⬢ crystals the field formed)">n<strong id="header-n">—</strong></span>
+    <span class="stat-inline" title="proofs sealed in this instance's ledger · the ledger head (the whole history in one hash)">ledger<strong id="header-ledger">—</strong></span>
+    <span class="stat-inline" id="header-model">—</span>
+    <span class="stat-inline run-info" id="header-run-info" title="server mode · framework version · run folder in sirisys_runs/">—</span>
   </div>
 </header>
 
@@ -409,30 +444,37 @@
     <div class="panel-section">
       <h3>Counters</h3>
       <div class="stat-row"><span class="stat-key">cycle</span><span class="stat-val accent" id="s-cycle">—</span></div>
-      <div class="stat-row"><span class="stat-key">T</span><span class="stat-val" id="s-T">—</span></div>
+      <div class="stat-row" title="internal time (era, offset): it never moves backwards"><span class="stat-key">T</span><span class="stat-val" id="s-T">—</span></div>
       <div class="stat-row"><span class="stat-key">constructs</span><span class="stat-val" id="s-constructs">—</span></div>
       <div class="stat-row"><span class="stat-key">edges</span><span class="stat-val" id="s-edges">—</span></div>
-      <div class="stat-row"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
-      <div class="stat-row"><span class="stat-key">terminated</span><span class="stat-val" id="s-terminated">—</span></div>
-      <div class="stat-row"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
+      <div class="stat-row" title="every crystallization in this instance; the Zero Points are crystals from the start"><span class="stat-key">apparents</span><span class="stat-val" id="s-apparents">—</span></div>
+      <div class="stat-row" title="constructs that concluded, each with a TERMINATE proof: an identity never vanishes silently"><span class="stat-key">concluded</span><span class="stat-val" id="s-concluded">—</span></div>
+      <div class="stat-row" title="conflict constructs: NEITHER × NEITHER as a structure of its own"><span class="stat-key">conflicts</span><span class="stat-val" id="s-conflicts">—</span></div>
       <div class="stat-row"><span class="stat-key">BOTH edges</span><span class="stat-val" id="s-both">—</span></div>
-      <div class="stat-row"><span class="stat-key">closures (cycle)</span><span class="stat-val" id="s-closures">—</span></div>
-      <div class="stat-row"><span class="stat-key">reincarnations</span><span class="stat-val" id="s-reinc">—</span></div>
-      <div class="stat-row"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
+      <div class="stat-row" title="BOTH channels that reached the exchange quantum this cycle, banked on their endpoints"><span class="stat-key">closures (cycle)</span><span class="stat-val" id="s-closures">—</span></div>
+      <div class="stat-row" title="concluded names born again as new constructs, their conclusion on record"><span class="stat-key">reincarnations</span><span class="stat-val" id="s-reinc">—</span></div>
+      <div class="stat-row" title="the three most energetic constructs: a self-adjustment criterion keeps it bounded"><span class="stat-key">top-3 energy</span><span class="stat-val" id="s-energy3">—</span></div>
+      <div class="stat-row" title="share of uncrystallized constructs unstable in some way: BOTH edges, drifted identity, Vc &lt; 0.25 or LEMNISCATE"><span class="stat-key">instability</span><span class="stat-val accent" id="s-instability">—</span></div>
       <div class="bar-track"><div class="bar-fill" id="inst-bar"></div></div>
-      <div class="stat-row spaced"><span class="stat-key">last cussive</span><span class="stat-val" id="s-cussive-ago">—</span></div>
+      <div class="stat-row spaced"><span class="stat-key">last crystal</span><span class="stat-val" id="s-crystal-ago">—</span></div>
     </div>
-    <div class="panel-section"><h3>Modes</h3><div id="modes-list"></div></div>
+    <div class="panel-section">
+      <h3 title="one phase for the whole field: contraction lowers the thresholds, expansion adds [::] operations">Breathing</h3>
+      <div class="stat-row" title="completed breaths: the slow clock a crystal's support ages on"><span class="stat-key">breath</span><span class="stat-val" id="b-breath">—</span></div>
+      <div class="stat-row" title="0 at full expansion, 1 at full contraction"><span class="stat-key">contraction</span><span class="stat-val accent" id="b-contraction">—</span></div>
+      <div class="bar-track"><div class="bar-fill" id="b-bar"></div></div>
+      <div class="stat-row spaced" title="set by the field once per breath, so that crystals formed track crystals concluded"><span class="stat-key">tolerance</span><span class="stat-val" id="b-tolerance">—</span></div>
+    </div>
+    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3>Layers</h3><div id="layers-list"></div></div>
-    <div class="panel-section"><h3>Lagrangian</h3><div id="lagrangian-list"></div></div>
+    <div class="panel-section"><h3 title="tags on constructs and proofs (DeOS Compiler Guide pp.77–80); they do not yet govern any decision">Lagrangian</h3><div id="lagrangian-list"></div></div>
     <div class="panel-section"><h3>Filters · layer</h3><div id="filter-layer"></div></div>
     <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
     <div class="panel-section">
-      <h3>Pool telemetry</h3>
-      <div class="stat-row"><span class="stat-key">pools B·C·X</span><span class="stat-val" id="t-pool">—</span></div>
-      <div class="stat-row"><span class="stat-key">exec ok/tried</span><span class="stat-val" id="t-exec">—</span></div>
-      <div class="stat-row"><span class="stat-key">exchange ops</span><span class="stat-val" id="t-rx">—</span></div>
-      <div class="stat-row"><span class="stat-key">breath · tolerance</span><span class="stat-val" id="t-breath">—</span></div>
+      <h3 title="the candidates for [::] this cycle, and what was done with them">Pool telemetry</h3>
+      <div class="stat-row" title="matured BOTH · energetic conflicts · exchangeable crystals"><span class="stat-key">pools B·C·X</span><span class="stat-val" id="t-pool">—</span></div>
+      <div class="stat-row" title="[::] operations that gave a product, of those tried"><span class="stat-key">[::] ok/tried</span><span class="stat-val" id="t-exec">—</span></div>
+      <div class="stat-row" title="products with I::Am or I::AmNot as an operand · with a crystal as an operand"><span class="stat-key">foundational · exchange</span><span class="stat-val" id="t-ops">—</span></div>
       <canvas id="telem-chart"></canvas>
     </div>
   </div>
@@ -444,7 +486,7 @@
     <div class="ctrl-group floating">
       <button class="btn" id="btn-play" title="Play / Pause">Play</button>
       <button class="btn" id="btn-step" title="Step one cycle">Step</button>
-      <button class="btn" id="btn-reset" title="Reset session">Reset</button>
+      <button class="btn" id="btn-reset" title="Start a new instance (the current run stays in sirisys_runs/)">Reset</button>
     </div>
     <div class="speed-control floating">
       <label for="speed-slider">delay</label>
@@ -462,24 +504,26 @@
     <div class="empty-state-icon">∅</div>
     <div class="empty-state-title">field is dormant</div>
     <div class="empty-state-hint">
-      Press <kbd>Play</kbd> above to start the simulation.<br>
-      The field will appear here as constructs emerge.
+      Press <kbd>Play</kbd> above to start cycling the field.<br>
+      Its constructs appear here from the first cycle.
     </div>
   </div>
 
   <div id="tooltip">
     <div class="tt-header"><span class="tt-layer-dot" id="tt-layer-dot"></span><span class="tt-name" id="tt-name"></span></div>
+    <div class="tt-row" id="tt-kind-row"><span class="k">kind</span><span class="v" id="tt-kind"></span></div>
     <div class="tt-row"><span class="k">layer</span><span class="v" id="tt-layer"></span></div>
     <div class="tt-row"><span class="k">witness</span><span class="v" id="tt-witness"></span></div>
     <div class="tt-row"><span class="k">energy</span><span class="v" id="tt-energy"></span></div>
-    <div class="tt-row"><span class="k">proofs</span><span class="v" id="tt-proofs"></span></div>
-    <div class="tt-row"><span class="k">lagrange</span><span class="v" id="tt-lagrange"></span></div>
+    <div class="tt-row"><span class="k">umbragiac</span><span class="v" id="tt-umbragiac"></span></div>
+    <div class="tt-row"><span class="k">banked</span><span class="v" id="tt-banked"></span></div>
     <div class="tt-row"><span class="k">Vc</span><span class="v" id="tt-vc"></span></div>
     <div class="tt-row"><span class="k">mode</span><span class="v" id="tt-mode"></span></div>
     <div class="tt-row"><span class="k">chirality</span><span class="v" id="tt-chirality"></span></div>
-    <div class="tt-row"><span class="k">crystal state</span><span class="v" id="tt-crystal"></span></div>
-    <div class="tt-row"><span class="k">banked</span><span class="v" id="tt-banked"></span></div>
-    <div class="tt-row"><span class="k">born</span><span class="v" id="tt-born"></span></div>
+    <div class="tt-row"><span class="k">crystallized as</span><span class="v" id="tt-crystal"></span></div>
+    <div class="tt-row"><span class="k">lagrange</span><span class="v" id="tt-lagrange"></span></div>
+    <div class="tt-row"><span class="k">proofs</span><span class="v" id="tt-proofs"></span></div>
+    <div class="tt-row"><span class="k">born at T</span><span class="v" id="tt-born"></span></div>
   </div>
 
   <div class="conn-status floating">
@@ -492,17 +536,25 @@
       <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
       <span>construct</span>
     </div>
-    <div class="item">
+    <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
-      <span>foundational</span>
+      <span>anchor</span>
     </div>
-    <div class="item">
+    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable">
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="11,7 9,11 5,11 3,7 5,3 9,3" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
       <span>apparent</span>
     </div>
-    <div class="item">
+    <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
       <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
       <span>zero point</span>
+    </div>
+    <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
+      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
+      <span>conflict</span>
+    </div>
+    <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-TRUE)" stroke-width="1"/></svg>
+      <span>crystal support</span>
     </div>
   </div>
 </div>
@@ -510,12 +562,13 @@
 <!-- ═══════════════ Event log ═══════════════ -->
 <div class="panel right">
   <div class="panel-header">Event Log</div>
+  <div class="log-filters" id="log-filters"></div>
   <div class="panel-body">
     <div class="log-list" id="log-list"></div>
   </div>
 </div>
 
-<template id="log-placeholder"><div class="log-empty" id="log-empty">waiting for events...<br><span class="faint">[::] operations · cussive promotions · terminations</span></div></template>
+<template id="log-placeholder"><div class="log-empty" id="log-empty">waiting for events...<br><span class="faint">[::] products · cussive collapses · conclusions</span></div></template>
 
 <script>
 'use strict';
@@ -525,18 +578,25 @@
 const LAYERS = ['NULL_00', 'UMBRA_0', 'UNIT_1', 'APPARENT'];        // index = a construct's layer value
 const APPARENT = 3;
 const STATES = ['BOTH', 'TRUE', 'FALSE', 'NEITHER'];
+// The Zero Points: the Universal apparents (TMC p.22), Z1::ORIGIN in NULL_00
 const ZERO_POINTS = new Set(['Z0::IDENTITY', 'Z1::ORIGIN', 'Z2::CONCORDANCY', 'Z3::RECURSION', 'Z4::APPARENCY']);
-const FOUNDATIONAL = new Set(['I::Am', 'I::AmNot', 'SYSTEM']);       // the other anchors
+// The anchors: never promoted, never pruned
+const ANCHORS = new Set([...ZERO_POINTS, 'I::Am', 'I::AmNot', 'SYSTEM']);
 // DeOS Compiler Guide p.78: the trade-off each Lagrangian point names
 const LAGRANGE = {
   L1: ['safe/live', 'safety vs. liveness'], L2: ['redund/effic', 'redundancy vs. efficiency'],
   L3: ['local/global', 'local vs. global identity'], L4: ['depth/perf', 'proof depth vs. performance'],
   L5: ['entropy/det', 'entropy vs. determinism'],
 };
+// The kinds of entry in the event log, each with its chip
+const LOG_KINDS = {
+  event: ['[::]', '--accent'], cussive: ['cussive', '--warn'], terminate: ['concluded', '--err'],
+  narration: ['narration', '--text-dim'], sombunal: ['Sombunal', '--sombunal'], model: ['model', '--warn'],
+};
 
-const LOG_KEPT = 200;             // event log entries
+const LOG_KEPT = 150;             // event log entries of each kind
 const TELEMETRY_KEPT = 200;       // cycles in the telemetry chart
-const PULSE_MS = 1100;            // the ring drawn when a construct crystallizes
+const PULSE_MS = 1100;            // the rings drawn where a construct rises a layer
 const POLL_MS = 300;              // polling, while the field cycles
 const RECONNECT_MS = 2000;        // a WebSocket that closed
 const WS_RETRY_MS = 30000;        // a WebSocket that failed while the server answered
@@ -547,7 +607,7 @@ const COLOR = {
   layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
   mode: { OMEGA: css('--col-TRUE'), LEMNISCATE: css('--col-BOTH'), NEUTRAL: css('--col-NEITHER') },
-  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'),
+  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), bright: css('--text-bright'),
 };
 const FONT_MONO = css('--font-mono');
 
@@ -584,7 +644,7 @@ const isShown = n => FILTERS.layer[n.c.layer];
 const radius = n => [3, 4, 5, 7][n.c.layer] ?? 3;
 function shapeOf(name, layer) {
   if (ZERO_POINTS.has(name)) return 'star';
-  if (FOUNDATIONAL.has(name)) return 'diamond';
+  if (ANCHORS.has(name)) return 'diamond';
   if (layer === APPARENT) return 'hexagon';
   return 'circle';
 }
@@ -677,8 +737,9 @@ function render() {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
     if (!a || !b || !FILTERS.edgeState[e.state] || !isShown(a) || !isShown(b)) continue;
     const width = e.state === 'BOTH' ? 2 : 1;
-    if (b.c.layer === APPARENT) {
-      // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo
+    if (b.c.layer === APPARENT && e.state !== 'BOTH') {
+      // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
+      // A BOTH edge faces its fixed floor instead, into a crystal or not.
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
       ctx.strokeStyle = COLOR.layer.APPARENT; ctx.globalAlpha = 0.20; ctx.lineWidth = width + 3;
       ctx.stroke();
@@ -709,14 +770,32 @@ function render() {
       ctx.strokeStyle = 'rgba(238,241,246,0.6)'; ctx.lineWidth = 1;
       ctx.stroke();
     }
+    if (n.c.conflict) {                                 // ⊗: a conflict, a structure of its own
+      const k = r + 2, d = k * Math.SQRT1_2;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, k, 0, Math.PI * 2);
+      ctx.moveTo(n.x - d, n.y - d); ctx.lineTo(n.x + d, n.y + d);
+      ctx.moveTo(n.x + d, n.y - d); ctx.lineTo(n.x - d, n.y + d);
+      ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7; ctx.lineWidth = 0.9;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
   }
 
-  // Crystallization: two rings expand from the construct and fade, following it as it moves
+  // Cussive collapse, following the construct as it moves: one ring where it rose to
+  // UNIT_1, two amber rings where it crystallized
   const now = performance.now();
   for (const p of pulses) {
     const t = (now - p.start) / PULSE_MS;
     if (t < 0 || t > 1) continue;
     const node = nodes.get(p.name), x = node ? node.x : p.x, y = node ? node.y : p.y;
+    if (!p.crystal) {
+      ctx.strokeStyle = COLOR.layer.UNIT_1;
+      ctx.beginPath(); ctx.arc(x, y, 6 + t * 20, 0, Math.PI * 2);
+      ctx.globalAlpha = (1 - t) * 0.6; ctx.lineWidth = 1.2;
+      ctx.stroke();
+      continue;
+    }
     ctx.strokeStyle = COLOR.layer.APPARENT;
     ctx.beginPath(); ctx.arc(x, y, 8 + t * 42, 0, Math.PI * 2);
     ctx.globalAlpha = (1 - t) * 0.85; ctx.lineWidth = 2;
@@ -731,12 +810,12 @@ function render() {
   ctx.restore();
 }
 
-const pulses = [];                // { name, x, y, start }
+const pulses = [];                // { name, crystal, x, y, start }
 let animating = false;
-function pulse(name) {
+function pulse(name, crystal) {
   const n = nodes.get(name);
   if (!n) return;
-  pulses.push({ name, x: n.x, y: n.y, start: performance.now() });
+  pulses.push({ name, crystal, x: n.x, y: n.y, start: performance.now() });
   if (!animating) { animating = true; requestAnimationFrame(animate); }
 }
 function animate() {
@@ -795,20 +874,35 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 const tooltip = $('tooltip');
+// What a construct is, beyond its layer: a Zero Point, an anchor, a conflict, and
+// for a crystal, Universal (the Zero Points) or Exchangeable (TMC p.22)
+function kindOf(name, c) {
+  const kind = [];
+  if (ZERO_POINTS.has(name)) kind.push('zero point');
+  else if (ANCHORS.has(name)) kind.push('anchor');
+  if (c.conflict) kind.push('conflict');                      // typed by its proof chain
+  if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
+  return kind.join(' · ');
+}
+const fixed = (v, digits) => v != null ? Number(v).toFixed(digits) : '—';
+
 function showTooltip(name, n, mx, my) {
-  const c = n.c, layer = LAYERS[c.layer] || '?';
-  setText('tt-name', c.conflict ? '⊗ ' + name : name);       // conflicts: typed by their proof chain
+  const c = n.c, layer = LAYERS[c.layer] || '?', kind = kindOf(name, c);
+  setText('tt-name', c.conflict ? '⊗ ' + name : name);
+  $('tt-kind-row').hidden = !kind;
+  setText('tt-kind', kind);
   setText('tt-layer', layer);
   $('tt-layer-dot').style.background = COLOR.layer[layer] || '#888';
   setText('tt-witness', (c.witness || '').slice(0, 16));
-  setText('tt-energy', (c.umbragiac_score || 0).toFixed(3));
-  setText('tt-proofs', c.proof_chain);
-  setText('tt-lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—');
-  setText('tt-vc', c.vc != null ? c.vc.toFixed(3) : '—');
+  setText('tt-energy', fixed(c.energy, 3));                   // what [::] selection weighs
+  setText('tt-umbragiac', fixed(c.umbragiac_score, 3));       // contradiction stress (UCO)
+  setText('tt-banked', fixed(c.banked, 2));                   // exchange banked toward crystallization
+  setText('tt-vc', fixed(c.vc, 3));
   setText('tt-mode', c.mode || '—');
-  setText('tt-chirality', c.chirality === 1 ? '+ (right)' : c.chirality === -1 ? '− (left)' : '—');
+  setText('tt-chirality', c.chirality === 1 ? '+' : c.chirality === -1 ? '−' : '—');
   setText('tt-crystal', c.crystal || '—');
-  setText('tt-banked', c.banked != null ? c.banked.toFixed(2) : '—');
+  setText('tt-lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—');
+  setText('tt-proofs', c.proof_chain);
   setText('tt-born', c.born_at ? `(${c.born_at[0]},${c.born_at[1]})` : '—');
   // Inside the field's panel, beside the pointer; on the other side near an edge
   tooltip.style.left = tooltip.style.top = '0px';
@@ -878,20 +972,20 @@ function renderFilters() {
   })));
 }
 
-// Header: n, then how many of each shape (◆ foundational, ✦ zero points, ⬢ emergent crystals)
+// Header: n, then how many of each shape (◆ anchors, ✦ Zero Points, ⬢ crystals the field formed)
 function renderShapeCount(constructs) {
   let diamonds = 0, stars = 0, hexagons = 0;
   for (const c of constructs) {
     if (ZERO_POINTS.has(c.name)) stars++;
-    else if (FOUNDATIONAL.has(c.name)) diamonds++;
+    else if (ANCHORS.has(c.name)) diamonds++;
     else if (c.layer === APPARENT) hexagons++;
   }
   $('header-n').replaceChildren(constructs.length + ' ',
     el('span', 'n-breakdown', `(${diamonds}◆·${stars}✦·${hexagons}⬢)`));
 }
 
-// Pool telemetry: the breath (contraction, 0–1) and the share of operations
-// acting on the field's own crystals (exchangeable apparents, 0–1)
+// Pool telemetry: the breath (contraction, 0–1) and the share of products made
+// with the field's own crystals (exchangeable apparents, 0–1)
 const telemetry = [];
 function drawTelemetry() {
   const chart = $('telem-chart'), tctx = chart.getContext('2d');
@@ -915,9 +1009,9 @@ function drawTelemetry() {
   tctx.setLineDash([]); tctx.globalAlpha = 1;
   line(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.warn, 1.3);
   line(telemetry.map(t => t.contraction || 0), COLOR.accent, 1.4);
-  tctx.font = '9px ' + FONT_MONO; tctx.textBaseline = 'top';
-  tctx.fillStyle = COLOR.accent; tctx.fillText('● breath', W - 92, 3);
-  tctx.fillStyle = COLOR.warn; tctx.fillText('● exchange', W - 46, 3);
+  tctx.font = '9px ' + FONT_MONO; tctx.textBaseline = 'top'; tctx.textAlign = 'right';
+  tctx.fillStyle = COLOR.warn; tctx.fillText('● exchange', W - 5, 3);
+  tctx.fillStyle = COLOR.accent; tctx.fillText('● contraction  ', W - 5 - tctx.measureText('● exchange').width, 3);
 }
 
 
@@ -925,24 +1019,60 @@ function drawTelemetry() {
 
 const logList = $('log-list'), logBox = logList.parentElement;
 
-// Text from a language model (names, narration, questions) goes in as text, never as markup
-function log(cycle, text, kind) {
+// One chip per kind: a click hides or shows that kind of entry
+$('log-filters').replaceChildren(...Object.entries(LOG_KINDS).map(([kind, [label, color]]) => {
+  const chip = el('button', 'log-chip', label);
+  chip.type = 'button';
+  chip.style.setProperty('--chip', `var(${color})`);
+  chip.setAttribute('aria-pressed', 'true');
+  chip.onclick = () => {
+    const shown = logList.classList.toggle('hide-' + kind) === false;
+    chip.setAttribute('aria-pressed', String(shown));
+  };
+  return chip;
+}));
+
+// An entry of one kind (LOG_KINDS), kept with the latest LOG_KEPT of that kind, so
+// that frequent kinds never push the rare ones out. Text from a language model
+// (names, narration, questions) goes in as text, never as markup.
+function log(cycle, content, kind, extra = '') {
+  addEntry(el('div', `log-entry ${kind} ${extra}`.trim()), cycle, content, kind);
+}
+function addEntry(entry, cycle, content, kind, into = entry) {
   const following = logBox.scrollHeight - logBox.scrollTop - logBox.clientHeight < 40;   // reader at the newest
   $('log-empty')?.remove();
-  const entry = el('div', 'log-entry ' + kind);
-  entry.append(el('span', 'cycle-tag', 'c' + cycle), text);
+  into.append(el('span', 'cycle-tag', 'c' + cycle), content);
   logList.append(entry);
-  while (logList.children.length > LOG_KEPT) logList.firstElementChild.remove();
+  const ofKind = logList.getElementsByClassName(kind);
+  while (ofKind.length > LOG_KEPT) ofKind[0].remove();
   if (following) logBox.scrollTop = logBox.scrollHeight;
+}
+// A cycle's [::] products and cussive collapses; the names given to the products
+// (by the model, when there is one) open beneath it
+function logCycle(snap, crystallized) {
+  let summary = `[::] ${snap.events}`;
+  if (snap.promoted > 0) summary += ` · cussive ${snap.promoted}`;
+  if (crystallized.length) summary += ` · crystallized ${crystallized.length}`;
+  const names = snap.emergent_names || [];
+  if (!names.length) { log(snap.cycle, summary, 'event'); return; }
+  const entry = el('details', 'log-entry event'), head = el('summary');
+  entry.append(head, el('div', 'names', names.join('\n')));
+  addEntry(entry, snap.cycle, summary, 'event', head);
 }
 
 
 // ═══ One snapshot per cycle ═════════════════════════════════════════════════
 
 let lastSnapshot = null;
-let lastCussiveCycle = null;
+let currentRun = null;            // the instance on screen: its run folder
+let discardedRun = null;          // the instance just reset: its snapshots still in flight are dropped
+let lastCrystalCycle = null;
+let watchReported = false;        // a tripped model watch, said once in the log
 
 function applySnapshot(snap) {
+  if (snap.run && snap.run === discardedRun) return;
+  if (snap.run && currentRun && snap.run !== currentRun) clearField();     // a new instance, reset from anywhere
+  currentRun = snap.run || currentRun;
   lastSnapshot = snap;
   const field = snap.field, T = `(${snap.T[0]},${snap.T[1]})`;
   setText('s-cycle', snap.cycle); setText('header-cycle', snap.cycle);
@@ -952,14 +1082,25 @@ function applySnapshot(snap) {
   // the apparent log also counts the Zero Points, crystals from birth: both figures
   const zeroPoints = field.constructs.filter(c => ZERO_POINTS.has(c.name) && c.layer === APPARENT).length;
   setText('s-apparents', `${snap.apparents} (${Math.max(0, snap.apparents - zeroPoints)} emergent)`);
-  setText('s-terminated', snap.terminations);
+  setText('s-concluded', snap.terminations);
   setText('s-conflicts', snap.conflicts);
   setText('s-both', snap.both_edges);
   setText('s-closures', snap.closures);
   setText('s-reinc', snap.reincarnations);
+  // the criterion's measure: the three most energetic constructs, together
+  const energies = field.constructs.map(c => c.energy).filter(e => e != null).sort((a, b) => b - a);
+  setText('s-energy3', energies.length ? energies.slice(0, 3).reduce((sum, e) => sum + e, 0).toFixed(2) : '—');
   setText('s-instability', snap.instability.toFixed(3));
   $('inst-bar').style.width = snap.instability * 100 + '%';
   renderShapeCount(field.constructs);
+  if (snap.ledger) showLedger(snap.ledger);
+  renderRunInfo();
+  if ('model_watch' in snap) renderModel(snap.model_watch);
+
+  setText('b-breath', snap.breath ?? '—');
+  setText('b-contraction', fixed(snap.contraction, 2));
+  $('b-bar').style.width = (snap.contraction || 0) * 100 + '%';
+  setText('b-tolerance', fixed(snap.tolerance, 2));
 
   renderBreakdown('modes-list', Object.entries(snap.modes).map(([k, v]) => ({ label: k, count: v, color: COLOR.mode[k] || '#888' })));
   renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({ label: k, count: v, color: COLOR.layer[k] || '#888' })));
@@ -969,9 +1110,7 @@ function applySnapshot(snap) {
   const t = snap.telemetry || {};
   setText('t-pool', [t.both_pool_size, t.conflict_pool_size, t.exchange_pool_size].map(v => v ?? '—').join(' · '));
   setText('t-exec', (t.executions_successful || 0) + '/' + (t.executions_attempted || 0));
-  setText('t-rx', String(t.exchange_executions || 0));
-  setText('t-breath', snap.contraction != null
-    ? snap.contraction.toFixed(2) + ' · tol ' + (snap.tolerance != null ? snap.tolerance.toFixed(2) : '—') : '—');
+  setText('t-ops', [t.foundational_executions, t.exchange_executions].map(v => v ?? '—').join(' · '));
   if (t.cycle !== undefined) {
     telemetry.push({ ...t, contraction: snap.contraction });
     if (telemetry.length > TELEMETRY_KEPT) telemetry.shift();
@@ -983,20 +1122,20 @@ function applySnapshot(snap) {
   relaxLayout(4);
   render();
 
-  if (snap.events > 0 || snap.promoted > 0) {
-    let summary = snap.events + ' event' + (snap.events === 1 ? '' : 's');
-    if (snap.promoted > 0) summary += '  ^ ' + snap.promoted + ' promotion' + (snap.promoted === 1 ? '' : 's');
-    log(snap.cycle, summary, snap.promoted > 0 ? 'cussive' : 'event');
-  }
-  // Crystallization, the moment that matters most, shows on the field as well as in the log
-  if (snap.promoted_names.length) {
-    snap.promoted_names.forEach(pulse);
-    lastCussiveCycle = snap.cycle;
-  }
-  const ago = lastCussiveCycle === null ? null : snap.cycle - lastCussiveCycle;
-  setText('s-cussive-ago', ago === null ? '—' : ago === 0 ? 'just now' : ago + 'c ago');
+  // Cussive collapse: every construct that rose a layer, and which of them crystallized
+  const crystallized = snap.crystallized ?? snap.promoted_names.filter(name => nodes.get(name)?.c.layer === APPARENT);
+  const crystals = new Set(crystallized);
+  if (snap.events > 0 || snap.promoted > 0) logCycle(snap, crystallized);
+  snap.promoted_names.forEach(name => pulse(name, crystals.has(name)));
+  if (crystallized.length) lastCrystalCycle = snap.cycle;
+  const ago = lastCrystalCycle === null ? null : snap.cycle - lastCrystalCycle;
+  setText('s-crystal-ago', ago === null ? '—' : ago === 0 ? 'just now' : ago + 'c ago');
 
-  for (const line of snap.log) if (line.includes('[CUSSIVE]')) log(snap.cycle, line.trim(), 'cussive');
+  // From the framework's console: each cussive collapse, and what went wrong with the model
+  for (const line of snap.log) {
+    if (line.includes('[CUSSIVE]')) log(snap.cycle, line.trim(), 'cussive', line.includes('→ APPARENT') ? 'crystal' : '');
+    else if (line.includes('[LLM]')) log(snap.cycle, line.trim(), 'model');
+  }
   // Every construct that concluded, from its TERMINATE proof (Compiler Guide
   // pp.203-204: an identity never vanishes silently)
   for (const c of snap.concluded) {
@@ -1004,19 +1143,63 @@ function applySnapshot(snap) {
     log(snap.cycle, `TERMINATE ${c.name} · ${c.layer || '?'} · ${c.mode || '?'}${vc}`, 'terminate');
   }
   // With a model: the Intermediary's narration (every 2nd cycle) and the questions
-  // put to the Sombunal (every 3rd)
-  if (snap.narration) log(snap.cycle, 'voice  ' + snap.narration, 'voice');
+  // put to the Sombunal (every 3rd), which enter the field as constructs
+  if (snap.narration) log(snap.cycle, 'narration  ' + snap.narration, 'narration');
   if (snap.question) log(snap.cycle, 'Sombunal ?  ' + snap.question, 'sombunal');
+  const watch = snap.model_watch;
+  if (watch && watch.tripped && !watchReported) {
+    watchReported = true;
+    log(snap.cycle, `model watch tripped: ${watch.reason}. The server paused; Play goes on, `
+                  + 'with constructs named synthetically while the model fails.', 'model');
+  }
+}
+
+// The header describes the instance on screen: the server's mode and framework version
+// (from the status), and the run folder of the snapshots shown
+let runInfo = [], statusRun = null;
+function renderRunInfo() {
+  setText('header-run-info', [...runInfo, currentRun || statusRun].filter(Boolean).join(' · '));
+}
+
+function showLedger(ledger) {
+  $('header-ledger').replaceChildren(ledger.count + ' ',
+    el('span', 'n-breakdown', (ledger.head || '').slice(0, 12) + '…'));
+}
+
+// The model from the status ({ backend, name, active }), and its watch so far
+let model = null;
+function renderModel(watch) {
+  const box = $('header-model');
+  if (!model) return;
+  let text, title, tone = '';
+  if (!model.active) {
+    text = model.backend === 'none' ? 'no model' : 'model unavailable';
+    title = 'constructs are named synthetically'
+      + (model.backend === 'none' ? '' : ` (degraded: ${model.backend} did not answer at start)`);
+  } else {
+    text = 'model ' + model.name;
+    title = model.backend + ' · ' + model.name;
+    if (watch) {
+      const bad = watch.failures + watch.empty;
+      title += ` · ${watch.calls} calls: ${watch.failures} failed, ${watch.empty} empty`;
+      if (watch.tripped) { text += ' · watch tripped'; tone = 'err'; title += ' · ' + watch.reason; }
+      else if (bad) { text += ` · ${bad} bad of ${watch.calls}`; tone = 'warn'; }
+    }
+  }
+  box.textContent = text;
+  box.title = title;
+  box.className = ('stat-inline ' + tone).trim();
 }
 
 // After a reset: nothing of the previous instance stays on screen
 function clearField() {
   nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0;
-  lastSnapshot = null; lastCussiveCycle = null;
-  for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-terminated', 's-conflicts',
-                    's-both', 's-closures', 's-reinc', 's-instability', 's-cussive-ago', 't-pool', 't-exec', 't-rx',
-                    't-breath', 'header-cycle', 'header-T', 'header-n']) setText(id, '—');
-  $('inst-bar').style.width = '0%';
+  lastSnapshot = null; currentRun = null; lastCrystalCycle = null; watchReported = false;
+  for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-concluded', 's-conflicts',
+                    's-both', 's-closures', 's-reinc', 's-energy3', 's-instability', 's-crystal-ago',
+                    'b-breath', 'b-contraction', 'b-tolerance', 't-pool', 't-exec', 't-ops',
+                    'header-cycle', 'header-T', 'header-n', 'header-ledger']) setText(id, '—');
+  for (const id of ['inst-bar', 'b-bar']) $(id).style.width = '0%';
   for (const id of ['modes-list', 'layers-list', 'lagrangian-list', 'filter-layer', 'filter-edge']) $(id).replaceChildren();
   logList.replaceChildren($('log-placeholder').content.cloneNode(true));
   $('empty-state').classList.remove('hidden');
@@ -1121,11 +1304,11 @@ async function poll(run) {
 
 function updateStatus(st) {
   if (!st) return;
-  if (st.mode || st.framework_version) {
-    const parts = [st.mode, st.framework_version && 'v' + st.framework_version,
-                   st.llm_active ? 'model on' : 'model off (degraded)', st.run, st.ledger && 'ledger ' + st.ledger.count];
-    setText('header-run-info', parts.filter(Boolean).join(' · '));
-  }
+  if (st.mode || st.framework_version) runInfo = [st.mode, st.framework_version && 'v' + st.framework_version];
+  statusRun = st.run || statusRun;
+  renderRunInfo();
+  if (st.model) { model = st.model; renderModel(st.model.watch); }
+  if (st.ledger && !lastSnapshot) showLedger(st.ledger);     // until a snapshot keeps it current
   $('btn-play').textContent = st.running ? 'Pause' : 'Play';
   $('btn-play').classList.toggle('active', !!st.running);
   $('header-running').classList.toggle('active', !!st.running);
@@ -1156,6 +1339,7 @@ $('btn-play').onclick = () => send($('btn-play').classList.contains('active') ? 
 $('btn-step').onclick = () => send('step');
 $('btn-reset').onclick = () => {
   if (confirm('Start a new experiment instance?\n\nNothing is lost: the current run stays in sirisys_runs/.')) {
+    discardedRun = currentRun;
     send('reset');
     clearField();
   }

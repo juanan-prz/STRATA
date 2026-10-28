@@ -25,13 +25,21 @@ INTERFACE (what the visualizer uses)
     POST /api/control/<action>   play · pause · step · reset {"stream": "live" | N}
                                  · speed {"cycle_delay_ms": N}
     WS   /ws                     the status first, then each snapshot as it is made;
-                                 {"action": ...} messages are answered with an ack
+                                 {"action": ...} messages are answered with an ack, and the
+                                 status is sent again when the engine starts or stops otherwise
   A snapshot is delivered once, to whichever client reads it first: one viewer
   at a time. While nobody reads, only the last MAX_PENDING are kept.
 
+THE MODEL WATCH
+  With a model, the engine watches every call as run_report.py does
+  (sirisys_measures.ModelHealth): a model that fails or answers empty would
+  leave the field on synthetic names without notice. When the watch trips, the
+  engine pauses once and the status and the snapshots say why; Play goes on.
+
 REQUIREMENTS
     pip3 install -r requirements.txt     (fastapi, uvicorn and websockets for this server)
-    Beside this file: sirisys_loader.py, Sirisys_Framework_vX_Y.py, Sirisys_Live_Visualizer.html
+    Beside this file: sirisys_loader.py, Sirisys_Framework_vX_Y.py, Sirisys_Live_Visualizer.html,
+    and sirisys_measures.py for a run with a model
 """
 import argparse
 import asyncio
@@ -125,6 +133,14 @@ class ExperimentEngine:
             self.ss = S.new_session()
         self.cycle, self.last_T = 0, tuple(self.ss.clock.T)
         self._terminations_seen = self.ss.field.terminations_total
+        self._apparents_seen = self.ss.field.apparents_total
+        self.health = None                      # the model watch; watching changes nothing in the calls
+        if self.ss.llm.available:
+            # Only a run with a model needs the watch: importing this file does not
+            from sirisys_measures import ModelHealth
+            self.health = ModelHealth()
+            self.health.attach(self.ss.llm)
+        self._paused_for_model = False
         log.info("Experiment instance %s (framework %s, LLM %s)",
                  self.run_dir.name, S.__sirisys_file__, self.ss.llm)
 
@@ -161,6 +177,10 @@ class ExperimentEngine:
             if now <= self.last_T:
                 raise S.ContinuityError(f"time did not advance: {self.last_T} -> {now}")
             self.last_T = now
+            if self.health and self.health.tripped and not self._paused_for_model:
+                self._paused_for_model, self.running = True, False   # once: Play goes on
+                log.warning("The model watch tripped: %s. Paused: press Play to go on regardless.",
+                            self.health.reason)
             snapshot = self._snapshot(r, [line for line in printed.getvalue().splitlines() if line.strip()])
             with self._queue_lock:
                 self._queue.append(snapshot)
@@ -175,6 +195,9 @@ class ExperimentEngine:
         f = self.ss.field
         new = f.terminations_total - self._terminations_seen
         self._terminations_seen = f.terminations_total
+        crystallized = f.apparents_since(self._apparents_seen)  # the promotions that reached APPARENT
+        self._apparents_seen = f.apparents_total
+        energy = self.ss.concordancy._energy_map(f)            # what [::] selection weighs
         modes = dict.fromkeys(("OMEGA", "LEMNISCATE", "NEUTRAL"), 0)
         layers = dict.fromkeys(("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT"), 0)
         constructs = []
@@ -185,6 +208,7 @@ class ExperimentEngine:
             constructs.append({
                 "name": c.name, "layer": c.layer.value, "born_at": list(c.born_at),
                 "witness": c.witness, "umbragiac_score": round(c.umbragiac_score, 4),
+                "energy": round(energy.get(c.name, 0.0), 4),
                 "lagrange": c.lagrange.name if c.lagrange else None,
                 "proof_chain": c.proofs_total,                  # lifetime count
                 "vc": round(f.compute_anchoring_weight(c), 4),
@@ -198,22 +222,31 @@ class ExperimentEngine:
                  for e in f.edges]
         telemetry = self.ss.concordancy.pool_telemetry
         return {
-            "type": "cycle", "cycle": self.cycle, "T": list(self.ss.clock.T),
+            "type": "cycle", "run": self.run_dir.name, "cycle": self.cycle, "T": list(self.ss.clock.T),
             "constructs": len(f.constructs), "edges": len(f.edges),
             "apparents": f.apparents_total, "terminations": f.terminations_total,
             "instability": round(r["instability"], 4), "modes": modes, "layers": layers,
             "events": len(r["emergent"]), "emergent_names": r["emergent"],
             "promoted": len(r["promoted"]), "promoted_names": r["promoted"],
-            "llm_used": r["llm_used"], "log": console,
+            "crystallized": crystallized,
+            "llm_used": r["llm_used"], "model_watch": self._model_watch(), "log": console,
             "conflicts": r["conflict_count"], "closures": r["closures"],
             "both_edges": r["both_count"], "reincarnations": f.reincarnations,
             "action": r["action"], "narration": r["narration"], "question": r["question"],
-            "contraction": r["contraction"], "tolerance": round(f.tolerance, 3),
+            "breath": f.breaths, "contraction": r["contraction"], "tolerance": round(f.tolerance, 3),
             "concluded": [_conclusion(t.meta or {}) for t in (f.termination_log[-new:] if new > 0 else [])],
             "telemetry": telemetry[-1] if telemetry else {},
             "ledger": {"count": self.ledger.count, "head": self.ledger.head[:16]},
             "field": {"constructs": constructs, "edges": edges},
         }
+
+    def _model_watch(self) -> dict | None:
+        """The model watch so far; None without a model."""
+        h = self.health
+        if h is None:
+            return None
+        return {"calls": h.calls, "ok": h.ok, "failures": h.failures, "empty": h.empty,
+                "tripped": h.tripped, "reason": h.reason}
 
     # ── what clients use ─────────────────────────────────────────────────
     def control(self, action: str, **options) -> dict:
@@ -250,10 +283,13 @@ class ExperimentEngine:
         return {"ok": False, "error": f"unknown action: {action}"}
 
     def status(self) -> dict:
+        llm = self.ss.llm
         return {"running": self.running, "cycle": self.cycle, "T": list(self.ss.clock.T),
                 "stream": self.stream if self.stream is not None else "live",
                 "cycle_delay_ms": self.cycle_delay_ms,
-                "llm_active": self.ss.llm.available, "llm": repr(self.ss.llm),
+                "llm_active": llm.available, "llm": repr(llm),
+                "model": {"backend": llm.backend, "name": llm.model, "active": llm.available,
+                          "watch": self._model_watch()},
                 "mode": "experiment", "profile": self.profile, "run": self.run_dir.name,
                 "ledger": {"count": self.ledger.count, "head": self.ledger.head[:16]},
                 "framework": S.__sirisys_file__, "framework_version": S.__sirisys_version__}
@@ -346,11 +382,19 @@ def create_app(engine):
         snapshot_ready = engine.listen(loop)
         receiving = None                        # the pending read of the client's next message
         try:
-            await ws.send_json({"type": "status", **engine.status()})
+            status = engine.status()
+            await ws.send_json({"type": "status", **status})
+            told_running = status["running"]    # what the client was last told
             while True:
                 snapshot_ready.clear()          # before draining, so nothing queued after it is missed
                 for snapshot in engine.drain():
                     await ws.send_json(snapshot)
+                if engine.running != told_running:
+                    # Started or stopped otherwise: by itself (a step ended, the model watch
+                    # tripped, a cycle raised) or by another client
+                    status = engine.status()
+                    told_running = status["running"]
+                    await ws.send_json({"type": "status", **status})
                 receiving = receiving or asyncio.create_task(ws.receive_text())
                 waking = asyncio.create_task(snapshot_ready.wait())
                 done, _ = await asyncio.wait({receiving, waking}, timeout=1.0,
@@ -364,6 +408,7 @@ def create_app(engine):
                         break           # the client is gone: stop, rather than spin on a dead socket
                     reply = _reply(engine, message)
                     if reply:
+                        told_running = reply["status"]["running"]
                         await ws.send_json(reply)
         except WebSocketDisconnect:
             pass                                                # the client left while we were sending
