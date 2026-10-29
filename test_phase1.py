@@ -453,6 +453,7 @@ constants = {
     "ERA_CAPACITY": S.InternalClock.ERA_CAPACITY,
     "DECAY": S.InternalClock.DECAY,
     "VC_UNSTABLE": float(re.search(r"Vc_THRESHOLD\s*=\s*([\d.]+)", inspect.getsource(S.Sombunal.global_instability)).group(1)),
+    "EXCHANGE_QUANTUM": S.TetralemmaEngine.EXCHANGE_QUANTUM,
 }
 drift = [name for name, value in constants.items() if float(declared(inspector, name) or "nan") != value]
 for kind in ("omega", "lemniscate"):
@@ -460,18 +461,22 @@ for kind in ("omega", "lemniscate"):
         drift.append(f"{kind.upper()}_RELATIONS")
 if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY:
     drift.append("PROOF_RELATIONS")
-check("the inspector's constants are the framework's: the clock, the Vc threshold, the relations of each "
-      "existence mode, the relations a construct's proofs can carry",
+check("the inspector's constants are the framework's: the clock, the Vc threshold, the exchange quantum, "
+      "the relations of each existence mode, the relations a construct's proofs can carry",
       not drift, ", ".join(drift) or f"{len(constants) + 3} constants agree")
 
 live_tokens, inspector_tokens = tokens(views["live"]), tokens(inspector)
 shared = set(live_tokens) & set(inspector_tokens)
 differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
 # Written once in each file, alike: the strata, how an edge state and a mode are drawn and written
-SHARED = ("RINGS", "EDGE_STYLE", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText")
+SHARED = ("RINGS", "EDGE_STYLE", "EXCHANGE_QUANTUM", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
+          "ARROW_ZOOM", "QUIET")
 unlike = [name for name in SHARED if not declared(views["live"], name) or declared(views["live"], name) != declared(inspector, name)]
-check("the two views agree with each other: the strata rings, how each edge state and mode is drawn and "
-      "written, and every colour token both define", not unlike and len(shared) > 20 and not differ,
+if declared(views["live"], "HISTORY_KEPT") != str(server.HISTORY_KEPT):     # the live view merges as the server does
+    unlike.append("HISTORY_KEPT (live and server)")
+check("the two views agree with each other and the live view with its server: the strata rings, how each edge "
+      "state and mode is drawn and written, every colour token both define, the history kept",
+      not unlike and len(shared) > 20 and not differ,
       ", ".join(unlike + differ) or f"{len(SHARED)} declarations and {len(shared)} colour tokens alike")
 
 check.finish()

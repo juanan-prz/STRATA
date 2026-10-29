@@ -560,6 +560,7 @@
       <button class="btn" id="btn-strata" aria-pressed="false" title="Placed by stratum: Zero Points at the centre, then the anchors, then UMBRA_0, UNIT_1 and APPARENT outwards; a construct that rises a layer moves out (V)">strata</button>
     </div>
     <div class="ctrl-group floating">
+      <button class="btn" id="btn-anchors" aria-pressed="false" title="The relations of the anchors, often most of the edges: faint, so that the rest of the structure shows (A)">quiet anchors</button>
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
   </div>
@@ -687,6 +688,8 @@ const MODE_MEANING = {
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
 // How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
 const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
+// TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
+const EXCHANGE_QUANTUM = 12;
 
 // ═══ Settings ═══════════════════════════════════════════════════════════════
 
@@ -700,6 +703,7 @@ const TELEMETRY_KEPT = 200;       // cycles in the telemetry chart
 const PULSE_MS = 1100;            // the rings drawn where a construct rises a layer
 const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
 const LAYOUT_STEPS = 120;         // force-layout steps when the layout changes
+const ARROW_ZOOM = 2;             // each edge's direction drawn from this zoom on
 // Strata: the distance from the centre of each stratum, after the ladder of being, inwards
 // to outwards (Understanding TMC pp.49–50: an interpretation, not TMC's own text); the
 // Zero Points at the centre, as origin and anchor (a design choice). As in the inspector.
@@ -745,6 +749,12 @@ function edgeMark(state) {
   }
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
   svg.append(stroke);
+  if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
+    stroke.setAttribute('stroke-opacity', '0.4');
+    const exchanged = stroke.cloneNode();
+    exchanged.setAttribute('x1', '5'); exchanged.setAttribute('x2', '13'); exchanged.removeAttribute('stroke-opacity');
+    svg.append(exchanged);
+  }
   return svg;
 }
 
@@ -756,6 +766,10 @@ const ctx = canvas.getContext('2d');
 const nodes = new Map();          // name → { x, y, vx, vy, c: the construct as the last snapshot gave it }
 let edges = [];
 const FILTERS = { layer: [true, true, true, true], edgeState: { BOTH: true, TRUE: true, FALSE: true, NEITHER: true } };
+// The relations of the anchors, most edges in most runs: at full strength, or faint so that
+// the rest of the structure shows
+let quietAnchors = false;
+const QUIET = 0.12;
 let viewX = 0, viewY = 0, viewK = 1;
 let DPR = window.devicePixelRatio || 1;
 
@@ -889,6 +903,33 @@ function ring(x, y, r, color, alpha, width, dash) {
   ctx.stroke();
   ctx.setLineDash([]);
 }
+function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing from a to b
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+  const tipX = b.x - ux * size.gap, tipY = b.y - uy * size.gap;
+  ctx.beginPath();
+  ctx.moveTo(tipX, tipY);
+  ctx.lineTo(tipX - ux * size.len - uy * size.len * 0.5, tipY - uy * size.len + ux * size.len * 0.5);
+  ctx.lineTo(tipX - ux * size.len + uy * size.len * 0.5, tipY - uy * size.len - ux * size.len * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = color; ctx.globalAlpha = alpha;
+  ctx.fill();
+}
+// An edge as the canvas draws it: its state's colour and line, and from ARROW_ZOOM on an
+// arrowhead at its target (src → tgt). A BOTH channel is faint, with what it has exchanged
+// brighter from its middle outwards: whole when it closes at the quantum.
+function drawRelation(a, b, e, alpha, extra, arrowGap) {
+  const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, color = COLOR.state[e.state] || COLOR.dim;
+  if (e.state === 'BOTH' && e.both_age != null) {
+    const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
+    line(a, b, color, alpha * 0.4, width + extra);
+    if (share > 0) line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+  } else {
+    line(a, b, color, alpha, width + extra, dash);
+  }
+  if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
+}
+
 // In strata, the rings that hold someone, each named at its upper left (as in the inspector)
 function drawStrata(px) {
   const held = new Set(Array.from(nodes, ([name, n]) => stratumOf(name, n.c.layer)));
@@ -909,14 +950,15 @@ function render(now) {
   ctx.scale(viewK, viewK);
   if (layout === 'strata') drawStrata(1 / viewK);
 
+  const arrows = viewK >= ARROW_ZOOM;
   for (const e of edges) {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
     if (!a || !b || !FILTERS.edgeState[e.state] || !isShown(a) || !isShown(b)) continue;
-    const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
+    const dim = quietAnchors && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
-    if (b.c.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12, width + 2);
-    line(a, b, COLOR.state[e.state] || COLOR.dim, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6), width, dash);
+    if (b.c.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+    drawRelation(a, b, e, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim, 0, arrows ? sizeOf(e.tgt, b) + 2 : null);
   }
 
   for (const [name, n] of nodes) {
@@ -1868,13 +1910,19 @@ $('btn-reset').onclick = () => {
   }
 };
 $('btn-fit').onclick = fitView;
+function setQuietAnchors(on) {
+  quietAnchors = on;
+  $('btn-anchors').setAttribute('aria-pressed', String(on));
+  requestDraw();
+}
+$('btn-anchors').onclick = () => setQuietAnchors(!quietAnchors);
 $('btn-relations').onclick = () => setLayout('relations');
 $('btn-strata').onclick = () => setLayout('strata');
 slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
-// Space plays or pauses, S steps, F fits, V changes the layout, M shows or hides the
-// metabolism. The slider keeps its
+// Space plays or pauses, S steps, F fits, V changes the layout, A quiets the anchors'
+// relations, M shows or hides the metabolism. The slider keeps its
 // arrows; a focused button or summary keeps Space and Enter, which press it.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !(e.target instanceof Element)) return;
@@ -1883,7 +1931,7 @@ window.addEventListener('keydown', e => {
   const act = {
     ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView,
     v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
-    m: () => setMetabolismShown($('metab-body').hidden),
+    m: () => setMetabolismShown($('metab-body').hidden), a: () => setQuietAnchors(!quietAnchors),
   }[e.key.toLowerCase()];
   if (act) { e.preventDefault(); act(); }
 });

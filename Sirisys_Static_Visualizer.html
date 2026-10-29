@@ -500,6 +500,7 @@
     </div>
     <div class="ctrl-group floating">
       <button class="btn" id="btn-proofs" aria-pressed="false" title="Rings the constructs whose saved proofs carry the relation chosen in its list (P)">proofs</button>
+      <button class="btn" id="btn-anchors" aria-pressed="false" title="The relations of the anchors, often most of the edges: faint, so that the rest of the structure shows (A)">quiet anchors</button>
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
     <div class="ctrl-group floating">
@@ -601,6 +602,8 @@ const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INT
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
 // How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
 const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
+// TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
+const EXCHANGE_QUANTUM = 12;
 
 // ═══ The framework's constants, and settings ════════════════════════════════
 
@@ -615,6 +618,7 @@ const LAYOUT_STEPS = 300;         // force-layout steps for a new state
 const CONTINUE_STEPS = 120;       // for the next state of a timeline, which keeps the positions it can
 const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
 const LABEL_ZOOM = 3.5;           // every name is written from this zoom on; a selection's always
+const ARROW_ZOOM = 2;             // each edge's direction drawn from this zoom on; a selection's always
 const PLAY_MS = 900;              // per state, when the timeline plays
 
 // ═══ Helpers ════════════════════════════════════════════════════════════════
@@ -652,6 +656,12 @@ function edgeMark(state) {
   }
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
   svg.append(stroke);
+  if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
+    stroke.setAttribute('stroke-opacity', '0.4');
+    const exchanged = stroke.cloneNode();
+    exchanged.setAttribute('x1', '5'); exchanged.setAttribute('x2', '13'); exchanged.removeAttribute('stroke-opacity');
+    svg.append(exchanged);
+  }
   return svg;
 }
 
@@ -884,6 +894,10 @@ let view = null;                  // the state on screen, derived
 let previousNames = null;         // the constructs of the previous state of a timeline
 let selected = null;              // the construct in the inspector
 let proofOverlay = false;        // the constructs whose saved proofs carry one relation, ringed
+// The relations of the anchors, most edges in most runs: at full strength, or faint so that
+// the rest of the structure shows
+let quietAnchors = false;
+const QUIET = 0.12;
 let overlayRelation = PROOF_RELATIONS[0];
 
 function resizeCanvas() {
@@ -950,6 +964,22 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
   ctx.fillStyle = color; ctx.globalAlpha = alpha;
   ctx.fill();
 }
+// An edge as the canvas draws it: its state's colour and line, and from ARROW_ZOOM on an
+// arrowhead at its target (src → tgt). A BOTH channel is faint, with what it has exchanged
+// brighter from its middle outwards: whole when it closes at the quantum.
+function drawRelation(a, b, e, alpha, extra, arrowGap) {
+  const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, color = COLOR.state[e.state] || COLOR.dim;
+  if (e.state === 'BOTH' && e.both_age != null) {
+    const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
+    line(a, b, color, alpha * 0.4, width + extra);
+    if (share > 0) line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+  } else {
+    line(a, b, color, alpha, width + extra, dash);
+  }
+  if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
+}
+
 function render() {
   const W = canvas.width / DPR, H = canvas.height / DPR;
   ctx.clearRect(0, 0, W, H);
@@ -968,13 +998,13 @@ function render() {
     const a = positions.get(e.src), b = positions.get(e.tgt);
     const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
     if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state] || !onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
-    const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, dim = near && !emphasis ? 0.25 : ringed ? 0.45 : 1;
+    const quiet = quietAnchors && !emphasis && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
+    const dim = (near && !emphasis ? 0.25 : ringed ? 0.45 : 1) * quiet;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
-    if (cb.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, width + 2);
+    if (cb.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
     const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
-    line(a, b, COLOR.state[e.state] || COLOR.dim, alpha, emphasis ? width + 0.5 : width, dash);
-    if (emphasis) arrowhead(a, b, { gap: sizeOf(e.tgt, cb) + 2, len: 5 }, COLOR.state[e.state], 0.95);
+    drawRelation(a, b, e, alpha, emphasis ? 0.5 : 0, emphasis || viewK >= ARROW_ZOOM ? sizeOf(e.tgt, cb) + 2 : null);
   };
   for (const e of view.edges) if (!focus || (e.src !== focus && e.tgt !== focus)) drawEdge(e, false);
   if (focus) for (const e of view.edgesOf.get(focus)) drawEdge(e, true);   // its relations, on top, with their direction
@@ -1432,7 +1462,9 @@ function renderInspector() {
     const meta = el('div', 'meta', `${e.rel} · `);
     const state = el('span', null, e.state);
     state.style.color = COLOR.state[e.state];
-    meta.append(state, ` · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}${e.both_age ? ' · BOTH age ' + e.both_age : ''}`);
+    meta.append(state, ` · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}`
+      + (e.state === 'BOTH' && e.both_age != null       // what the channel has exchanged, of the quantum it closes at
+        ? ` · exchanged ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM}` : ''));
     body.append(nameRef(out ? e.tgt : e.src), meta);
     row.append(dir, body);
     parts.push(row);
@@ -1630,6 +1662,12 @@ $('btn-relations').onclick = () => setLayout('relations');
 $('btn-strata').onclick = () => setLayout('strata');
 $('btn-proofs').onclick = () => setProofOverlay(!proofOverlay);
 $('btn-fit').onclick = fitView;
+function setQuietAnchors(on) {
+  quietAnchors = on;
+  $('btn-anchors').setAttribute('aria-pressed', String(on));
+  requestDraw();
+}
+$('btn-anchors').onclick = () => setQuietAnchors(!quietAnchors);
 $('btn-prev').onclick = () => step(-1);
 $('btn-next').onclick = () => step(1);
 $('btn-play').onclick = togglePlaying;
@@ -1653,8 +1691,8 @@ search.addEventListener('input', () => {
 });
 search.addEventListener('keydown', e => { if (e.key === 'Enter') find(); });
 
-// F fits, V changes the layout, P shows the proofs, O opens, ← → move in the timeline,
-// Esc clears the selection. The search box keeps its letters and the slider its arrows;
+// F fits, V changes the layout, P shows the proofs, A quiets the anchors' relations, O opens,
+// ← → move in the timeline, Esc clears the selection. The search box keeps its letters and the slider its arrows;
 // a focused button uses only Space and Enter, which are not shortcuts here.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -1662,7 +1700,7 @@ window.addEventListener('keydown', e => {
   if (e.target instanceof Element && e.target.closest('input, textarea, select')) return;
   const act = {
     f: fitView, v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
-    p: () => setProofOverlay(!proofOverlay), o: () => fileInput.click(),
+    p: () => setProofOverlay(!proofOverlay), o: () => fileInput.click(), a: () => setQuietAnchors(!quietAnchors),
     arrowleft: () => step(-1), arrowright: () => step(1),
   }[e.key.toLowerCase()];
   if (act) { e.preventDefault(); act(); }

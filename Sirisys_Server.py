@@ -283,8 +283,10 @@ class ExperimentEngine:
                 "chirality": c.chirality,
                 "crystal": c.crystal_state.name if c.crystal_state else None,
             })
-        edges = [{"src": e.src, "tgt": e.tgt, "state": e.state.name, "weight": round(e.weight, 4)}
-                 for e in f.edges]
+        # both_age: the cycles a BOTH channel has stayed open; weight × both_age is what it has
+        # exchanged, and it closes at TetralemmaEngine.EXCHANGE_QUANTUM
+        edges = [{"src": e.src, "tgt": e.tgt, "state": e.state.name, "weight": round(e.weight, 4),
+                  "both_age": e.both_age} for e in f.edges]
         telemetry = self.ss.concordancy.pool_telemetry
         return {
             "type": "cycle", "run": self.run_dir.name, "cycle": self.cycle, "T": list(self.ss.clock.T),
