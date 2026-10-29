@@ -348,10 +348,12 @@ class ExperimentEngine:
                 "records": records}
 
     def _read_criteria(self) -> dict:
-        """The criteria as run_report.py reports them: the result, each criterion, the verdict."""
+        """The criteria as run_report.py reports them: the result, each criterion, what each
+        asks, the verdict."""
         result = self.life.result()
-        return {"cycles": result["cycles"], "result": result,
-                "checks": self.life.checks(result), "verdict": self.life.verdict(result)}
+        return {"cycles": result["cycles"], "result": result, "checks": self.life.checks(result),
+                "rules": {name: words for name, (words, _) in self.life.RULE.items()},
+                "verdict": self.life.verdict(result)}
 
     def _model_watch(self) -> dict | None:
         """The model watch so far; None without a model."""

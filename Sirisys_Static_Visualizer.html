@@ -8,8 +8,9 @@
   The inspector of a saved instance: open the state.json of an experiment run
   (sirisys_runs/<run>/state.json) or of any other instance, and examine it
   construct by construct: its proofs, its genesis, its relations. Several files
-  of one instance make a timeline. Nothing is sent anywhere and nothing is
-  needed besides this file: it works with no server and no connection.
+  of one instance make a timeline, with what the field did between each two.
+  Nothing is sent anywhere and nothing is needed besides this file: it works
+  with no server and no connection.
 
   The live view (Sirisys_Live_Visualizer.html) shows the field as it cycles; this
   one shows a moment of it in depth. Both use the same shapes, colours and names.
@@ -599,7 +600,8 @@ const MODE_MEANING = {
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
 // The relations a construct's proofs can carry, each with the sign of the mode it counts toward
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
-const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
+const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
+  : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
 // How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
 const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
@@ -651,9 +653,8 @@ function edgeMark(state) {
   const svg = document.createElementNS(NS, 'svg'), stroke = document.createElementNS(NS, 'line');
   svg.setAttribute('class', 'edge-mark');
   svg.setAttribute('width', '18'); svg.setAttribute('height', '8'); svg.setAttribute('viewBox', '0 0 18 8');
-  for (const [k, v] of Object.entries({ x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 })) {
-    stroke.setAttribute(k, v);
-  }
+  const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
+  for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
   svg.append(stroke);
   if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
@@ -973,7 +974,9 @@ function drawRelation(a, b, e, alpha, extra, arrowGap) {
     const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
     line(a, b, color, alpha * 0.4, width + extra);
-    if (share > 0) line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+    if (share > 0) {
+      line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+    }
   } else {
     line(a, b, color, alpha, width + extra, dash);
   }
@@ -1002,7 +1005,9 @@ function render() {
     const dim = (near && !emphasis ? 0.25 : ringed ? 0.45 : 1) * quiet;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
-    if (cb.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+    if (cb.layer === APPARENT && e.state !== 'BOTH') {
+      line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+    }
     const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
     drawRelation(a, b, e, alpha, emphasis ? 0.5 : 0, emphasis || viewK >= ARROW_ZOOM ? sizeOf(e.tgt, cb) + 2 : null);
   };
@@ -1023,7 +1028,9 @@ function render() {
       ctx.globalAlpha = 0.95 * dim; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
     } else {
       ctx.globalAlpha = dim; ctx.fillStyle = color; ctx.fill();
-      if (shape !== 'circle') { ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.6 * dim; ctx.lineWidth = 1; ctx.stroke(); }
+      if (shape !== 'circle') {
+        ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.6 * dim; ctx.lineWidth = 1; ctx.stroke();
+      }
     }
     if (c.conflict) {                                 // ⊗: a conflict, a structure of its own
       const k = size + 2, d = k * Math.SQRT1_2;
@@ -1206,7 +1213,8 @@ function renderBreakdown(id, rows) {
     }
     const label = el('span', 'label', r.label);
     if (r.title) label.title = r.title;
-    row.append(...spaced([marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')].filter(Boolean)));
+    const parts = [marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')];
+    row.append(...spaced(parts.filter(Boolean)));
     return row;
   }));
 }
@@ -1315,7 +1323,8 @@ function renderCounters(t) {
 }
 
 function renderBreakdowns(t) {
-  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: t.modes[m], sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
+  renderBreakdown('modes-list', MODES.map(m => ({
+    label: m, count: t.modes[m], sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
   renderBreakdown('layers-list', LAYERS.map(l => ({ label: l, count: t.layers[l], color: COLOR.layer[l] })));
   renderLagrangian(view.state.field.constructs);
   for (const l of LAYERS) filterCounts.layer[l].textContent = t.layers[l];
@@ -1428,7 +1437,8 @@ function renderInspector() {
       : `newest first:`));
     for (const p of [...proofs].reverse()) {
       const entry = el('div', 'proof');
-      entry.append(el('div', 'rel', `${relationSign(p.relation)} ${p.relation}` + (p.tensate_role ? ' · ' + p.tensate_role : '')),
+      const role = p.tensate_role ? ' · ' + p.tensate_role : '';
+      entry.append(el('div', 'rel', `${relationSign(p.relation)} ${p.relation}${role}`),
         el('div', 'meta', `anchor ${p.anchor} · ${p.lagrange || '—'} · T${atT(p.time)}`),
         el('div', 'meta', p.id));
       parts.push(entry);
@@ -1569,7 +1579,8 @@ function renderInterval(index) {
   const prev = timeline[index - 1], cur = timeline[index];
   const why = !prev ? null
     : runOf(prev.state) !== runOf(cur.state) ? 'the previous file is of another run: no metabolism between them'
-    : prev.estimated.length || cur.estimated.length ? 'a file written before v13.3 keeps no exact totals: no metabolism between them'
+    : prev.estimated.length || cur.estimated.length
+      ? 'a file written before v13.3 keeps no exact totals: no metabolism between them'
     : null;
   $('tl-interval').hidden = !prev || !!why;
   $('tl-interval-note').hidden = !why;

@@ -8,7 +8,9 @@
   The live view of one experiment instance, served by Sirisys_Server.py
   (http://127.0.0.1:8000). It receives one snapshot per cycle, over the
   WebSocket /ws or, where that is blocked, by polling /api/snapshot, and draws
-  the field. The buttons send play, pause, step, reset and speed. The server's
+  the field; under it, the instance's metabolism breath by breath (its history
+  from /api/history); beside it, the counters, the Phase 3 criteria and the
+  event log. The buttons send play, pause, step, reset and speed. The server's
   interface is described at the top of Sirisys_Server.py.
 -->
 <style>
@@ -284,6 +286,7 @@
   .field { position: relative; flex: 1; min-height: 0; overflow: hidden; }
   #canvas { display: block; width: 100%; height: 100%; cursor: grab; }
   #canvas:active { cursor: grabbing; }
+
   /* ───── The metabolism, under the field ───── */
   .metabolism { flex: none; border-top: 1px solid var(--border); background: var(--bg-1); }
   .metab-head {
@@ -292,6 +295,7 @@
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide); color: var(--text-dim);
   }
   .metab-toggle {
+    flex-shrink: 0; white-space: nowrap;
     padding: 2px 0; border: 0; background: none; cursor: pointer;
     font: inherit; letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-muted);
   }
@@ -303,10 +307,11 @@
   .metab-key i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 1px; vertical-align: -1px; }
   .metab-body[hidden] { display: none; }
   #metab-chart { display: block; width: 100%; height: 112px; }
-  .metab-read {                                 /* two lines at most: the bar under the pointer */
+  .metab-read {                                 /* the bar under the pointer: two lines, three on a narrow screen */
     height: 30px; padding: 0 var(--sp-3) 4px; overflow: hidden;
     font-family: var(--font-mono); font-size: 10px; line-height: 13px; color: var(--text-muted);
   }
+  @media (max-width: 1300px) { .metab-read { height: 43px; } }
 
   .floating {                                   /* the boxes over the field */
     background: var(--bg-elevated);
@@ -709,8 +714,8 @@ const ARROW_ZOOM = 2;             // each edge's direction drawn from this zoom 
 // Zero Points at the centre, as origin and anchor (a design choice). As in the inspector.
 const RINGS = { zero: 0, anchor: 60, NULL_00: 110, UMBRA_0: 170, UNIT_1: 240, APPARENT: 330 };
 const HISTORY_KEPT = 2048;        // metabolism records before the oldest are merged in pairs (as the server)
-const METAB_BAR_PX = 12;          // the widest bar of the metabolism, and the narrowest
-const METAB_MIN_BAR_PX = 2;
+const METAB_BAR_PX = 12;          // the widest bar of the metabolism
+const METAB_MIN_BAR_PX = 2;       // and the narrowest: more breaths than fit are merged into one bar
 const POLL_MS = 300;              // polling, while the field cycles
 const RECONNECT_MS = 2000;        // a WebSocket that closed
 const WS_RETRY_MS = 30000;        // a WebSocket that failed while the server answered
@@ -744,9 +749,8 @@ function edgeMark(state) {
   const svg = document.createElementNS(NS, 'svg'), stroke = document.createElementNS(NS, 'line');
   svg.setAttribute('class', 'edge-mark');
   svg.setAttribute('width', '18'); svg.setAttribute('height', '8'); svg.setAttribute('viewBox', '0 0 18 8');
-  for (const [k, v] of Object.entries({ x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 })) {
-    stroke.setAttribute(k, v);
-  }
+  const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
+  for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
   svg.append(stroke);
   if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
@@ -923,7 +927,9 @@ function drawRelation(a, b, e, alpha, extra, arrowGap) {
     const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
     line(a, b, color, alpha * 0.4, width + extra);
-    if (share > 0) line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+    if (share > 0) {
+      line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
+    }
   } else {
     line(a, b, color, alpha, width + extra, dash);
   }
@@ -957,8 +963,11 @@ function render(now) {
     const dim = quietAnchors && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
-    if (b.c.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
-    drawRelation(a, b, e, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim, 0, arrows ? sizeOf(e.tgt, b) + 2 : null);
+    if (b.c.layer === APPARENT && e.state !== 'BOTH') {
+      line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+    }
+    const alpha = Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
+    drawRelation(a, b, e, alpha, 0, arrows ? sizeOf(e.tgt, b) + 2 : null);
   }
 
   for (const [name, n] of nodes) {
@@ -1004,7 +1013,7 @@ function render(now) {
   ctx.restore();
 }
 
-// One frame draws whatever changed: the field, its rings while they last, the chart
+// One frame draws whatever changed: the field, its rings while they last, the charts
 const pulses = [];                // { name, crystal, x, y, start }
 let framePending = false, chartStale = false, metabStale = false;
 function requestDraw() {
@@ -1206,7 +1215,7 @@ function renderShapeCount(constructs) {
 
 // ═══ The panels ═════════════════════════════════════════════════════════════
 
-// Rows of { label, count, color, title }, each with a bar as long as its share
+// Rows of { label, count, color?, sign?, title }, each with a bar as long as its share
 function renderBreakdown(id, rows) {
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
   $(id).replaceChildren(...rows.map(r => {
@@ -1224,7 +1233,8 @@ function renderBreakdown(id, rows) {
     }
     const label = el('span', 'label', r.label);
     if (r.title) label.title = r.title;
-    row.append(...spaced([marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')].filter(Boolean)));
+    const parts = [marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')];
+    row.append(...spaced(parts.filter(Boolean)));
     return row;
   }));
 }
@@ -1309,7 +1319,8 @@ function drawTelemetry() {
   contraction.forEach((v, i) => tctx.lineTo(xAt(i), yAt(v)));
   tctx.lineTo(xAt(contraction.length - 1), yAt(0)); tctx.closePath();
   tctx.fillStyle = COLOR.dim; tctx.globalAlpha = 0.28; tctx.fill(); tctx.globalAlpha = 1;
-  plot(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.layer.APPARENT, 1.3);
+  const exchange = telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0));
+  plot(exchange, COLOR.layer.APPARENT, 1.3);
   tctx.font = '9px ' + FONT_MONO; tctx.textBaseline = 'top'; tctx.textAlign = 'right';
   tctx.fillStyle = COLOR.layer.APPARENT; tctx.fillText('— exchange', W - 5, 3);
   tctx.fillStyle = COLOR.muted; tctx.fillText('▮ contraction  ', W - 5 - tctx.measureText('— exchange').width, 3);
@@ -1396,8 +1407,9 @@ function binRecords(records, width) {
 }
 const sumOf = counts => Object.values(counts || {}).reduce((sum, n) => sum + n, 0);
 
-// Three rows, each on its own scale: born above, concluded below; rises above (to UNIT_1,
-// then to APPARENT), crystals that concluded below; the population by layer at the end
+// Three rows, each on its own scale: born above, concluded below; rises above (those that
+// stop short of APPARENT, almost all to UNIT_1, then the crystallizations), the crystals that
+// concluded below; the population by layer at the end of the breath
 const METAB_ROWS = [
   { top: 4, height: 34, up: '↑ born', down: '↓ concluded' },
   { top: 44, height: 34, up: '↑ rose', down: '↓ crystals concluded' },
@@ -1454,7 +1466,9 @@ function drawMetabolism() {
     bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, 0.95 * now);
     bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.45 * now);
     let y = c.top + c.height;
-    for (const layer of LAYERS) y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], 0.9 * now);
+    for (const layer of LAYERS) {
+      y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], 0.9 * now);
+    }
   });
   mctx.globalAlpha = 1; mctx.fillStyle = COLOR.dim; mctx.textAlign = 'left';
   [[flow, METAB_ROWS[0]], [rises, METAB_ROWS[1]], [people, METAB_ROWS[2]]].forEach(([max, row]) =>
@@ -1484,7 +1498,8 @@ function setMetabolismShown(shown) {
 $('metab-toggle').onclick = () => setMetabolismShown($('metab-body').hidden);
 $('metab-chart').addEventListener('mousemove', e => {
   const rect = $('metab-chart').getBoundingClientRect(), n = metabBins.length;
-  const plotW = rect.width - METAB_GUTTER.left - METAB_GUTTER.right, step = Math.min(METAB_BAR_PX + 1, plotW / Math.max(1, n));
+  const plotW = rect.width - METAB_GUTTER.left - METAB_GUTTER.right;
+  const step = Math.min(METAB_BAR_PX + 1, plotW / Math.max(1, n));
   const i = Math.floor((e.clientX - rect.left - METAB_GUTTER.left) / step);
   const hover = i >= 0 && i < n ? i : null;
   if (hover !== metabHover) { metabHover = hover; metabStale = true; requestDraw(); }
@@ -1493,20 +1508,22 @@ $('metab-chart').addEventListener('mouseleave', () => { metabHover = null; metab
 
 // ═══ The criteria ═══════════════════════════════════════════════════════════
 
-// The Phase 3 rule as sirisys_measures.LifeCriteria judges it; the server sends each
-// criterion's result (checks) and the verdict, read every few hundred cycles
+// The Phase 3 rule as sirisys_measures.LifeCriteria judges it. Every few hundred cycles the
+// server reads the result, each criterion (checks), what each asks (rules, written beside
+// the rule itself) and the verdict; here, how each value is shown
 const CRITERIA = [
-  ['durable', 'durable crystals', r => r.durable_per_1000.length ? `min ${Math.min(...r.durable_per_1000)} / 1000` : '—',
-   'at least 1 living a breath in every 1000 cycles'],
-  ['flicker', 'flicker', r => r.flicker_share != null ? `${(100 * r.flicker_share).toFixed(1)} %` : '—',
-   'at most 5 % of crystals gone within a breath'],
-  ['population', 'population trend', r => fixed(r.constructs_trend, 2), 'at most ×1.2: no growth'],
-  ['cost', 'cost per cycle', r => r.ms_first_last ? `${r.ms_first_last[0]} → ${r.ms_first_last[1]} ms` : '—',
-   'last ≤ 1.5 × first + 0.5 ms: flat'],
-  ['energy', 'top-3 energy trend', r => fixed(r.top3_energy_trend, 2), 'at most ×1.2: bounded'],
+  ['durable', 'durable crystals', r => r.durable_per_1000.length ? `min ${Math.min(...r.durable_per_1000)} / 1000` : '—'],
+  ['flicker', 'flicker', r => r.flicker_share != null ? `${(100 * r.flicker_share).toFixed(1)} %` : '—'],
+  ['population', 'population trend', r => fixed(r.constructs_trend, 2)],
+  ['cost', 'cost per cycle', r => r.ms_first_last ? `${r.ms_first_last[0]} → ${r.ms_first_last[1]} ms` : '—'],
+  ['energy', 'top-3 energy trend', r => fixed(r.top3_energy_trend, 2)],
 ];
 let criteriaEvery = null;          // cycles between two readings, as the server says
+let criteriaShown = null;          // what the panel shows, so that an unchanged status redraws nothing
 function renderCriteria(c) {
+  const key = JSON.stringify([c, criteriaEvery]);
+  if (key === criteriaShown) return;
+  criteriaShown = key;
   const verdict = $('criteria-verdict'), mark = $('header-criteria-mark');
   if (!c || c.unavailable) {
     const why = c ? `not measured: ${c.unavailable}`
@@ -1532,9 +1549,9 @@ function renderCriteria(c) {
   };
   const [lowest, mean, highest] = r.new_per_200 || [];
   // Each criterion marked only once the rule can judge: before, its value alone
-  const judged = key => c.verdict == null ? null : c.checks[key] === true ? 'holds' : c.checks[key] === false ? 'fails' : null;
+  const judged = k => c.verdict == null || c.checks[k] == null ? null : c.checks[k] ? 'holds' : 'fails';
   $('criteria-list').replaceChildren(
-    ...CRITERIA.map(([key, name, value, rule]) => row(judged(key), name, value(r), rule)),
+    ...CRITERIA.map(([k, name, value]) => row(judged(k), name, value(r), (c.rules || {})[k] || '')),
     row(null, 'new crystals', r.new_per_200 ? `${lowest} · ${mean} · ${highest}` : '—',
         `per 200 cycles: least · mean · most; ${r.zero_windows} of ${r.windows} windows with none`),
     row(null, 'tolerance', r.tolerance_first_last ? `${r.tolerance_first_last[0]} → ${r.tolerance_first_last[1]}` : '—',
@@ -1717,8 +1734,10 @@ function applySnapshot(snap) {
   if (snap.criteria) renderCriteria(snap.criteria);
   renderCounters(snap);
   renderBreathing(snap);
-  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: snap.modes[m] || 0, sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
-  renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({ label: k, count: v, color: COLOR.layer[k] || '#888' })));
+  renderBreakdown('modes-list', MODES.map(m => ({
+    label: m, count: snap.modes[m] || 0, sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
+  renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({
+    label: k, count: v, color: COLOR.layer[k] || '#888' })));
   renderLagrangian(snap.field.constructs);
   updateFilterCounts(snap);
   renderPoolTelemetry(snap);
@@ -1922,8 +1941,8 @@ slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
 // Space plays or pauses, S steps, F fits, V changes the layout, A quiets the anchors'
-// relations, M shows or hides the metabolism. The slider keeps its
-// arrows; a focused button or summary keeps Space and Enter, which press it.
+// relations, M shows or hides the metabolism. The slider keeps its arrows; a focused
+// button or summary keeps Space and Enter, which press it.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !(e.target instanceof Element)) return;
   if (e.target.closest('input, textarea, select')) return;

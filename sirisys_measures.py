@@ -83,13 +83,19 @@ class LifeCriteria:
                                      round(sum(tol[-k:]) / max(1, k), 3)) if k else None,
         }
 
-    # The Phase 3 acceptance rule, criterion by criterion, in the order it is judged
+    # The Phase 3 acceptance rule, criterion by criterion, in the order it is judged: what
+    # each asks, in words (the live view shows them), and the test
     RULE = {
-        "durable": lambda r: min(r["durable_per_1000"]) >= 1,
-        "flicker": lambda r: r["flicker_share"] <= 0.05,
-        "population": lambda r: r["constructs_trend"] <= 1.2,
-        "cost": lambda r: r["ms_first_last"][1] <= 1.5 * r["ms_first_last"][0] + 0.5,
-        "energy": lambda r: r["top3_energy_trend"] <= 1.2,
+        "durable": ("at least 1 crystal living a breath in every 1000 cycles",
+                    lambda r: min(r["durable_per_1000"]) >= 1),
+        "flicker": ("at most 5 % of crystals gone within a breath",
+                    lambda r: r["flicker_share"] <= 0.05),
+        "population": ("at most ×1.2, the recent population against the earlier: no growth",
+                       lambda r: r["constructs_trend"] <= 1.2),
+        "cost": ("last ≤ 1.5 × first + 0.5 ms: flat",
+                 lambda r: r["ms_first_last"][1] <= 1.5 * r["ms_first_last"][0] + 0.5),
+        "energy": ("at most ×1.2, its recent samples against the earlier: bounded",
+                   lambda r: r["top3_energy_trend"] <= 1.2),
     }
 
     @staticmethod
@@ -97,7 +103,7 @@ class LifeCriteria:
         """Each criterion of the rule: True or False, or None where the life is
         too short to say."""
         held = {}
-        for name, rule in LifeCriteria.RULE.items():
+        for name, (_, rule) in LifeCriteria.RULE.items():
             try:
                 held[name] = bool(rule(r))
             except (TypeError, ValueError, KeyError):
