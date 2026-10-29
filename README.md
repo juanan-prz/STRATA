@@ -119,7 +119,7 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
 
 ```bash
 python3 test_sirisys.py              # integrity, determinism, bounded memory
-python3 test_phase1.py               # experiment engine, model backends, web layer, model health, experiment tools
+python3 test_phase1.py               # experiment engine, model backends, web layer, model health, experiment tools, the visualizers' names
 python3 test_phase2_guarantee.py     # measuring topology and depth leaves the ledger and the field unchanged
 python3 test_phase4.py               # segmented ledger, tampering, crash during rotation, disk
 python3 test_ontology.py             # invariants of the field, cycle by cycle, with and without a model

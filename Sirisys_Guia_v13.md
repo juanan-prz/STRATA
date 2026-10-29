@@ -102,7 +102,7 @@ Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su
 
 ```bash
 python3 test_sirisys.py      # integridad, determinismo sin azar, memoria acotada
-python3 test_phase1.py       # motor del experimento, backends del modelo, capa web, salud del modelo y herramientas de experimento
+python3 test_phase1.py       # motor del experimento, backends del modelo, capa web, salud del modelo, herramientas de experimento y los nombres de los visualizadores
 python3 test_phase2_guarantee.py   # medir topología y profundidad no altera el ledger ni el campo
 python3 test_phase4.py       # ledger por segmentos, manipulación, cortes durante una rotación, disco
 python3 test_ontology.py     # invariantes del campo, ciclo a ciclo, con y sin modelo

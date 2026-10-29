@@ -1,15 +1,19 @@
 """Everything around the field: the experiment engine, the model backends, the
-profiles, the web layer, the model-health watch, and the experiment tools
-(run_report.py, live_c2.py).
+profiles, the web layer, the model-health watch, the experiment tools
+(run_report.py, live_c2.py), and the names and constants the visualizers share
+with the framework.
 No API key, no Ollama and no FastAPI needed: a local fake model, and a stub in
 place of the web framework.
 Usage: python3 test_phase1.py"""
+import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 from sirisys_measures import ModelHealth
@@ -324,5 +328,87 @@ check("withholding every channel through the model path gives the control, bit f
 check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
       set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
       and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")
+
+
+# A view that drifts from the code it shows is wrong without an error anywhere. Each
+# visualizer is one file that opens alone, so the names and constants it shares with
+# the framework are written in it; these checks read them from both files and compare
+# them with the framework and with each other. The formulas the inspector mirrors are
+# not compared here: that needs a browser.
+check.section("6 · The visualizers and the framework")
+
+
+def declared(html, name):
+    """The right-hand side of a visualizer's top-level `const <name> = …;`."""
+    found = re.search(rf"^const {name} = (.*?);[ \t]*(?://[^\n]*)?\n", html, re.M | re.S)
+    return found.group(1) if found else ""
+
+
+def quoted(text):
+    return re.findall(r"'([^']*)'", text)
+
+
+def tokens(html):
+    """The colour tokens of a visualizer: the custom properties of its :root."""
+    return dict(re.findall(r"(--[\w-]+):\s*([^;]+?)\s*;", re.search(r":root\s*\{(.*?)\}", html, re.S).group(1)))
+
+
+views = {name: (HERE / f).read_text(encoding="utf-8") for name, f in
+         (("live", "Sirisys_Live_Visualizer.html"), ("inspector", "Sirisys_Static_Visualizer.html"))}
+framework_source = Path(S.__file__).read_text(encoding="utf-8")
+framework_names = {
+    "layers": [layer.name for layer in sorted(S.Layer, key=lambda layer: layer.value)],
+    "states": {s.value for s in S.TetraState},
+    "zero points": set(S.ZERO_POINTS),
+    "anchors": set(S.ANCHORS),
+    "Lagrangian points": {p.value for p in S.LagrangianPoint},
+}
+drift = []
+for view, html in views.items():
+    zero_points = set(quoted(declared(html, "ZERO_POINTS")))
+    anchors = set(quoted(declared(html, "ANCHORS"))) | (zero_points if "...ZERO_POINTS" in declared(html, "ANCHORS") else set())
+    carried = {
+        "layers": quoted(declared(html, "LAYERS")),
+        "states": set(quoted(declared(html, "STATES"))),
+        "zero points": zero_points,
+        "anchors": anchors,
+        "Lagrangian points": set(re.findall(r"\b(L\d):", declared(html, "LAGRANGE"))),
+    }
+    drift += [f"{view}: {what}" for what in framework_names if carried[what] != framework_names[what]]
+    if declared(html, "APPARENT") != str(S.Layer.APPARENT.value):
+        drift.append(f"{view}: APPARENT")
+check("both visualizers carry the framework's names: layers in order, edge states, Zero Points, anchors, "
+      "Lagrangian points", not drift, ", ".join(drift) or "live and inspector agree with the framework")
+
+inspector = views["inspector"]
+modes_source = inspect.getsource(S.ConcordancyField.compute_existence_mode)
+relations_of = lambda kind: set(re.findall(r'"([A-Z]+)"', re.search(rf"{kind}_relations\s*=\s*\{{([^}}]*)\}}", modes_source).group(1)))
+LEDGER_ONLY = {"TERMINATE", "SHIFT"}                # sealed in the ledger, never attached to a construct
+constants = {
+    "ERA_CAPACITY": S.InternalClock.ERA_CAPACITY,
+    "DECAY": S.InternalClock.DECAY,
+    "VC_UNSTABLE": float(re.search(r"Vc_THRESHOLD\s*=\s*([\d.]+)", inspect.getsource(S.Sombunal.global_instability)).group(1)),
+}
+drift = [name for name, value in constants.items() if float(declared(inspector, name) or "nan") != value]
+if set(quoted(declared(inspector, "MODES"))) != set(re.findall(r'return "([A-Z]+)"', modes_source)):
+    drift.append("MODES")
+for kind in ("omega", "lemniscate"):
+    if set(quoted(declared(inspector, f"{kind.upper()}_RELATIONS"))) != relations_of(kind):
+        drift.append(f"{kind.upper()}_RELATIONS")
+if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY:
+    drift.append("PROOF_RELATIONS")
+check("the inspector's constants are the framework's: the clock, the Vc threshold, the existence modes "
+      "and their relations, the relations a construct's proofs can carry",
+      not drift, ", ".join(drift) or f"{len(constants) + 4} constants agree")
+
+live_tokens, inspector_tokens = tokens(views["live"]), tokens(inspector)
+shared = set(live_tokens) & set(inspector_tokens)
+differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
+rings = {view: declared(html, "RINGS") for view, html in views.items()}
+rings_alike = bool(rings["live"]) and rings["live"] == rings["inspector"]
+check("the two views agree with each other: the strata rings, and every colour token both define",
+      rings_alike and len(shared) > 20 and not differ,
+      f"rings {'alike' if rings_alike else 'differ'}; "
+      + (f"tokens differ: {', '.join(differ)}" if differ else f"{len(shared)} shared tokens alike"))
 
 check.finish()
