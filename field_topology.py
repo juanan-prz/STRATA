@@ -227,7 +227,7 @@ class Genealogy:
 
     The parent -> product edges are pruned as they weaken, so depth cannot be
     read from the edges at sampling time. Call update() after every cycle: it
-    reads that cycle's operations from ConcordancyOperator.ops_log(), which
+    reads that cycle's operations from ConcordancyOperator.ops_log, which
     records x, y and z for each one, and keeps depths only for the constructs
     still in the field (a name that concludes and returns later starts afresh).
     """

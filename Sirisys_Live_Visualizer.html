@@ -1951,8 +1951,13 @@ slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
 // Space plays or pauses, S steps, F fits, V changes the layout, A quiets the anchors'
-// relations, M shows or hides the metabolism. The slider keeps its arrows; a focused
-// button or summary keeps Space and Enter, which press it.
+// relations, M shows or hides the metabolism. The slider keeps its arrows. A button reached
+// with the keyboard (or a summary) keeps Space and Enter, which press it; a button clicked
+// with the pointer hands the focus back, so Space still plays or pauses right after a click
+// on Step or Reset.
+document.addEventListener('click', e => {
+  if (e.detail > 0 && e.target instanceof Element) e.target.closest('button')?.blur();
+});
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !(e.target instanceof Element)) return;
   if (e.target.closest('input, textarea, select')) return;

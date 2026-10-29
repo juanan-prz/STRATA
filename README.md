@@ -97,7 +97,7 @@ The server can be left cycling with no browser open: it keeps only the latest 20
 
 ## Core concepts
 
-**Layers.** Constructs live in four layers: `NULL_00` (held only by the origin anchor), `UMBRA_0` (where products, conflicts and percepts are born), `UNIT_1` (active units, candidates to crystallize) and `APPARENT` (crystals). A construct rises a layer when enough tension reaches it (cussive collapse); an Apparent is incontrovertible.
+**Layers.** Constructs live in four layers: `NULL_00` (held only by the origin anchor), `UMBRA_0` (where percepts, questions, conflicts and most products are born), `UNIT_1` (active units, candidates to crystallize; a `BOTH` product is born here) and `APPARENT` (crystals). A construct rises a layer when enough tension reaches it (cussive collapse); an Apparent is incontrovertible.
 
 **Tetralemma.** Every relation carries one of four states: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Sustained `BOTH` drives emergence and closes once enough recursion has been exchanged through it. `NEITHER×NEITHER` materializes a conflict, or, past a per-cycle cap, the fourth corner itself: no combination is a dead end.
 
