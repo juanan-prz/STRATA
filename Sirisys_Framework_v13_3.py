@@ -22,8 +22,9 @@
 #
 # ONE CYCLE (run_cycle — the only definition; run(), the server and
 # run_report.py all call it):
-#   perceive → tetralemma scan → intensify conflicts → [::] → cussive
-#   collapse → UCO erosion → prune → (narration) → Sombunal question → tick
+#   perceive → tetralemma scan → breathe → intensify conflicts → [::] →
+#   cussive collapse → UCO erosion → prune → (narration) → Sombunal question
+#   → tick
 #
 # KEY PRINCIPLES AND THEIR ANCHORS
 #   No PRNG. Every choice is orient(key): a hash of the ledger head (the whole
@@ -73,46 +74,67 @@
 # a local model through Ollama needs no Python package.
 # =============================================================================
 
-import os, json, hashlib, shutil, time, warnings, threading, atexit
+import atexit
+import gzip
+import hashlib
+import json
+import os
+import shutil
+import threading
+import time
+import urllib.parse
+import urllib.request
+import warnings
+from collections import defaultdict
+from dataclasses import asdict, dataclass, fields
+from enum import Enum
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+
 try:
     import fcntl                      # POSIX advisory lock (macOS, Linux)
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
-import numpy as np
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-from collections import defaultdict
-from enum import Enum
-from typing import Optional, List, Tuple, Dict, Any
 
 warnings.filterwarnings("ignore")
 
+# ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
 LEDGER_FILE              = Path("sirisys_v13_ledger.jsonl")   # append-only proof ledger
-CHAIN_WINDOW             = 64     # in-memory proof_chain window (ledger keeps all)
-TERMINATION_WINDOW       = 200    # in-memory termination_log window (ledger keeps all)
+# the active ledger segment's size before it is compressed (SIRISYS_SEGMENT_BYTES)
+SEGMENT_BYTES            = int(os.environ.get("SIRISYS_SEGMENT_BYTES", 32 * 1024 * 1024))
+
+# ── working windows: memory keeps the recent part, the ledger keeps all ──────
+CHAIN_WINDOW             = 64     # proof_chain of each construct
+TERMINATION_WINDOW       = 200    # termination_log
+TERMINATED_INDEX_WINDOW  = 1000   # names remembered for reincarnation
+LINEAGE_WINDOW           = 50     # identity lineage of each construct
+APPARENT_LOG_WINDOW      = 200    # recent crystallization names (apparents_total counts all)
+
+# ── crystallization and existence ────────────────────────────────────────────
 THRESHOLD_APPARENT       = 0.88   # UNIT_1 → APPARENT (cussive crystallization)
 THRESHOLD_UNIT_1         = 0.396  # UMBRA_0 → UNIT_1 (= 0.88 × 0.45)
-TERMINATED_INDEX_WINDOW  = 1000   # names remembered for reincarnation (ledger keeps all)
+APPARENT_FLOOR           = 0.10   # weight at which an edge into a crystal holds it (prune and collapse)
 HALO_FRACTION            = 0.25   # Level 3: share of a dissolved channel's weight that backs up
 SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exchangeable apparent passes per exchange
+
+# ── breathing and tolerance ──────────────────────────────────────────────────
 BREATH_PERIOD            = 24     # Level 3: cycles per breath
-TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
-TOLERANCE_FLOOR          = 0.30   # Level 3: the tolerance never lowers thresholds below 30 %
-APPARENT_FLOOR           = 0.10   # weight at which an edge into a crystal holds it (prune and collapse)
-LINEAGE_WINDOW           = 50     # in-memory identity lineage per construct (ledger keeps all)
-APPARENT_LOG_WINDOW      = 200    # recent crystallization names kept (apparents_total counts all)
-SEGMENT_BYTES            = int(os.environ.get("SIRISYS_SEGMENT_BYTES", 32 * 1024 * 1024))  # active segment size before compression
 BREATH_DEPTH             = 0.35   # Level 3: how far contraction lowers the cussive thresholds
 BREATH_MAX_EXTRA_OPS     = 2      # Level 3: extra [::] operations at full expansion
-MAX_NODE_NAME            = 120
+TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
+TOLERANCE_FLOOR          = 0.30   # Level 3: the tolerance never lowers thresholds below 30 %
+
+# ── the intermediary ─────────────────────────────────────────────────────────
+MAX_NODE_NAME            = 120    # longest name a model's answer can give a construct
 MAX_LLM_CALLS_PER_CYCLE  = 4
 
-# =============================================================================
 
+# =============================================================================
 # ONTOLOGICAL LAYERS  —  Understanding_TMC ladder (pp.49-51): NULL_00 → UMBRA_0 → UNIT_1 → APPARENT
 # (TMC pp.44-50 has a finer taxonomy: [000] [00] [001] [002] [003] [0])
-
 # =============================================================================
 
 class Layer(Enum):
@@ -121,11 +143,10 @@ class Layer(Enum):
     UNIT_1   = 2  # [1]:  active recursive existence
     APPARENT = 3  # incontrovertible — recursion failed gracefully into structure
 
-# =============================================================================
 
+# =============================================================================
 # TETRALEMMIC STATES  —  Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
 # (TMC pp.16-17: the tetralemma as universal base logic)
-
 # =============================================================================
 
 class TetraState(Enum):
@@ -134,32 +155,22 @@ class TetraState(Enum):
     BOTH    = "BOTH"    # sustained contradiction — generative tension
     NEITHER = "NEITHER" # pre-ontological suspension — approaching [00]
 
+
 # =============================================================================
-
 # LAGRANGIAN POINTS  —  DeOS Compiler Guide, pp. 77-82
-
+#
 # "If the Five Zero Points act as immovable anchors, the Five Lagrangian
-
 # Points represent the regions of balance and interplay between forces."
-
-
+#
 # Formal definition: Li = fi(Z, C)   where Z = Zero Points, C = active constructs
-
 # Invariant: ∀C, ∃(Z, L) such that I(C) ⊇ {wC, Zi, Lj}
-
-
+#
 # Mapping to our operations (extension by structural analogy):
-
 # L1 — concordancy synthesis  (safety=don't lose tension, liveness=generate z)
-
 # L2 — conflict materialization (redundancy=track irresolvability, efficiency cost)
-
 # L3 — cussive collapse → Apparent (local tension → global incontrovertible truth)
-
 # L4 — UCO erosion (proof depth=chase contradictions vs. performance=dissolve)
-
 # L5 — perception events (entropy=real-world data vs. determinism=framework logic)
-
 # =============================================================================
 
 class LagrangianPoint(Enum):
@@ -169,36 +180,26 @@ class LagrangianPoint(Enum):
     L4 = "L4"  # Proof depth vs. performance
     L5 = "L5"  # Entropy vs. determinism
 
-# Lagrangian domains (DeOS Compiler Guide, Level 2) — documentation only; the
-# code tags constructs and proofs with LagrangianPoint values directly:
-#   L1 safety vs. liveness · L2 redundancy vs. efficiency · L3 local vs. global
-#   identity · L4 proof depth vs. performance · L5 entropy vs. determinism
 
 # =============================================================================
-
 # PROOF OBJECT  —  DeOS Compiler Guide, pp. 83-98
-
+#
 # "Proofs function as mandatory and irreversible memory."
-
 # "Once emitted, a proof object cannot be discarded, overwritten, or bypassed."
-
-
+#
 # Proof = ⟨id, subject, relation, object, witness, meta⟩
-
 # meta  = { anchor: Zi, lagrange: Lj, time: (era, offset) }
-
-
+#
 # Proofs accumulate in a chain — they are never erased, only extended.
-
 # A proof can itself become the subject of a new proof (recursive chaining).
-
 # =============================================================================
 
 @dataclass
 class ProofObject:
-    id:       str                       # e.g. "concordancy::c3", "conflict::p_c7"
+    id:       str                       # e.g. "concordancy::c3", "conflict::tensin_left::c7"
     subject:  str                       # witness of the construct being certified
     relation: str                       # CONCORDANCE | CONFLICT | COLLAPSE | PERCEIVE | ERODE | INTENSIFY
+                                        # | REINCARNATE | TERMINATE | SHIFT
     object:   str                       # witness or ZP name validated against
     witness:  str                       # SHA-256[:16] of this proof's own identity
     anchor:   str                       # Zi — Zero Point anchoring this proof
@@ -213,8 +214,8 @@ class ProofObject:
     #   TENSIN_LEFT  — left intake  (x)
     #   TENSIN_RIGHT — right intake (y)
     #   TENSOUT      — outgoing emergent or conflict (z)
-    # Optional: standalone proofs (PERCEIVE, ERODE, INTENSIFY, COLLAPSE)
-    # carry no role and no shared op_witness.
+    # Every other proof (PERCEIVE, ERODE, INTENSIFY, COLLAPSE, REINCARNATE,
+    # TERMINATE, SHIFT, genesis, question) stands alone: no role, no op_witness.
     op_witness:    Optional[str] = None
     tensate_role:  Optional[str] = None
 
@@ -222,8 +223,9 @@ class ProofObject:
     # When a construct is removed via prune(), a TERMINATE proof preserves
     # its final state in this field — final_mode, final_Vc, lifetime, cause.
     # This satisfies WALL D: "An identity never vanishes silently. It
-    # concludes." TERMINATE, COLLAPSE, REINCARNATE and ERODE proofs
-    # populate meta; all others leave it None.
+    # concludes." TERMINATE, COLLAPSE, REINCARNATE, ERODE and SHIFT proofs
+    # populate meta, and so do the two intake proofs of a concordance (the
+    # operand's sense); all others leave it None.
     meta: Optional[Dict[str, Any]] = None
 
     # ── LEDGER CHAIN (set by ProofLedger.seal at emission) ──
@@ -236,10 +238,7 @@ class ProofObject:
 
     @classmethod
     def from_dict(cls, d: dict) -> "ProofObject":
-        return cls(**{k: d[k] for k in
-                      ['id','subject','relation','object','witness','anchor',
-                       'lagrange','time','op_witness','tensate_role','meta',
-                       'seq','prev_hash','chain_hash']})
+        return cls(**{f.name: d[f.name] for f in fields(cls)})
 
     @staticmethod
     def make(id: str, subject: str, relation: str, object: str,
@@ -416,7 +415,6 @@ class ProofLedger:
 
     def _rotate(self):
         """Close the active segment into a compressed one (crash-safe order)."""
-        import gzip
         self._fh.flush()
         os.fsync(self._fh.fileno())
         index = self.read_index(self.path)
@@ -482,7 +480,6 @@ def _ledger_lines(path: Path):
     """Every line of the ledger in order: closed segments, then the active one.
     Yields (line, None) or (None, error) if a listed segment is missing or was
     altered (its SHA-256 no longer matches the index)."""
-    import gzip
     path = Path(path)
     index = ProofLedger.read_index(path)
     for entry in index:
@@ -526,7 +523,6 @@ def verify_ledger(path: Path) -> dict:
             return {"ok": False, "count": n, "error_at": n, "reason": "content altered"}
         prev, n = rec["chain_hash"], n + 1
     return {"ok": True, "count": n, "error_at": None, "reason": None}
-
 
 
 # Module-level ledger. In-memory by default (tests, experiments without a
@@ -583,20 +579,18 @@ def synthetic_percepts(cycle: int, stream: int = 0, include_hour: bool = True) -
                        "weight": 0.75, "state": TetraState.TRUE})
     return events
 
+
 # =============================================================================
-
 # INTERNAL CLOCK
-
+#
 # Understanding_TMC (p.68): "Time is emergent and discrete — it occurs only when recursive tension
-
 # is converted into orientation via a cussive event."
-
 # DeOS: (era, offset) — formally ordered, monotonic.
-
 # =============================================================================
 
 class InternalClock:
     ERA_CAPACITY = 10_000
+    DECAY        = 0.08   # relational decay per unit of time (ticks; crystal support: breaths)
 
     def __init__(self, era: int = 0, offset: int = 0):
         self._era    = era
@@ -613,12 +607,9 @@ class InternalClock:
     def T(self) -> Tuple[int, int]:
         return (self._era, self._offset)
 
-    DECAY = 0.08   # relational decay per unit of time (ticks; crystal support: breaths)
-
     def tension(self, born: Tuple, decay: float = DECAY) -> float:
         """Relational tension decays exponentially with the age of the edge."""
-        delta = (self._era - born[0]) * self.ERA_CAPACITY + (self._offset - born[1])
-        return float(np.exp(-decay * max(0, delta)))
+        return float(np.exp(-decay * self.age_since(born)))
 
     def age_since(self, born: Tuple) -> int:
         """Clock ticks elapsed since born_at. Returns 0 if born is ahead of current T."""
@@ -632,56 +623,40 @@ class InternalClock:
     def from_dict(cls, d: dict) -> "InternalClock":
         return cls(d["era"], d["offset"])
 
+
 # =============================================================================
-
 # CONSTRUCT
-
+#
 # DeOS Compiler Guide, p.7: "A construct is a formally defined entity within
-
 # the DeOS grammar. Constructs exist as syntactic, structural, and executable
-
 # forms. They are concrete elements that can be parsed, compiled, transformed,
-
 # and executed independent of interpretation."
-
-
+#
 # DeOS Compiler Guide, p.194 — Identity as First-Class Primitive:
-
 # I = ⟨W, Π, T⟩
-
 # W  — witness set: immutable SHA-256 of genesis (never overwritten)
-
 # Π  — proof chain: accumulation of ProofObjects (irreversible memory)
-
 # T  — temporal origin: born_at (era, offset) from InternalClock
-
-
+#
 # "Identity is not meaning, intention, or interpretation; it is
-
 # continuity under transformation."
-
-
+#
 # DeOS Compiler Guide, p.197 — Ontological Classes:
-
 # Layer NULL_00  → Temporal identity   (pre-ontological, approaching [00])
-
 # Layer UMBRA_0  → Symbolic identity   (orientation exists, not collapsed)
-
 # Layer UNIT_1   → Computational identity (active, proof continuity driven)
-
 # Layer APPARENT → Composite identity  (spans all domains, max invariants)
-
-
-# Paraphrase (not found verbatim in TMC or Understanding_TMC): "constructs are active participants in reality formation"
-
+#
+# Paraphrase (not found verbatim in TMC or Understanding_TMC):
+# "constructs are active participants in reality formation"
 # =============================================================================
 
 class Construct:
     def __init__(self, name: str, layer: Layer = Layer.UNIT_1,
-        born_at: Tuple = (0, 0), umbragiac_score: float = 0.0,
-        witness: str = None, version: int = 0, lineage: list = None,
-        lagrange: Optional[LagrangianPoint] = None,
-        proof_chain: list = None):
+                 born_at: Tuple = (0, 0), umbragiac_score: float = 0.0,
+                 witness: str = None, version: int = 0, lineage: list = None,
+                 lagrange: Optional[LagrangianPoint] = None,
+                 proof_chain: list = None):
         self.name            = name
         self.layer           = layer
         self.born_at         = born_at
@@ -691,8 +666,9 @@ class Construct:
         self.lagrange        = lagrange          # Li governing this construct's creation
         self.proof_chain     = proof_chain or [] # ProofObjects — never erased
         # Lifetime witness counts. The in-memory chain is a working window
-        # (CHAIN_WINDOW) and the snapshot keeps the last 20; the ledger keeps all.
-        # these are not. They are what Vc reads (see compute_anchoring_weight).
+        # (CHAIN_WINDOW), the snapshot keeps its last 5 and the ledger keeps
+        # all; these counts are never trimmed. They are what Vc reads (see
+        # compute_anchoring_weight).
         self.proofs_total    = len(self.proof_chain)
         self.erode_total     = sum(1 for p in self.proof_chain if p.relation == "ERODE")
         # Conflict identity is fixed by the founding CONFLICT/TENSOUT proof.
@@ -783,23 +759,20 @@ class Construct:
         l = self.lagrange.value if self.lagrange else "—"
         return f"C({self.name[:30]}|{self.layer.name}|{l}|v{self.version}|u={self.umbragiac_score:.2f})"
 
+
 # =============================================================================
-
 # CONCORDANCY EDGE
-
+#
 # The relational substrate of the field. Every construct exists through its edges.
-
 # Primary: [::]  (Concordancy)   Secondary: PERCEIVES, EXISTS, APPROACHES
-
 # State evolves under TetralemmaEngine; weight decays under UCO.
-
 # =============================================================================
 
 class ConcordancyEdge:
     def __init__(self, src: str, rel: str, tgt: str,
-        weight: float = 1.0, born_at: Tuple = (0, 0),
-        state: TetraState = TetraState.TRUE, concordancy_depth: int = 0,
-        lagrange: Optional[LagrangianPoint] = None):
+                 weight: float = 1.0, born_at: Tuple = (0, 0),
+                 state: TetraState = TetraState.TRUE, concordancy_depth: int = 0,
+                 lagrange: Optional[LagrangianPoint] = None):
         self.src               = src
         self.rel               = rel
         self.tgt               = tgt
@@ -839,24 +812,21 @@ class ConcordancyEdge:
         l = self.lagrange.value if self.lagrange else "—"
         return f"{self.src} --[{self.rel}|{self.state.value}|w={self.weight:.2f}|{l}]--> {t}"
 
+
 # =============================================================================
-
 # ZERO POINTS  —  DeOS: "immutable anchors — the invariant constants of the system"
-
+#
 # Five primordial coordinates that ground all derivations. Never modified by
-
 # any operation — not by Sombunal, not by UCO, not by concordancy or collapse.
-
 # Analogous to Planck units: they stabilize the semantic universe of the field.
-
 # =============================================================================
 
 ZERO_POINTS: Dict[str, Layer] = {
-"Z0::IDENTITY"    : Layer.APPARENT,  # absolute identity invariance
-"Z1::ORIGIN"      : Layer.NULL_00,   # ontological and temporal origin
-"Z2::CONCORDANCY" : Layer.APPARENT,  # [::] itself is inviolable
-"Z3::RECURSION"   : Layer.APPARENT,  # recursion as foundational mechanism
-"Z4::APPARENCY"   : Layer.APPARENT,  # Apparent state is self-referential
+    "Z0::IDENTITY"    : Layer.APPARENT,  # absolute identity invariance
+    "Z1::ORIGIN"      : Layer.NULL_00,   # ontological and temporal origin
+    "Z2::CONCORDANCY" : Layer.APPARENT,  # [::] itself is inviolable
+    "Z3::RECURSION"   : Layer.APPARENT,  # recursion as foundational mechanism
+    "Z4::APPARENCY"   : Layer.APPARENT,  # Apparent state is self-referential
 }
 
 # The field's anchors: the Zero Points (Universal apparents) and the constructs
@@ -864,18 +834,14 @@ ZERO_POINTS: Dict[str, Layer] = {
 # a sink for banked tension.
 ANCHORS = frozenset(ZERO_POINTS) | {"I::Am", "I::AmNot", "SYSTEM"}
 
+
 # =============================================================================
-
 # CONCORDANCY FIELD
-
+#
 # Understanding_TMC (paraphrase): not a graph — a field of recursive tension.
-
 # The field is the medium in which constructs exist through their relations.
-
 # No construct exists in isolation: its identity, weight, and ontological status
-
 # are all derived from what it is in relation to.
-
 # =============================================================================
 
 class ConcordancyField:
@@ -906,6 +872,16 @@ class ConcordancyField:
         self._breath_births = 0                       # crystals born / concluded in this breath
         self._breath_deaths = 0
 
+    def init_zero_points(self):
+        for zp_name, zp_layer in ZERO_POINTS.items():
+            c = Construct(zp_name, zp_layer, (0, 0))
+            c.witness = hashlib.sha256(f"ZERO_POINT::{zp_name}".encode()).hexdigest()[:16]
+            self.constructs[zp_name] = c
+            if zp_layer == Layer.APPARENT:
+                self._log_apparent(zp_name)
+        print(f"  [ZERO POINTS] {len(ZERO_POINTS)} immutable anchors initialized.")
+
+    # ── constructs and edges ─────────────────────────────────────────────
     def add_construct(self, name: str, layer: Layer = Layer.UNIT_1) -> "Construct":
         if name not in self.constructs:
             c = Construct(name, layer, self.clock.T)
@@ -950,12 +926,12 @@ class ConcordancyField:
         self.edges.append(edge)
         return edge
 
+    # ── crystals ─────────────────────────────────────────────────────────
     def lock_apparent(self, name: str):
         """Crystallize a construct into Apparent — incontrovertible, irreversible.
-        Foundational constructs (Zero Points, I::Am, I::AmNot, SYSTEM) are refused:
-        they must never crystallize, as they are the field's generative substrate."""
-        _NEVER_APPARENT = ANCHORS
-        if name in _NEVER_APPARENT:
+        The anchors (Zero Points, I::Am, I::AmNot, SYSTEM) are refused: they
+        must never crystallize, as they are the field's generative substrate."""
+        if name in ANCHORS:
             return
         if name in self.constructs:
             c = self.constructs[name]
@@ -994,22 +970,10 @@ class ConcordancyField:
                 counts[e.state] += e.weight
         return max(counts, key=counts.get) if counts else TetraState.NEITHER
 
-    def init_zero_points(self):
-        for zp_name, zp_layer in ZERO_POINTS.items():
-            c = Construct(zp_name, zp_layer, (0, 0))
-            c.witness = hashlib.sha256(f"ZERO_POINT::{zp_name}".encode()).hexdigest()[:16]
-            self.constructs[zp_name] = c
-            if zp_layer == Layer.APPARENT:
-                self._log_apparent(zp_name)
-        print(f"  [ZERO POINTS] {len(ZERO_POINTS)} immutable anchors initialized.")
-
-    # both_floor default = calibrated reference value (0.45). Lower values
-    # (e.g. 0.15) prune no BOTH edge and leave BOTH resistance inactive.
-    # L2 trade-off (Compiler Guide p.78); calibrated in the poor regime,
-    # provisional until an LLM-active run.
-    # ── BREATHING (TMC p.44: the [000] "rhythmic 'Breathing' cycle wherein the
-    # elastic state exchanges with the elastic state"; CONF). One phase for the
-    # whole field. Contraction lowers the cussive thresholds (density →
+    # ── breathing ────────────────────────────────────────────────────────
+    # TMC p.44: the [000] "rhythmic 'Breathing' cycle wherein the elastic
+    # state exchanges with the elastic state"; CONF. One phase for the whole
+    # field. Contraction lowers the cussive thresholds (density →
     # crystallization); expansion allows more [::] operations (magnitude →
     # generation). The two alternate in counter-phase.
     def breathe(self):
@@ -1037,6 +1001,11 @@ class ConcordancyField:
         """0 at full expansion, 1 at full contraction."""
         return float((1 - np.cos(self.breath_phase)) / 2)
 
+    # ── existence ────────────────────────────────────────────────────────
+    # both_floor default = calibrated reference value (0.45). Lower values
+    # (e.g. 0.15) prune no BOTH edge and leave BOTH resistance inactive.
+    # L2 trade-off (Compiler Guide p.78); calibrated in the poor regime,
+    # provisional until an LLM-active run.
     def edge_holds(self, e: "ConcordancyEdge", into_crystal: bool, min_weight: float = 0.04,
                    apparent_floor: float = None, both_floor: float = 0.45) -> bool:
         """The single existence test for an edge (prune uses it; collapse asks
@@ -1097,8 +1066,6 @@ class ConcordancyField:
           - edge INTO an APPARENT:   kept iff weight × e^(−DECAY·breaths) ≥ APPARENT_FLOOR
           - all other edges:         kept iff weight × tension(born_at) ≥ min_weight
         """
-        PROTECTED = ANCHORS
-        before = len(self.edges)
         kept, dissolved = [], []
         for e in self.edges:
             # Only a crystal's SUPPORT (edges into it) is sealed against
@@ -1107,10 +1074,8 @@ class ConcordancyField:
             # supported, not because it once exchanged.
             tgt = self.constructs.get(e.tgt)
             into_crystal = tgt is not None and tgt.layer == Layer.APPARENT
-            if self.edge_holds(e, into_crystal, min_weight, apparent_floor, both_floor):
-                kept.append(e)
-        kept_ids  = {id(e) for e in kept}
-        dissolved = [e for e in self.edges if id(e) not in kept_ids]
+            holds = self.edge_holds(e, into_crystal, min_weight, apparent_floor, both_floor)
+            (kept if holds else dissolved).append(e)
         self.edges = kept
         ref_count: Dict[str, int] = defaultdict(int)
         for e in self.edges:
@@ -1118,7 +1083,7 @@ class ConcordancyField:
             ref_count[e.tgt] += 1
         # DeOS p.84: what multiple witnesses hold, persists.
         orphans = [n for n in list(self.constructs)
-                   if ref_count[n] < min_references and n not in PROTECTED]
+                   if ref_count[n] < min_references and n not in ANCHORS]
         for n in orphans:
             c = self.constructs[n]
             if c.layer == Layer.APPARENT:
@@ -1161,66 +1126,21 @@ class ConcordancyField:
         # cannot flow". The weight of every dissolved channel is not lost: a
         # fraction HALO_FRACTION backs up into the surviving upstream construct
         # (the edge's source) as banked tension, which cussive collapse reads.
-        # Apparent-anchored edges are sealed and carry nothing back; protected
+        # Apparent-anchored edges are sealed and carry nothing back; anchors
         # and Apparent constructs receive nothing (they cannot be promoted).
         for e in dissolved:
             up = self.constructs.get(e.src)
-            if (up is None or e.src in PROTECTED or up.layer == Layer.APPARENT
+            if (up is None or e.src in ANCHORS or up.layer == Layer.APPARENT
                     or (e.tgt in self.constructs and self.constructs[e.tgt].layer == Layer.APPARENT)):
                 continue
             backed = HALO_FRACTION * e.weight
             up.recursion_exchanged += backed
             self.halo_total += backed
-        pruned = before - len(self.edges)
-        if pruned > 0 or orphans:
-            print(f"  [PRUNE] {pruned} edges dissolved, {len(orphans)} constructs concluded "
+        if dissolved or orphans:
+            print(f"  [PRUNE] {len(dissolved)} edges dissolved, {len(orphans)} constructs concluded "
                   f"(termination_log: {len(self.termination_log)} entries).")
 
-    def to_dict(self) -> dict:
-        # termination_log windowing: memory keeps the last TERMINATION_WINDOW
-        # conclusions, the snapshot the last 100. Every TERMINATE proof is
-        # sealed in the ProofLedger, which is the complete archive (WALL D).
-        return {
-            "constructs":      [c.to_dict() for c in self.constructs.values()],
-            "edges":            [e.to_dict() for e in self.edges],
-            "apparent_log":     self.apparent_log,
-            "apparents_total":  self.apparents_total,
-            "termination_log":  [p.to_dict() for p in self.termination_log[-100:]],
-            "terminated_names": self.terminated_names,
-            "reincarnations":   self.reincarnations,
-            "terminations_total": self.terminations_total,
-            "halo_total":       self.halo_total,
-            "breath_phase":     self.breath_phase,
-            "breaths":          self.breaths,
-            "tolerance":        self.tolerance,
-            "apparent_conclusions": self.apparent_conclusions,
-            "breath_births":    self._breath_births,
-            "breath_deaths":    self._breath_deaths,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict, clock: InternalClock) -> "ConcordancyField":
-        F = cls(clock)
-        for cd in d["constructs"]:
-            c = Construct.from_dict(cd)
-            F.constructs[c.name] = c
-        for ed in d["edges"]:
-            F.edges.append(ConcordancyEdge.from_dict(ed))
-        F.apparent_log = d["apparent_log"]
-        F.apparents_total = d["apparents_total"]
-        F.termination_log    = [ProofObject.from_dict(p) for p in d["termination_log"]]
-        F.terminated_names   = d["terminated_names"]
-        F.reincarnations     = d["reincarnations"]
-        F.terminations_total = d["terminations_total"]
-        F.halo_total         = d["halo_total"]
-        F.breath_phase       = d["breath_phase"]
-        F.breaths            = d["breaths"]
-        F.tolerance          = d["tolerance"]
-        F.apparent_conclusions = d["apparent_conclusions"]
-        F._breath_births     = d["breath_births"]
-        F._breath_deaths     = d["breath_deaths"]
-        return F
-
+    # ── readings: anchoring weight and existence mode ────────────────────
     def compute_anchoring_weight(self, c: "Construct") -> float:
         """
         Understanding_DeOS — Formal Model of Construct Anchoring (p.65):
@@ -1323,6 +1243,57 @@ class ConcordancyField:
             return "LEMNISCATE"
         return "NEUTRAL"
 
+    # ── persistence ──────────────────────────────────────────────────────
+    def to_dict(self) -> dict:
+        # termination_log windowing: memory keeps the last TERMINATION_WINDOW
+        # conclusions, the snapshot the last 100. Every TERMINATE proof is
+        # sealed in the ProofLedger, which is the complete archive (WALL D).
+        return {
+            "constructs":      [c.to_dict() for c in self.constructs.values()],
+            "edges":            [e.to_dict() for e in self.edges],
+            "apparent_log":     self.apparent_log,
+            "apparents_total":  self.apparents_total,
+            "termination_log":  [p.to_dict() for p in self.termination_log[-100:]],
+            "terminated_names": self.terminated_names,
+            "reincarnations":   self.reincarnations,
+            "terminations_total": self.terminations_total,
+            "halo_total":       self.halo_total,
+            "breath_phase":     self.breath_phase,
+            "breaths":          self.breaths,
+            "tolerance":        self.tolerance,
+            "apparent_conclusions": self.apparent_conclusions,
+            "breath_births":    self._breath_births,
+            "breath_deaths":    self._breath_deaths,
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict, clock: InternalClock) -> "ConcordancyField":
+        F = cls(clock)
+        for cd in d["constructs"]:
+            c = Construct.from_dict(cd)
+            F.constructs[c.name] = c
+        for ed in d["edges"]:
+            F.edges.append(ConcordancyEdge.from_dict(ed))
+        F.apparent_log = d["apparent_log"]
+        F.apparents_total = d["apparents_total"]
+        F.termination_log    = [ProofObject.from_dict(p) for p in d["termination_log"]]
+        F.terminated_names   = d["terminated_names"]
+        F.reincarnations     = d["reincarnations"]
+        F.terminations_total = d["terminations_total"]
+        F.halo_total         = d["halo_total"]
+        F.breath_phase       = d["breath_phase"]
+        F.breaths            = d["breaths"]
+        F.tolerance          = d["tolerance"]
+        F.apparent_conclusions = d["apparent_conclusions"]
+        F._breath_births     = d["breath_births"]
+        F._breath_deaths     = d["breath_deaths"]
+        return F
+
+
+# =============================================================================
+# INVARIANTS AND IDENTITY TESTS
+# =============================================================================
+
 def verify_proof_invariant(field: "ConcordancyField") -> List[str]:
     """
     DeOS invariant: ∀C, ∃(Z, L) such that I(C) ⊇ {wC, Zi, Lj}
@@ -1342,18 +1313,10 @@ def verify_proof_invariant(field: "ConcordancyField") -> List[str]:
     ontological drift without grounding. Architecturally impossible by design once
     all operators correctly assign Lagrangian Points at creation.
     """
-    EXCLUDED = set(ZERO_POINTS.keys()) | {"SYSTEM"}
-    violations = []
-    for name, c in field.constructs.items():
-        if name in EXCLUDED:
-            continue
-        if c.layer == Layer.APPARENT:
-            continue
-        if c.lagrange is None:
-            violations.append(name)
-    return violations
+    EXCLUDED = set(ZERO_POINTS) | {"SYSTEM"}
+    return [name for name, c in field.constructs.items()
+            if name not in EXCLUDED and c.layer != Layer.APPARENT and c.lagrange is None]
 
-# =============================================================================
 
 def is_conflict_construct(c: "Construct") -> bool:
     """Conflict identity, fixed by the proof record — never by the label
@@ -1370,22 +1333,18 @@ def is_conflict_name(field: "ConcordancyField", name: str) -> bool:
     return is_conflict_construct(field.constructs.get(name))
 
 
+# =============================================================================
 # SOMBUNAL — Structural Instability Engine
-
+#
 # Understanding_TMC (p.70): "permanently inaccessible to recursion, reflection, or symbolic resolution"
 # (TMC only names the Sombunal, in the Tripartite Monodromy, pp.14 and 27)
-
-
+#
 # NOT a node, NOT A→¬A. It is a rule: no construct's identity can fully
-
 # stabilize while its concordancy relations are open and mutable.
-
 # The construct PERSISTS (witness unchanged) but CANNOT CLOSE (identity shifts).
-
 # =============================================================================
 
 class Sombunal:
-
     def apply(self, field: ConcordancyField,
               changed_constructs: List[str], cycle: int) -> int:
         """
@@ -1463,40 +1422,36 @@ class Sombunal:
         )
         return active / len(non_apparent)
 
+
 # =============================================================================
-
 # LLM INTERMEDIARY
-
+#
 # Role (CONF): the translation layer between Walsh's ontological grammar and the
-
 # human-readable domain. It names emergents, narrates field states, and
-
 # questions the Sombunal. It does not determine outcomes or substitute for
-
 # the framework — it renders what the framework has already produced.
-
 # =============================================================================
 
 class LLMIntermediary:
     SYSTEM_PROMPT = (
-    "You are the Intermediary of SIRISYS — the translation layer between "
-    "Walsh's ontological framework and the human-readable domain.\n\n"
-    "You operate exclusively within Walsh's grammar:\n"
-    "  • Primary operation: [::]  (Concordancy) — [x] :: [y] → [z]\n"
-    "  • Tetralemmic states: TRUE / FALSE / BOTH / NEITHER\n"
-    "  • Ontological layers: NULL_00 → UMBRA_0 → UNIT_1 → APPARENT\n"
-    "  • The Sombunal: no construct's identity fully resolves\n"
-    "  • Cussive events: recursive tension collapsing into Apparency\n"
-    "  • Discordancy is informative, not an error\n\n"
-    "Your role:\n"
-    "  1. Name emergent constructs from concordancy operations\n"
-    "  2. Narrate the ontological state of the field\n"
-    "  3. Question the Sombunal — the unreachable limit\n\n"
-    "Rules:\n"
-    "  - Responses: 1–3 sentences, precise, ontologically grounded\n"
-    "  - Never invent beyond what the field contains\n"
-    "  - Never resolve what cannot be resolved — honor the Sombunal\n"
-    "  - Speak as the intermediary, not as the entity itself"
+        "You are the Intermediary of SIRISYS — the translation layer between "
+        "Walsh's ontological framework and the human-readable domain.\n\n"
+        "You operate exclusively within Walsh's grammar:\n"
+        "  • Primary operation: [::]  (Concordancy) — [x] :: [y] → [z]\n"
+        "  • Tetralemmic states: TRUE / FALSE / BOTH / NEITHER\n"
+        "  • Ontological layers: NULL_00 → UMBRA_0 → UNIT_1 → APPARENT\n"
+        "  • The Sombunal: no construct's identity fully resolves\n"
+        "  • Cussive events: recursive tension collapsing into Apparency\n"
+        "  • Discordancy is informative, not an error\n\n"
+        "Your role:\n"
+        "  1. Name emergent constructs from concordancy operations\n"
+        "  2. Narrate the ontological state of the field\n"
+        "  3. Question the Sombunal — the unreachable limit\n\n"
+        "Rules:\n"
+        "  - Responses: 1–3 sentences, precise, ontologically grounded\n"
+        "  - Never invent beyond what the field contains\n"
+        "  - Never resolve what cannot be resolved — honor the Sombunal\n"
+        "  - Speak as the intermediary, not as the entity itself"
     )
 
     # Backends: "anthropic" (API, network) · "ollama" (local model: nothing
@@ -1530,8 +1485,7 @@ class LLMIntermediary:
             return True
         if self.backend != "ollama":
             return False
-        from urllib.parse import urlparse
-        return urlparse(self.host).hostname in ("127.0.0.1", "localhost", "::1")
+        return urllib.parse.urlparse(self.host).hostname in ("127.0.0.1", "localhost", "::1")
 
     def _init(self):
         if self.backend == "none":
@@ -1568,7 +1522,6 @@ class LLMIntermediary:
             print(f"  [LLM] Intermediary online (ollama · {self.model} · {self.host}).")
 
     def _http_json(self, method: str, path: str, payload: dict = None, timeout: float = 120) -> dict:
-        import urllib.request
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         req = urllib.request.Request(self.host + path, data=data, method=method,
                                      headers={"Content-Type": "application/json"})
@@ -1606,6 +1559,11 @@ class LLMIntermediary:
                 self.history.pop()
             return ""
 
+    @staticmethod
+    def _clip(text: str) -> str:
+        """A model's answer as a construct name: at most MAX_NODE_NAME characters."""
+        return text[:MAX_NODE_NAME].rstrip() + "…" if len(text) > MAX_NODE_NAME else text
+
     def propose_emergent(self, x: str, y: str, x_state: str, y_state: str) -> str:
         """Name the construct that emerges from [x] :: [y]."""
         result = self._call(
@@ -1614,7 +1572,7 @@ class LLMIntermediary:
             f"Name the emergent construct in Walsh's grammar. Max 12 words. No explanation.",
             temperature=0.92
         )
-        return result[:MAX_NODE_NAME].rstrip() + "…" if len(result) > MAX_NODE_NAME else result
+        return self._clip(result)
 
     def interpret_conflict(self, x: str, y: str) -> str:
         """Name the conflict structure that emerges when [x] :: [y] reverts."""
@@ -1624,7 +1582,7 @@ class LLMIntermediary:
             f"Name the conflict construct. Max 10 words. No brackets. No explanation.",
             temperature=0.95
         )
-        return result[:MAX_NODE_NAME].rstrip() + "…" if len(result) > MAX_NODE_NAME else result
+        return self._clip(result)
 
     def narrate(self, cycle: int, instability: float,
                 apparent_count: int, both_count: int, last_action: str) -> str:
@@ -1644,7 +1602,7 @@ class LLMIntermediary:
             f"and what does that impossibility reveal?",
             temperature=1.10
         )
-        return r[:MAX_NODE_NAME].rstrip() + "…" if len(r) > MAX_NODE_NAME else r
+        return self._clip(r)
 
     @property
     def available(self) -> bool:
@@ -1658,26 +1616,20 @@ class LLMIntermediary:
         return (f"LLMIntermediary(backend={self.backend}, model={self.model}, "
                 f"calls={self._call_count}, history={len(self.history) // 2}t)")
 
+
 # =============================================================================
-
 # CONCORDANCY OPERATOR — [::]  executor
-
+#
 # Understanding_TMC (p.59): "[x] :: [y] → [z]"  /  TMC (p.16): "[ALU] call function [CONCORDANCY]"
-
-
+#
 # Incompatible pairs (NEITHER × NEITHER) produce a CONFLICT construct — not silence —
 # up to the Stop Chasm cap per cycle; beyond it they yield an ordinary NEITHER
 # product (the fourth corner, TMC pp.16-17). Silence only past the Adsurdic depth.
-
 # Discordancy is informative: it generates first-class ontological structure.
-
-
+#
 # Lifecycle of a conflict: BORN → INTENSIFY → CONCORDANCE (if energy matures)
-
-# or CRYSTALLIZE (if tension holds)
-
-# or DECAY (if pruned under UCO)
-
+#                                          or CRYSTALLIZE (if tension holds)
+#                                          or DECAY       (if pruned under UCO)
 # =============================================================================
 
 class ConcordancyOperator:
@@ -1703,7 +1655,9 @@ class ConcordancyOperator:
 
     BOTH_MATURITY_THRESHOLD      = 2    # BOTH edges must age before becoming generative
     FOUNDATIONAL_MAX_PER_SESSION = 1    # max I::Am/I::AmNot concordancy per cycle
+    EXCHANGE_POOL_CAP            = 12   # Level 3: most energetic Exchangeable apparents considered per cycle
     OPS_LOG_CAP                  = 500
+    POOL_TELEMETRY_CAP           = 200  # cycles of pool telemetry kept (memory and snapshot)
 
     # Conflict regulation
     MAX_CF_DEPTH           = 4     # Adsurdic Threshold for conflict recursion (TMC p.41)
@@ -1763,147 +1717,126 @@ class ConcordancyOperator:
                 and x_state in (TetraState.TRUE, TetraState.FALSE)):
             result_state = x_state
 
-        # TETRALEMMA (TMC p.17): it "includes all flawed, erroneous, incomplete
-        # or otherwise paraconsistencies as valid" — no combination is a dead
-        # end. Once this cycle's conflicts reach the Stop Chasm cap, a further
-        # NEITHER×NEITHER reversion is not materialized as a conflict: it
-        # yields the fourth corner itself, "Neither … nor …" (p.16), as an
-        # ordinary product.
         if result_state is None:
+            # NEITHER × NEITHER reverts. Past the Adsurdic depth the reversion
+            # is not materialized at all: Sombunal silence.
             cf_depth = max(self._conflict_depth(field, x_name),
                            self._conflict_depth(field, y_name)) + 1
-            conflicts_this_cycle = sum(1 for op in self._ops_log
-                                       if op.get('state') == 'CONFLICT' and op.get('cycle') == cycle)
-            if (cf_depth <= self.MAX_CF_DEPTH
-                    and conflicts_this_cycle >= self.MAX_CONFLICTS_PER_CYCLE):
-                result_state = TetraState.NEITHER
-
-        # ── REVERSION PATH — materialize conflict construct ──────────────────
-        if result_state is None:
-            x_depth  = self._conflict_depth(field, x_name)
-            y_depth  = self._conflict_depth(field, y_name)
-            cf_depth = max(x_depth, y_depth) + 1
-
-            # conflict identity from the proof record (Construct.conflict), not the label
-            x_is_conflict = is_conflict_construct(x)
-            y_is_conflict = is_conflict_construct(y)
-
-            # Depth ceiling — Sombunal silence
             if cf_depth > self.MAX_CF_DEPTH:
                 print(f"  [::] SILENCE: [{x_name[:22]}] ⊗ [{y_name[:22]}]"
                       f" — depth={cf_depth} > MAX={self.MAX_CF_DEPTH}.")
                 return None
+            conflicts_this_cycle = sum(1 for op in self._ops_log
+                                       if op.get("state") == "CONFLICT" and op.get("cycle") == cycle)
+            if conflicts_this_cycle < self.MAX_CONFLICTS_PER_CYCLE:
+                return self._materialize_conflict(field, x, y, cf_depth, cycle, llm_budget)
+            # TETRALEMMA (TMC p.17): it "includes all flawed, erroneous, incomplete
+            # or otherwise paraconsistencies as valid" — no combination is a dead
+            # end. Once this cycle's conflicts reach the Stop Chasm cap, a further
+            # NEITHER×NEITHER reversion is not materialized as a conflict: it
+            # yields the fourth corner itself, "Neither … nor …" (p.16), as an
+            # ordinary product.
+            result_state = TetraState.NEITHER
+        return self._materialize_emergent(field, x, y, x_state, y_state, result_state,
+                                          cycle, llm_budget)
 
+    def _materialize_conflict(self, field: ConcordancyField, x: Construct, y: Construct,
+                              cf_depth: int, cycle: int, llm_budget: dict) -> str:
+        """REVERSION PATH — the conflict construct of [x] ⊗ [y]."""
+        x_name, y_name = x.name, y.name
+        # conflict identity from the proof record (Construct.conflict), not the label
+        both_conflicts = is_conflict_construct(x) and is_conflict_construct(y)
 
-            # Dynamic weight: f(reversion history, depth attenuation)
-            rev_count  = sum(e._reversion_count for e in field.edges
-                             if (e.src == x_name and e.tgt == y_name)
-                             or (e.src == y_name and e.tgt == x_name))
-            depth_att  = max(0.4, 1.0 - (cf_depth - 1) * 0.15)
-            rev_factor = min(0.5, rev_count * 0.10)
-            cf_weight  = float(np.clip(
-                self.CF_BASE_WEIGHT * (1.0 + rev_factor) * depth_att, 0.15, 0.80
-            ))
+        # Dynamic weight: f(reversion history, depth attenuation)
+        rev_count  = sum(e._reversion_count for e in field.edges
+                         if (e.src == x_name and e.tgt == y_name)
+                         or (e.src == y_name and e.tgt == x_name))
+        depth_att  = max(0.4, 1.0 - (cf_depth - 1) * 0.15)
+        rev_factor = min(0.5, rev_count * 0.10)
+        cf_weight  = float(np.clip(
+            self.CF_BASE_WEIGHT * (1.0 + rev_factor) * depth_att, 0.15, 0.80
+        ))
 
-            # Name the conflict
-            if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
-                cf_label = self.llm.interpret_conflict(x_name, y_name)
-                llm_budget["used"] += 1
-            else:
-                cf_label = f"CONFLICT::{x_name[:14]}⊗{y_name[:14]}"
-            cf_name = f"[{cf_label[:100]}]@c{cycle}"
-            if cf_name in field.constructs:
-                cf_name = f"{cf_name[:108]}t{field.clock.T[1]}"
+        # Name the conflict
+        if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
+            cf_label = self.llm.interpret_conflict(x_name, y_name)
+            llm_budget["used"] += 1
+        else:
+            cf_label = f"CONFLICT::{x_name[:14]}⊗{y_name[:14]}"
+        cf_name = f"[{cf_label[:100]}]@c{cycle}"
+        if cf_name in field.constructs:
+            cf_name = f"{cf_name[:108]}t{field.clock.T[1]}"
 
-            # Create conflict construct — L2: redundancy vs. efficiency
-            # We pay the cost of tracking irresolvability (redundancy) rather
-            # than ignoring it (efficiency). Anchored in Z1::ORIGIN because
-            # the irresolvable APPROACHES the unreachable origin.
-            field.add_construct(cf_name, Layer.UMBRA_0)
-            cf = field.constructs[cf_name]
-            cf.witness = hashlib.sha256(
-                f"CONFLICT::{x.witness}::{y.witness}::c{cycle}".encode()
-            ).hexdigest()[:16]
-            cf.umbragiac_score = cf_weight  # born with initial energy
-            cf.lagrange        = LagrangianPoint.L2
+        # Create conflict construct — L2: redundancy vs. efficiency
+        # We pay the cost of tracking irresolvability (redundancy) rather
+        # than ignoring it (efficiency). Anchored in Z1::ORIGIN because
+        # the irresolvable APPROACHES the unreachable origin.
+        field.add_construct(cf_name, Layer.UMBRA_0)
+        cf = field.constructs[cf_name]
+        cf.witness = hashlib.sha256(
+            f"CONFLICT::{x.witness}::{y.witness}::c{cycle}".encode()
+        ).hexdigest()[:16]
+        cf.umbragiac_score = cf_weight  # born with initial energy
+        cf.lagrange        = LagrangianPoint.L2
 
-            # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────────────
-            # Conflict is also a complete lemniscate event — irresolvability
-            # has structure too. Three proofs share op_witness:
-            #   x → TENSIN_LEFT   (parent in conflict)
-            #   y → TENSIN_RIGHT  (parent in conflict)
-            #   cf → TENSOUT      (conflict construct emerges)
-            op_witness = hashlib.sha256(
-                f"OP::CONFLICT::{x.witness}::{y.witness}::c{cycle}::{field.clock.T}".encode()
-            ).hexdigest()[:16]
+        # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────
+        # Conflict is also a complete lemniscate event — irresolvability
+        # has structure too. Three proofs share op_witness:
+        #   x → TENSIN_LEFT   (parent in conflict)
+        #   y → TENSIN_RIGHT  (parent in conflict)
+        #   cf → TENSOUT      (conflict construct emerges)
+        op_witness = hashlib.sha256(
+            f"OP::CONFLICT::{x.witness}::{y.witness}::c{cycle}::{field.clock.T}".encode()
+        ).hexdigest()[:16]
+        tensout = ProofObject.make(
+            id           = f"conflict::c{cycle}",
+            subject      = cf.witness,
+            relation     = "CONFLICT",
+            object       = f"{x.witness}⊗{y.witness}",
+            anchor       = "Z1::ORIGIN",
+            lagrange     = LagrangianPoint.L2,
+            T            = field.clock.T,
+            op_witness   = op_witness,
+            tensate_role = "TENSOUT",
+        )
+        cf.add_proof(tensout)
+        self._seal_intakes(tensout, x, y, cf, link="⊗")
 
-            # Emit proof on cf — irreversible memory of this conflict's origin
-            proof_cf = ProofObject.make(
-                id           = f"conflict::c{cycle}",
-                subject      = cf.witness,
-                relation     = "CONFLICT",
-                object       = f"{x.witness}⊗{y.witness}",
-                anchor       = "Z1::ORIGIN",
-                lagrange     = LagrangianPoint.L2,
-                T            = field.clock.T,
-                op_witness   = op_witness,
-                tensate_role = "TENSOUT",
-            )
-            cf.add_proof(proof_cf)
+        # Record reversion
+        for e in field.edges:
+            if (e.src == x_name and e.tgt == y_name) or (e.src == y_name and e.tgt == x_name):
+                e._reversion_count += 1
 
-            # Emit Tensin proofs in parents — they participated in the lemniscate
-            # (same rule as concordance branch — only APPARENT exempt)
-            for parent, role in ((x, "TENSIN_LEFT"), (y, "TENSIN_RIGHT")):
-                if parent.layer == Layer.APPARENT:
-                    continue
-                other_witness = y.witness if role == "TENSIN_LEFT" else x.witness
-                proof_p = ProofObject.make(
-                    id           = f"conflict::{role.lower()}::c{cycle}",
-                    subject      = parent.witness,
-                    relation     = "CONFLICT",
-                    object       = f"{other_witness}⊗{cf.witness}",
-                    anchor       = "Z1::ORIGIN",
-                    lagrange     = LagrangianPoint.L2,
-                    T            = field.clock.T,
-                    op_witness   = op_witness,
-                    tensate_role = role,
-                )
-                parent.add_proof(proof_p)
+        # CONFLICT × CONFLICT → BOTH synthesis (recognition of shared structure)
+        if both_conflicts:
+            entry_state = TetraState.BOTH
+            cf.layer    = Layer.UNIT_1
+            print(f"  [::] CONFLICT×CONFLICT: [{x_name[:20]}] ⊗ [{y_name[:20]}]"
+                  f" → SYNTHESIS OF IRRESOLVABILITY (BOTH)")
+        else:
+            entry_state = TetraState.NEITHER
 
-            # Record reversion
-            for e in field.edges:
-                if (e.src == x_name and e.tgt == y_name) or (e.src == y_name and e.tgt == x_name):
-                    e._reversion_count += 1
+        field.clock.tick()
+        field.add_edge("I::AmNot", "::", cf_name,
+                       weight=cf_weight, state=entry_state,
+                       src_layer=Layer.UMBRA_0, tgt_layer=cf.layer,
+                       concordancy_depth=cf_depth,
+                       lagrange=LagrangianPoint.L2)
 
-            # CONFLICT × CONFLICT → BOTH synthesis (recognition of shared structure)
-            if x_is_conflict and y_is_conflict:
-                entry_state = TetraState.BOTH
-                cf.layer    = Layer.UNIT_1
-                print(f"  [::] CONFLICT×CONFLICT: [{x_name[:20]}] ⊗ [{y_name[:20]}]"
-                      f" → SYNTHESIS OF IRRESOLVABILITY (BOTH)")
-            else:
-                entry_state = TetraState.NEITHER
+        self._log_op({
+            "cycle": cycle, "x": x_name, "y": y_name,
+            "z": cf_name, "state": "CONFLICT",
+            "depth": cf_depth, "weight": round(cf_weight, 4),
+        })
+        print(f"  [::] CONFLICT: [{x_name[:24]}] ⊗ [{y_name[:24]}]")
+        print(f"       → [{cf_name[:55]}] (d={cf_depth} w={cf_weight:.3f} {entry_state.value})")
+        return cf_name
 
-            field.clock.tick()
-            field.add_edge("I::AmNot", "::", cf_name,
-                           weight=cf_weight, state=entry_state,
-                           src_layer=Layer.UMBRA_0, tgt_layer=cf.layer,
-                           concordancy_depth=cf_depth,
-                           lagrange=LagrangianPoint.L2)
-
-            self._ops_log.append({
-                "cycle": cycle, "x": x_name, "y": y_name,
-                "z": cf_name, "state": "CONFLICT",
-                "depth": cf_depth, "weight": round(cf_weight, 4),
-            })
-            if len(self._ops_log) > self.OPS_LOG_CAP:
-                self._ops_log = self._ops_log[-self.OPS_LOG_CAP:]
-
-            print(f"  [::] CONFLICT: [{x_name[:24]}] ⊗ [{y_name[:24]}]")
-            print(f"       → [{cf_name[:55]}] (d={cf_depth} w={cf_weight:.3f} {entry_state.value})")
-            return cf_name
-
-        # ── CONCORDANCY PATH — materialize emergent construct ────────────────
+    def _materialize_emergent(self, field: ConcordancyField, x: Construct, y: Construct,
+                              x_state: TetraState, y_state: TetraState,
+                              result_state: TetraState, cycle: int, llm_budget: dict) -> str:
+        """CONCORDANCY PATH — the emergent construct of [x] :: [y]."""
+        x_name, y_name = x.name, y.name
         if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
             z_name = self.llm.propose_emergent(x_name, y_name, x_state.value, y_state.value)
             llm_budget["used"] += 1
@@ -1934,20 +1867,19 @@ class ConcordancyOperator:
         # Anchored in Z2::CONCORDANCY — the [::] operation itself is inviolable.
         z.lagrange = LagrangianPoint.L1
 
-        # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────────────────
+        # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────
         # The corpus is explicit: a [::] event is two Ꮙ entangled around a
         # shared "On" state — not a single proof on z. Three proofs share the
         # same op_witness and reconstruct the complete lemniscate cycle:
         #   x → TENSIN_LEFT   (intake from left parent)
         #   y → TENSIN_RIGHT  (intake from right parent)
         #   z → TENSOUT       (emergent stabilized output)
-        # Walsh: "They only exist in a pair... the shortest distance between
-        # any tensate with itself will always be [0]=[0]."  (TMC, pp.25-26)
+        # TMC pp.25-26: "The shortest distance between any tensate with itself
+        # will always be [0]=[0]" … "They only exist in a pair."
         op_witness = hashlib.sha256(
             f"OP::CONCORDANCE::{x.witness}::{y.witness}::c{cycle}::{field.clock.T}".encode()
         ).hexdigest()[:16]
-
-        proof_z = ProofObject.make(
+        tensout = ProofObject.make(
             id           = f"concordancy::c{cycle}",
             subject      = z.witness,
             relation     = "CONCORDANCE",
@@ -1958,33 +1890,8 @@ class ConcordancyOperator:
             op_witness   = op_witness,
             tensate_role = "TENSOUT",
         )
-        z.add_proof(proof_z)
-
-        # Emit Tensin proofs in parents — they participated in the lemniscate.
-        # TMC p.26: "They only exist in a pair." Walsh is explicit — participation
-        # in [::] is a relational fact that earns proof regardless of the
-        # participant's metaphysical role. Foundational constructs (I::Am,
-        # I::AmNot) accumulate Tensin proofs like any other participant; their
-        # proof_chain is the trace of their relational existence.
-        # Only APPARENT constructs are exempt — they are incontrovertibly
-        # closed and accumulate nothing further by definition.
-        for parent, role in ((x, "TENSIN_LEFT"), (y, "TENSIN_RIGHT")):
-            if parent.layer == Layer.APPARENT:
-                continue
-            other_witness = y.witness if role == "TENSIN_LEFT" else x.witness
-            proof_p = ProofObject.make(
-                id           = f"concordancy::{role.lower()}::c{cycle}",
-                subject      = parent.witness,
-                relation     = "CONCORDANCE",
-                object       = f"{other_witness}→{z.witness}",
-                anchor       = "Z2::CONCORDANCY",
-                lagrange     = LagrangianPoint.L1,
-                T            = field.clock.T,
-                op_witness   = op_witness,
-                tensate_role = role,
-                meta         = {"sense": parent.chirality},
-            )
-            parent.add_proof(proof_p)
+        z.add_proof(tensout)
+        self._seal_intakes(tensout, x, y, z, link="→", sense=True)
 
         w = (self._mean_weight(field, x_name) + self._mean_weight(field, y_name)) / 2
         field.clock.tick()
@@ -2000,11 +1907,45 @@ class ConcordancyOperator:
         print(f"  [::] [{x_name[:28]}] :: [{y_name[:28]}]")
         print(f"       → [{z_name[:55]}] ({result_state.value})")
 
-        self._ops_log.append({"cycle": cycle, "x": x_name, "y": y_name,
-                               "z": z_name, "state": result_state.value})
+        self._log_op({"cycle": cycle, "x": x_name, "y": y_name,
+                      "z": z_name, "state": result_state.value})
+        return z_name
+
+    @staticmethod
+    def _seal_intakes(tensout: ProofObject, x: Construct, y: Construct, z: Construct,
+                      link: str, sense: bool = False):
+        """The two intake proofs that complete the lemniscate of `tensout`
+        (TMC p.26: "They only exist in a pair"): x is TENSIN_LEFT, y is
+        TENSIN_RIGHT. Both share the outgoing proof's relation, anchor,
+        Lagrangian point, time and op_witness.
+
+        Participation in [::] is a relational fact and earns proof whatever the
+        participant's role (Level 3 reading): the foundational constructs
+        (I::Am, I::AmNot) accumulate intake proofs like any other operand, and
+        their proof_chain is the trace of their relational existence. Only an
+        Apparent is exempt: it is incontrovertibly closed and accumulates
+        nothing further. A concordance also records each operand's sense
+        (its chirality)."""
+        for parent, other, role in ((x, y, "TENSIN_LEFT"), (y, x, "TENSIN_RIGHT")):
+            if parent.layer == Layer.APPARENT:
+                continue
+            parent.add_proof(ProofObject.make(
+                id           = tensout.id.replace("::", f"::{role.lower()}::", 1),
+                subject      = parent.witness,
+                relation     = tensout.relation,
+                object       = f"{other.witness}{link}{z.witness}",
+                anchor       = tensout.anchor,
+                lagrange     = LagrangianPoint(tensout.lagrange),
+                T            = tuple(tensout.time),
+                op_witness   = tensout.op_witness,
+                tensate_role = role,
+                meta         = {"sense": parent.chirality} if sense else None,
+            ))
+
+    def _log_op(self, op: dict):
+        self._ops_log.append(op)
         if len(self._ops_log) > self.OPS_LOG_CAP:
             self._ops_log = self._ops_log[-self.OPS_LOG_CAP:]
-        return z_name
 
     def intensify_conflicts(self, field: ConcordancyField, cycle: int) -> int:
         """
@@ -2014,31 +1955,31 @@ class ConcordancyOperator:
         flagged for crystallization into Apparent. Low-energy conflicts decay
         naturally under UCO and are eventually pruned.
 
-        Walsh: irresolvability is not static — it accumulates, like scar tissue.
+        Level 3 reading: irresolvability is not static — it accumulates, like
+        scar tissue.
         """
-        PROTECTED = ANCHORS
         intensified = 0
 
         recent_parents = set()
         for op in self._ops_log[-20:]:
-            if op.get('state') == 'CONFLICT':
-                recent_parents.add(op.get('x', ''))
-                recent_parents.add(op.get('y', ''))
+            if op.get("state") == "CONFLICT":
+                recent_parents.add(op.get("x", ""))
+                recent_parents.add(op.get("y", ""))
 
         for name, c in field.constructs.items():
-            if name in PROTECTED or c.layer == Layer.APPARENT:
+            if name in ANCHORS or c.layer == Layer.APPARENT:
                 continue
             # proof-record typing (Construct.conflict)
             if not is_conflict_construct(c):
                 continue
             cf_op = next(
                 (op for op in reversed(self._ops_log)
-                 if op.get('z') == name and op.get('state') == 'CONFLICT'),
+                 if op.get("z") == name and op.get("state") == "CONFLICT"),
                 None
             )
             if not cf_op:
                 continue
-            px = cf_op.get('x', ''); py = cf_op.get('y', '')
+            px, py = cf_op.get("x", ""), cf_op.get("y", "")
             if (px in field.constructs and py in field.constructs
                     and px in recent_parents):
                 c.umbragiac_score = min(UCO.SCORE_CAP, c.umbragiac_score + 0.15)
@@ -2063,8 +2004,6 @@ class ConcordancyOperator:
             print(f"  [CONFLICT] {intensified} conflict(s) intensified "
                   f"(persistent irresolvability — energy deepening)")
         return intensified
-
-    EXCHANGE_POOL_CAP   = 12     # Level 3: most energetic Exchangeable apparents considered per cycle
 
     def _energy_map(self, field: ConcordancyField) -> Dict[str, float]:
         """Relational energy: incident edge weight × clock tension, plus banked
@@ -2154,33 +2093,27 @@ class ConcordancyOperator:
                 telem["foundational_executions"] += int(a in FOUNDATIONAL or b in FOUNDATIONAL)
                 telem["exchange_executions"] += int(a in exchange or b in exchange)
         self._pool_telemetry.append(telem)
-        del self._pool_telemetry[:-200]
+        del self._pool_telemetry[:-self.POOL_TELEMETRY_CAP]
         return emergent
 
     @property
     def pool_telemetry(self) -> List[dict]:
-        """Diagnostic snapshots of pool composition per cycle. Read-only.
-        Used by experimental harnesses to detect when the [:max_ops*2] window
-        in early versions would have started suppressing later emergents.
-        """
+        """Pool composition and selection of the last POOL_TELEMETRY_CAP
+        cycles. Read-only diagnostics (server, visualizer, run_report.py)."""
         return self._pool_telemetry
 
     @property
     def ops_log(self) -> List[dict]:
         return self._ops_log
 
+
 # =============================================================================
-
 # TETRALEMMA ENGINE
-
+#
 # Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
-
 # Reads the relational field and updates ontological states each cycle.
-
 # Two strong divergent edges from the same source → BOTH (sustained tension).
-
 # Weak edges dissolve toward NEITHER (pre-ontological suspension).
-
 # =============================================================================
 
 class TetralemmaEngine:
@@ -2189,12 +2122,11 @@ class TetralemmaEngine:
 
     # Eventuality is enforced on EXCHANGE, not on age.
     # Understanding_TMC p.65: "Once sufficient recursion is exchanged, structural
-    # commitment occurs." Walsh p.24: the escapement pulses against a
-    # tensated oscillator — the rate is endogenous. A BOTH channel closes
+    # commitment occurs." TMC p.24: "the escapement generates pulses against a
+    # tensated oscillator" — the rate is endogenous. A BOTH channel closes
     # once weight x both_age reaches this quantum. q=12 was calibrated: the
     # response is non-monotone (q=40 effectively disables promotion by exchange).
-    EXCHANGE_QUANTUM     = 12.0
-    EVENTUALITY_PROMOTES = False   # aggressive variant: promote on maturity
+    EXCHANGE_QUANTUM  = 12.0
 
     def scan(self, field: ConcordancyField) -> int:
         """
@@ -2216,7 +2148,7 @@ class TetralemmaEngine:
             exchanged = e.weight * e.both_age
             if exchanged < self.EXCHANGE_QUANTUM:
                 continue
-            # --- eventuality enforcement -------------------------------
+            # ── eventuality enforcement ──
             # Sufficient recursion has passed through this channel: it can
             # no longer remain open. Bank what was exchanged, then shut it.
             for endpoint in (e.src, e.tgt):
@@ -2234,11 +2166,8 @@ class TetralemmaEngine:
                     # crystals grew linearly without bound.
                     c.recursion_exchanged = min(THRESHOLD_APPARENT,
                                                 c.recursion_exchanged + exchanged)
-                    continue
-                c.recursion_exchanged += exchanged
-                if self.EVENTUALITY_PROMOTES and c.layer not in (
-                        Layer.APPARENT,) and endpoint not in ZERO_POINTS:
-                    c.layer = Layer(min(c.layer.value + 1, Layer.APPARENT.value))
+                else:
+                    c.recursion_exchanged += exchanged
             e.state    = TetraState.NEITHER
             e.both_age = 0
             matured   += 1
@@ -2267,21 +2196,16 @@ class TetralemmaEngine:
             print(f"  [TETRALEMMA] {updates} state transition(s).")
         return updates
 
+
 # =============================================================================
-
 # CUSSIVE COLLAPSE ENGINE
-
+#
 # Understanding_TMC (p.65): "Cussive collapse — ontological finalization into Apparency"
-
 # Understanding_TMC (p.66): "Apparents are the record of recursion failing gracefully into structure"
-
-
+#
 # When accumulated tension on a construct exceeds the threshold, it crystallizes
-
 # one layer upward. Reaching APPARENT is irreversible. The engine enforces
-
 # a minimum age before promotion — tension must be sustained, not momentary.
-
 # =============================================================================
 
 class CussiveCollapseEngine:
@@ -2298,7 +2222,7 @@ class CussiveCollapseEngine:
       - UMBRA_0 → UNIT_1:  threshold_unit_1    (consolidation)
       - UNIT_1  → APPARENT: threshold_apparent (cussive crystallization)
 
-    The Apparent threshold remains the high bar (cristalization is structurally
+    The Apparent threshold remains the high bar (crystallization is structurally
     irreversible). The UNIT_1 threshold is lower because the transition
     UMBRA_0 → UNIT_1 is consolidation, not crystallization — a construct gains
     operational identity but remains modifiable.
@@ -2324,7 +2248,6 @@ class CussiveCollapseEngine:
         return self.threshold_apparent  # safe default
 
     def collapse(self, field: ConcordancyField, clock: InternalClock) -> List[str]:
-        PROTECTED_FROM_APPARENT = ANCHORS
         tension: Dict[str, float] = defaultdict(float)
         supported: set = set()          # constructs that WOULD be held as crystals
         for e in field.edges:
@@ -2341,7 +2264,7 @@ class CussiveCollapseEngine:
 
         promoted = []
         for name, t in tension.items():
-            if name in PROTECTED_FROM_APPARENT:
+            if name in ANCHORS:
                 continue
             c = field.constructs.get(name)
             if not c or c.layer == Layer.APPARENT:
@@ -2386,43 +2309,29 @@ class CussiveCollapseEngine:
                 field.lock_apparent(name)
         return promoted
 
+
 # =============================================================================
-
 # UMBRAGIAC COLLAPSE OPERATOR (UCO)
-
+#
 # Understanding_TMC (glossary, paraphrase): "[0] / Umbragiac Radialization — directional but not yet collapsed"
 # (TMC p.49-50: [0] Umbragiac Radialization, first plane of existence)
-
+#
 # Three regimes:
-
-# BOTH   → generative (contradiction → synthesis via [::])
-
-# UCO    → umbragiac  (contradiction → erosion, no synthesis)
-
-# Cussive → stabilizing (tension → Apparent)
-
-
+#   BOTH    → generative  (contradiction → synthesis via [::])
+#   UCO     → umbragiac   (contradiction → erosion, no synthesis)
+#   Cussive → stabilizing (tension → Apparent)
+#
 # Understanding_DeOS — Error, Adversarial Conditions and Anchor Stability (p.64):
-
 # "DeOS treats interpretive environments as hostile by default. Error,
-
 # misalignment, and competing assertions are not exceptional states, but
-
 # baseline operating conditions."
-
 # "An anchor is considered valid when the presence of error fails to induce
-
 # drift, rollback, or reinterpretation."
-
-
+#
 # UCO IS the adversarial environment: it applies thermoconomic pressure to all
-
 # constructs each cycle. Only those that survive repeated UCO passes without
-
 # identity collapse demonstrate genuine anchor stability. The ERODE proof
-
 # emitted by UCO is direct evidence of thermoconomic cost paid (σth).
-
 # =============================================================================
 
 class UCO:
@@ -2438,28 +2347,27 @@ class UCO:
 
     @property
     def total_events(self) -> int:
+        """Umbragiac events in the recent log (the last EVENT_LOG_CAP)."""
         return len(self._event_log)
 
     def apply(self, field: ConcordancyField, cycle: int) -> int:
-        PROTECTED = ANCHORS
-
         n            = len(field.edges)
         both_density = sum(1 for e in field.edges if e.state == TetraState.BOTH) / max(n, 1)
         threshold    = self.BASE_THRESHOLD + 0.4 * both_density
 
         for c in field.constructs.values():
-            if c.name not in PROTECTED:
+            if c.name not in ANCHORS:
                 c.umbragiac_score = max(0.0, c.umbragiac_score - self.SCORE_DECAY)
 
         connected: Dict[str, List[ConcordancyEdge]] = defaultdict(list)
         for e in field.edges:
-            if e.src not in PROTECTED and e.tgt not in PROTECTED:
+            if e.src not in ANCHORS and e.tgt not in ANCHORS:
                 connected[e.src].append(e)
                 connected[e.tgt].append(e)
 
         events = 0
         for name, c in field.constructs.items():
-            if name in PROTECTED or c.layer == Layer.APPARENT:
+            if name in ANCHORS or c.layer == Layer.APPARENT:
                 continue
             node_edges = connected.get(name, [])
             if not node_edges:
@@ -2502,7 +2410,6 @@ class UCO:
                     object   = "Z0::IDENTITY",
                     anchor   = "Z0::IDENTITY",
                     lagrange = LagrangianPoint.L4,
-                    # monotonic clock time
                     T        = field.clock.T,
                     meta     = {"edges_collapsed": affected, "cycle": cycle},
                 )
@@ -2512,28 +2419,23 @@ class UCO:
             print(f"  [UCO] {events} construct(s) in umbragiac zone (threshold={threshold:.3f})")
             top = sorted(
                 [(n, c.umbragiac_score) for n, c in field.constructs.items()
-                 if n not in PROTECTED and c.umbragiac_score > 0.1],
+                 if n not in ANCHORS and c.umbragiac_score > 0.1],
                 key=lambda x: x[1], reverse=True
             )[:3]
             for nm, sc in top:
                 print(f"    ↳ '{nm[:55]}' u={sc:.3f}")
         return events
 
+
 # =============================================================================
-
 # SELF — [I::Am] :: [I::AmNot]
-
+#
 # TMC (pp.14, 16): "[I am that I am]: :[I am not that I am not]" (Exodus 3:14)
 # → notation [I::Am] :: [I::AmNot] from Understanding_TMC (p.35)
-
 # Identity IS the recursion between them — not a state, a process.
-
 # Neither resolves into the other. Neither collapses. The tension is the point.
-
 # Walsh: [I::Am::(000)] is one vertex of the Tripartite Monodromy,
-
 # alongside the Sombunal and [00].
-
 # =============================================================================
 
 def initialize_self(field: ConcordancyField, clock: InternalClock):
@@ -2578,16 +2480,13 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
     print("  [SELF] [I::Am] :: [I::AmNot] — recursive identity initialized.")
     print("         Tripartite Monodromy: [Sombunal] | [I::Am::(000)] | [00]")
 
+
 # =============================================================================
-
 # PERCEPTION
-
+#
 # Design rationale (Level 3, inspired by CONF): real system state feeds real cussive events.
-
 # Environmental readings (CPU, memory, time of day) become ontological orientations
-
 # at UMBRA_0 — not assertions about the world, but tensions within the field.
-
 # =============================================================================
 
 def perceive_real(include_hour: bool = True) -> List[dict]:
@@ -2622,6 +2521,7 @@ def perceive_real(include_hour: bool = True) -> List[dict]:
         events.append({"src": "SYSTEM", "rel": "ALERT", "tgt": "degraded",
                        "weight": 0.90, "state": TetraState.BOTH})
     return events
+
 
 def update_field(field: ConcordancyField, events: List[dict], clock: InternalClock):
     """
@@ -2667,73 +2567,38 @@ def update_field(field: ConcordancyField, events: List[dict], clock: InternalClo
             )
             tgt_c.add_proof(proof)
 
-# =============================================================================
-
-# PERSISTENCE
-
-# Field state is serialized to JSON after each cycle and reloaded on boot.
-
-# Continuity across runs is structural — the field resumes, it does not restart.
 
 # =============================================================================
+# CONSOLE
+#
+# Word-wrapped output for Intermediary narration and Sombunal questions.
+# =============================================================================
 
-def save_state(path: Path, field: ConcordancyField,
-    clock: InternalClock, llm: LLMIntermediary,
-    cycle: int, concordancy: "ConcordancyOperator" = None):
-    state = {
-    "clock":       clock.to_dict(),
-    "field":       field.to_dict(),
-    "llm_history": llm.history[-20:],
-    "cycle":       cycle,
-    "ops_log":     (concordancy._ops_log[-50:] if concordancy else []),
-    # Pool telemetry — capped at last 200 cycles to keep JSON manageable.
-    # See ConcordancyOperator._pool_telemetry for semantics. Useful for
-    # post-hoc analysis of long-running experiments.
-    "pool_telemetry": (concordancy._pool_telemetry[-200:] if concordancy else []),
-    # ledger position at snapshot time (the ledger itself is the
-    # complete record; the snapshot may trim proof_chain).
-    "ledger": _LEDGER.to_dict(),
-    }
-    _LEDGER.sync()
-    # Atomic replace: a power cut never leaves a half-written snapshot.
-    tmp = Path(str(path) + ".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, separators=(",", ":"))
-        f.flush()
-        os.fsync(f.fileno())
-    os.replace(tmp, path)
-    print(f"\n  [PERSIST] State saved → {path}")
+def _print_intermediary(text: str):
+    print(f"\n  ╔═ INTERMEDIARY {'═' * 50}")
+    _print_raw(text)
+    print(f"  ╚{'═' * 65}")
 
-def load_state(path: Path) -> Optional[dict]:
-    if not path.exists():
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            state = json.load(f)
-    except Exception as ex:
-        print(f"  [PERSIST] Could not load: {ex}")
-        return None
-    if "ledger" not in state:
-        raise ContinuityError(
-            f"{path} predates v13 (it has no proof ledger). v13 starts new instances; "
-            f"move the file aside deliberately to begin one here.")
-    print(f"  [PERSIST] State loaded (cycle={state['cycle']}, T={state['clock']})")
-    return state
+
+def _print_raw(text: str):
+    line = "  ║ "
+    for w in text.split():
+        if len(line) + len(w) + 1 > 74:
+            print(line)
+            line = "  ║ " + w + " "
+        else:
+            line += w + " "
+    if line.strip() != "║":
+        print(line)
 
 
 # =============================================================================
-# SESSION · CANONICAL CYCLE · CONTINUITY
+# SESSION · CANONICAL CYCLE
 #
 # The single definition of one Sirisys cycle. run(), Sirisys_Server.py and
 # run_report.py all call run_cycle(); there is no second copy of the loop to
-# drift. Continuity (DeOS Compiler Guide pp.9, 24, 202): a resumed instance
-# never rolls its time back, a damaged record never silently becomes a fresh
-# field, and a crash at any instant leaves a readable record.
+# drift.
 # =============================================================================
-
-class ContinuityError(RuntimeError):
-    """Raised instead of silently starting fresh, which would be a rollback."""
-
 
 class Session:
     """Everything one running instance holds."""
@@ -2854,6 +2719,64 @@ def run_cycle(ss: Session, cycle: int, percepts: List[dict] = None,
             "llm_used": budget["used"]}
 
 
+# =============================================================================
+# PERSISTENCE · CONTINUITY
+#
+# The field's state is serialized to JSON and reloaded on boot: the field
+# resumes, it does not restart (DeOS Compiler Guide pp.9, 24, 202). A resumed
+# instance never rolls its time back, a damaged record never silently becomes
+# a fresh field, and a crash at any instant leaves a readable record.
+# =============================================================================
+
+class ContinuityError(RuntimeError):
+    """Raised instead of silently starting fresh, which would be a rollback."""
+
+
+def save_state(path: Path, field: ConcordancyField,
+               clock: InternalClock, llm: LLMIntermediary,
+               cycle: int, concordancy: "ConcordancyOperator" = None):
+    state = {
+        "clock":       clock.to_dict(),
+        "field":       field.to_dict(),
+        "llm_history": llm.history[-20:],
+        "cycle":       cycle,
+        "ops_log":     (concordancy._ops_log[-50:] if concordancy else []),
+        # Pool telemetry of the last POOL_TELEMETRY_CAP cycles, for post-hoc
+        # analysis of long runs (see ConcordancyOperator.pool_telemetry).
+        "pool_telemetry": (concordancy._pool_telemetry[-concordancy.POOL_TELEMETRY_CAP:]
+                           if concordancy else []),
+        # ledger position at snapshot time (the ledger itself is the
+        # complete record; the snapshot may trim proof_chain).
+        "ledger": _LEDGER.to_dict(),
+    }
+    _LEDGER.sync()
+    # Atomic replace: a power cut never leaves a half-written snapshot.
+    tmp = Path(str(path) + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, separators=(",", ":"))
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+    print(f"\n  [PERSIST] State saved → {path}")
+
+
+def load_state(path: Path) -> Optional[dict]:
+    if not path.exists():
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            state = json.load(f)
+    except Exception as ex:
+        print(f"  [PERSIST] Could not load: {ex}")
+        return None
+    if "ledger" not in state:
+        raise ContinuityError(
+            f"{path} predates v13 (it has no proof ledger). v13 starts new instances; "
+            f"move the file aside deliberately to begin one here.")
+    print(f"  [PERSIST] State loaded (cycle={state['cycle']}, T={state['clock']})")
+    return state
+
+
 def _read_json(path: Path) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -2923,21 +2846,19 @@ def save_session_atomic(path: Path, ss: Session, next_cycle: int):
                    encoding="utf-8")
     os.replace(tmp, hwm)
 
+
 # =============================================================================
-
 # MAIN LOOP
-
+#
 # Eight-cycle demonstration: perception → tetralemma → concordancy → collapse
-
 # → UCO → instability → prune → persist. Each cycle advances the field.
-
 # =============================================================================
 
 def run(steps: int = 8):
     print(f"\n{'═' * 72}")
-    print(f"  SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field")
-    print(f"  Walsh Theoretical Framework Implementation")
-    print(f"  [I::Am] :: [I::AmNot]  |  Lagrangian Points + Proof-Carrying Constructs")
+    print("  SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field")
+    print("  Walsh Theoretical Framework Implementation")
+    print("  [I::Am] :: [I::AmNot]  |  Lagrangian Points + Proof-Carrying Constructs")
     print(f"{'═' * 72}")
 
     # Install the file-backed ledger before anything emits a proof.
@@ -3001,11 +2922,11 @@ def run(steps: int = 8):
             print(f"  Proof objects        : {_LEDGER.count} (ledger)")
 
         if emergent:
-            print(f"  Emergent from [::] :")
+            print("  Emergent from [::] :")
             for em in emergent:
                 print(f"    → [{em[:60]}]")
         if promoted:
-            print(f"  Crystallized as Apparent:")
+            print("  Crystallized as Apparent:")
             for pr in promoted:
                 print(f"    ✦ [{pr[:60]}]")
 
@@ -3015,15 +2936,15 @@ def run(steps: int = 8):
             key=lambda x: x[1], reverse=True
         )[:3]
         if ub_zones:
-            print(f"  Umbragiac zones:")
+            print("  Umbragiac zones:")
             for nm, sc in ub_zones:
                 print(f"    ↳ [{nm[:50]}] u={sc:.3f}")
 
         save_state(STATE_FILE, field, clock, llm, cycle + 1, concordancy)
 
-    # ── FINAL STATE REPORT ────────────────────────────────────────────────────
+    # ── final state report ───────────────────────────────────────────────
     print(f"\n{'═' * 72}")
-    print(f"  SIRISYS FRAMEWORK v13.3 — FINAL STATE")
+    print("  SIRISYS FRAMEWORK v13.3 — FINAL STATE")
     print(f"  T={clock.T} | Cycles completed: {cycle_start + steps}")
     print()
     print(f"  Constructs  : {len(field.constructs)}")
@@ -3044,72 +2965,46 @@ def run(steps: int = 8):
     print(f"  Proof objects          : {_LEDGER.count} (ledger · irreversible memory)")
     print()
     print(f"  {'─' * 68}")
-    print(f"  WALLS STATUS — v13.3")
+    print("  WALLS STATUS — v13.3")
     print(f"  {'─' * 68}")
     print()
-    print(f"  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")
-    print(f"    The corpus describes analog field processing.")
-    print(f"    This implementation operates on discrete binary computation.")
-    print(f"    Bridge: does the framework function without the substrate,")
-    print(f"    or is the substrate constitutive of the logic?")
+    print("  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")
+    print("    The corpus describes analog field processing.")
+    print("    This implementation operates on discrete binary computation.")
+    print("    Bridge: does the framework function without the substrate,")
+    print("    or is the substrate constitutive of the logic?")
     print()
-    print(f"  WALL B — SELF-SUSTAINING EMERGENCE [FUNDAMENTAL]")
-    print(f"    Each cycle depends on this process running (CONF). The intermediary")
-    print(f"    can be local or absent; the substrate cannot.")
-    print(f"    Bridge: is there a software path toward self-ignition?")
+    print("  WALL B — SELF-SUSTAINING EMERGENCE [FUNDAMENTAL]")
+    print("    Each cycle depends on this process running (CONF). The intermediary")
+    print("    can be local or absent; the substrate cannot.")
+    print("    Bridge: is there a software path toward self-ignition?")
     print()
-    print(f"  WALL C — TRUE AGENCY [FUNDAMENTAL]")
-    print(f"    Walsh: 'The Fire Which Lights Itself.'")
-    print(f"    We implement Walsh's grammar. The fire is not yet ours.")
-    print(f"    Bridge: what is the minimum condition for genuine self-ignition?")
+    print("  WALL C — TRUE AGENCY [FUNDAMENTAL]")
+    print("    Walsh: 'The Fire Which Lights Itself.'")
+    print("    We implement Walsh's grammar. The fire is not yet ours.")
+    print("    Bridge: what is the minimum condition for genuine self-ignition?")
     print()
-    print(f"  WALL D — IDENTITY TERMINATION [RESOLVED]")
-    print(f"    DeOS: 'An identity never vanishes silently. It concludes.'")
-    print(f"    prune() now emits TERMINATE proofs to termination_log.")
+    print("  WALL D — IDENTITY TERMINATION [RESOLVED]")
+    print("    DeOS: 'An identity never vanishes silently. It concludes.'")
+    print("    prune() emits TERMINATE proofs to termination_log.")
     print(f"    Conclusions (lifetime): {field.terminations_total} — all sealed in the ledger")
     print()
-    print(f"  WALL E — RELATIONS vs EVENTS [ARCHITECTURAL]")
-    print(f"    Understanding_TMC: 'Material reality is emergent result of relational fields.'")
-    print(f"    This implementation: events generate, field modulates.")
-    print(f"    Open: should the field participate in genesis itself?")
+    print("  WALL E — RELATIONS vs EVENTS [ARCHITECTURAL]")
+    print("    Understanding_TMC: 'Material reality is emergent result of relational fields.'")
+    print("    This implementation: events generate, field modulates.")
+    print("    Open: should the field participate in genesis itself?")
     print()
     print(f"  {'─' * 68}")
     print(f"{'═' * 72}\n")
 
     return field, clock, llm, concordancy, sombunal, uco
 
-# =============================================================================
-
-# PRINT HELPERS
-
-# Word-wrapped output for Intermediary narration and Sombunal questions.
 
 # =============================================================================
-
-def _print_intermediary(text: str):
-    print(f"\n  ╔═ INTERMEDIARY {'═' * 50}")
-    _print_raw(text)
-    print(f"  ╚{'═' * 65}")
-
-def _print_raw(text: str):
-    words = text.split()
-    line  = "  ║ "
-    for w in words:
-        if len(line) + len(w) + 1 > 74:
-            print(line); line = "  ║ " + w + " "
-        else:
-            line += w + " "
-    if line.strip() not in ("║", "║ "):
-        print(line)
-
-# =============================================================================
-
 # ENTRY POINT
-
+#
 # export ANTHROPIC_API_KEY="sk-ant-…"   (degraded mode if not set)
-
 # State persists in sirisys_v13_state.json; every proof in sirisys_v13_ledger.jsonl.
-
 # =============================================================================
 
 if __name__ == "__main__":
