@@ -358,6 +358,25 @@ check("run_report feeds the synthetic stream when asked, reproducibly",
       f"{distinct} distinct percepts; seed 0 twice identical: {first['trace'] == again['trace']}; "
       f"seed 1 different: {first['trace'] != other['trace']}")
 
+# The live view's criteria are the reports': the same code on the same life
+every, server.CRITERIA_EVERY = server.CRITERIA_EVERY, 40
+with quiet(), environment(SIRISYS_LLM_BACKEND="none"):
+    measured = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    for _ in range(40):
+        measured.step_once = True
+        wait_for(lambda: not measured.step_once, 20)
+    reading, carried = measured.status()["criteria"], [s for s in measured.drain() if "criteria" in s]
+    measured.shutdown()
+    reported = run_report.run_arm(0, 40, False, no_log)["criteria"]
+server.CRITERIA_EVERY = every
+untimed = lambda r: {k: v for k, v in json.loads(json.dumps(r)).items() if k != "ms_first_last"}   # the cost is a time
+check("the live view's criteria are run_report's: the same result on the same life, each criterion and the verdict",
+      reading and reading["cycles"] == 40 and untimed(reading["result"]) == untimed(reported)
+      and reading["verdict"] is None and set(reading["checks"]) == {"durable", "flicker", "population", "cost", "energy"}
+      and [s["cycle"] for s in carried] == [39],
+      f"{reading['cycles']} cycles: durable {reading['result']['durable_per_1000']}, flicker "
+      f"{reading['result']['flicker_share']}; the verdict needs 1000" if reading else "no reading")
+
 # The arm that keeps only the Sombunal questions: exact by construction
 model.reset("counter")
 with quiet(), environment(OLLAMA_HOST=model.url):

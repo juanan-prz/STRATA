@@ -40,6 +40,14 @@ METABOLISM
   whole instance (/api/history), so a viewer that arrives late sees all of it;
   past HISTORY_KEPT breaths the oldest are merged in pairs.
 
+THE CRITERIA
+  The engine measures the instance as run_report.py does (sirisys_measures.
+  LifeCriteria, the self-adjustment criteria of Phase 3): every CRITERIA_EVERY
+  cycles the result, each criterion and the verdict go to the status and to
+  that cycle's snapshot. The verdict needs 1000 cycles. Measuring changes
+  nothing in the field; its record grows with the instance (some 100 bytes a
+  cycle).
+
 THE MODEL WATCH
   With a model, the engine watches every call as run_report.py does
   (sirisys_measures.ModelHealth): a model that fails or answers empty would
@@ -49,7 +57,8 @@ THE MODEL WATCH
 REQUIREMENTS
     pip3 install -r requirements.txt     (fastapi, uvicorn and websockets for this server)
     Beside this file: sirisys_loader.py, Sirisys_Framework_vX_Y.py, Sirisys_Live_Visualizer.html,
-    and sirisys_measures.py for a run with a model
+    and sirisys_measures.py (the criteria, and the model watch); without it the server runs and says
+    the criteria are not measured
 """
 import argparse
 import asyncio
@@ -78,6 +87,7 @@ PROFILES = {"standard": {"narrate": True, "include_hour": True},
             "minimal": {"narrate": False, "include_hour": False}}
 MAX_PENDING = 200               # snapshots kept while nobody reads them
 HISTORY_KEPT = 2048             # metabolism records before the oldest are merged in pairs
+CRITERIA_EVERY = 200            # cycles between two readings of the criteria
 LAYER_NAMES = ("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT")
 log = logging.getLogger("sirisys")
 
@@ -171,6 +181,12 @@ class ExperimentEngine:
         self._terminations_seen = self.ss.field.terminations_total
         self._apparents_seen = self.ss.field.apparents_total
         self._history = []                      # the metabolism, breath by breath (METABOLISM)
+        self.life, self.criteria = None, None   # the criteria, and their last reading (THE CRITERIA)
+        try:
+            from sirisys_measures import LifeCriteria
+            self.life = LifeCriteria(S)
+        except ImportError:
+            log.warning("sirisys_measures.py not found: the criteria are not measured")
         self.health = None                      # the model watch; watching changes nothing in the calls
         if self.ss.llm.available:
             # Only a run with a model needs the watch: importing this file does not
@@ -207,10 +223,15 @@ class ExperimentEngine:
         printed = io.StringIO()                 # the framework's own lines go to the visualizer's console
         with self._cycle_lock:
             before = set(self.ss.field.constructs)
+            model_before = self.health.model_seconds if self.health else 0.0
             with contextlib.redirect_stdout(printed):
                 percepts = (None if self.stream is None
                             else S.synthetic_percepts(self.cycle, self.stream, profile["include_hour"]))
+                started = time.perf_counter()
                 r = S.run_cycle(self.ss, self.cycle, percepts=percepts, **profile)
+                # the field's own time, without the model's calls, as run_report.py measures it
+                field_seconds = time.perf_counter() - started - (
+                    (self.health.model_seconds if self.health else 0.0) - model_before)
             now = tuple(self.ss.clock.T)
             if now <= self.last_T:
                 raise S.ContinuityError(f"time did not advance: {self.last_T} -> {now}")
@@ -220,6 +241,10 @@ class ExperimentEngine:
                 log.warning("The model watch tripped: %s. Paused: press Play to go on regardless.",
                             self.health.reason)
             snapshot = self._snapshot(r, [line for line in printed.getvalue().splitlines() if line.strip()], before)
+            if self.life:
+                self.life.after_cycle(self.ss, self.cycle, field_seconds)
+                if (self.cycle + 1) % CRITERIA_EVERY == 0:
+                    self.criteria = snapshot["criteria"] = self._read_criteria()
             with self._queue_lock:
                 self._queue.append(snapshot)
                 self._record_metabolism(snapshot)
@@ -320,6 +345,12 @@ class ExperimentEngine:
         return {"run": self.run_dir.name, "through_cycle": records[-1]["cycles"][1] if records else -1,
                 "records": records}
 
+    def _read_criteria(self) -> dict:
+        """The criteria as run_report.py reports them: the result, each criterion, the verdict."""
+        result = self.life.result()
+        return {"cycles": result["cycles"], "result": result,
+                "checks": self.life.checks(result), "verdict": self.life.verdict(result)}
+
     def _model_watch(self) -> dict | None:
         """The model watch so far; None without a model."""
         h = self.health
@@ -373,6 +404,8 @@ class ExperimentEngine:
                           "watch": self._model_watch()},
                 "mode": "experiment", "profile": self.profile, "run": self.run_dir.name,
                 "ledger": {"count": self.ledger.count, "head": self.ledger.head[:16]},
+                "criteria": self.criteria if self.life else {"unavailable": "sirisys_measures.py not found"},
+                "criteria_every": CRITERIA_EVERY,
                 "framework": S.__sirisys_file__, "framework_version": S.__sirisys_version__}
 
     def drain(self) -> list[dict]:

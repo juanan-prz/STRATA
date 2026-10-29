@@ -6,7 +6,8 @@ LifeCriteria
     measure_phase3.py, run_report.py and live_c2.py: durable crystals (life of
     at least one breath) in every 1000-cycle window, flicker <= 5 %, no growth
     trend, flat cost, bounded top-3 energy. Also the tolerance the field sets
-    for itself, first and last.
+    for itself, first and last. checks() says which criterion holds, one by one
+    (the live view shows them); verdict() is the whole rule.
 
 ModelHealth
     A model that fails or answers empty leaves the field on synthetic names
@@ -62,10 +63,10 @@ class LifeCriteria:
             last, prev = sum(cs[h:]) / max(1, N - h), sum(cs[:h]) / max(1, h)
         k = min(500, N // 2)
         h3 = len(e3) // 2
+        durable = Counter(b // 1000 for b in self.durable)      # by the 1000-cycle window it was born in
         return {
             "cycles": N,
-            "durable_per_1000": [sum(1 for b in self.durable if a <= b < a + 1000)
-                                 for a in range(0, N - S.BREATH_PERIOD, 1000)],
+            "durable_per_1000": [durable[a // 1000] for a in range(0, N - S.BREATH_PERIOD, 1000)],
             "flicker_share": round(self.flicker / max(1, self.apparents_total), 3),
             "zero_windows": w.count(0), "windows": len(w),
             "new_per_200": (min(w), round(sum(w) / len(w), 1), max(w)) if w else None,
@@ -82,19 +83,37 @@ class LifeCriteria:
                                      round(sum(tol[-k:]) / max(1, k), 3)) if k else None,
         }
 
+    # The Phase 3 acceptance rule, criterion by criterion, in the order it is judged
+    RULE = {
+        "durable": lambda r: min(r["durable_per_1000"]) >= 1,
+        "flicker": lambda r: r["flicker_share"] <= 0.05,
+        "population": lambda r: r["constructs_trend"] <= 1.2,
+        "cost": lambda r: r["ms_first_last"][1] <= 1.5 * r["ms_first_last"][0] + 0.5,
+        "energy": lambda r: r["top3_energy_trend"] <= 1.2,
+    }
+
+    @staticmethod
+    def checks(r):
+        """Each criterion of the rule: True or False, or None where the life is
+        too short to say."""
+        held = {}
+        for name, rule in LifeCriteria.RULE.items():
+            try:
+                held[name] = bool(rule(r))
+            except (TypeError, ValueError, KeyError):
+                held[name] = None
+        return held
+
     @staticmethod
     def verdict(r):
         """The Phase 3 acceptance rule; None for a life shorter than one
         1000-cycle window, too short to judge."""
         if r.get("cycles", 0) < 1000:
             return None
-        try:
-            return (min(r["durable_per_1000"]) >= 1 and r["flicker_share"] <= 0.05
-                    and r["constructs_trend"] <= 1.2
-                    and r["ms_first_last"][1] <= 1.5 * r["ms_first_last"][0] + 0.5
-                    and r["top3_energy_trend"] <= 1.2)
-        except (TypeError, ValueError):     # too short a life to judge
-            return None
+        for held in LifeCriteria.checks(r).values():     # in order, as the rule reads
+            if held is not True:
+                return held
+        return True
 
 
 def _kind(prompt):

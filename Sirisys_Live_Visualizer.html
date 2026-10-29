@@ -205,6 +205,22 @@
     transition: width 0.35s ease, background 0.2s;
   }
 
+  /* ───── The criteria: each with its value and its threshold ───── */
+  .criteria-verdict { padding: 2px 0 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .criteria-verdict.holds { color: var(--text-bright); }
+  .criteria-verdict.fails { color: var(--err); }
+  .crit-row {
+    display: grid; grid-template-columns: 12px 1fr auto; column-gap: var(--sp-2);
+    padding: 3px 0;
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .crit-row .mark { color: var(--text-dim); text-align: center; }
+  .crit-row.holds .mark { color: var(--text-bright); }
+  .crit-row.fails .mark, .crit-row.fails .value { color: var(--err); }
+  .crit-row .name { color: var(--text-muted); letter-spacing: var(--ls-wide); }
+  .crit-row .value { color: var(--text-bright); text-align: right; }
+  .crit-row .rule { grid-column: 2 / 4; color: var(--text-dim); font-size: 10px; }
+
   /* ───── Breakdowns (modes, layers, Lagrangian points) ───── */
   .breakdown-row {
     position: relative; isolation: isolate; overflow: hidden;
@@ -471,6 +487,7 @@
     <span class="stat-inline" title="internal time (era, offset): it never moves backwards">T<strong id="header-T">—</strong></span>
     <span class="stat-inline" title="constructs (◆ anchors · ✦ Zero Points · ⬢ crystals the field formed)">n<strong id="header-n">—</strong></span>
     <span class="stat-inline" title="proofs sealed in this instance's ledger · the ledger head (the whole history in one hash)">ledger<strong id="header-ledger">—</strong></span>
+    <span class="stat-inline" id="header-criteria" title="the self-adjustment criteria of Phase 3: see Criteria in the left panel">criteria<strong id="header-criteria-mark">—</strong></span>
     <span class="stat-inline" id="header-model">—</span>
     <span class="stat-inline run-info" id="header-run-info" title="server mode · framework version · run folder in sirisys_runs/">—</span>
   </div>
@@ -503,6 +520,11 @@
       <div class="stat-row" title="0 at full expansion, 1 at full contraction"><span class="stat-key">contraction</span><span class="stat-val accent" id="b-contraction">—</span></div>
       <div class="bar-track"><div class="bar-fill" id="b-bar"></div></div>
       <div class="stat-row spaced" title="set by the field once per breath, so that crystals formed track crystals concluded"><span class="stat-key">tolerance</span><span class="stat-val" id="b-tolerance">—</span></div>
+    </div>
+    <div class="panel-section">
+      <h3 title="the self-adjustment criteria of Phase 3, measured on this instance as run_report.py measures a run (sirisys_measures.LifeCriteria)">Criteria</h3>
+      <div class="criteria-verdict" id="criteria-verdict">—</div>
+      <div id="criteria-list"></div>
     </div>
     <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3>Layers</h3><div id="layers-list"></div></div>
@@ -1427,6 +1449,56 @@ $('metab-chart').addEventListener('mousemove', e => {
 });
 $('metab-chart').addEventListener('mouseleave', () => { metabHover = null; metabStale = true; requestDraw(); });
 
+// ═══ The criteria ═══════════════════════════════════════════════════════════
+
+// The Phase 3 rule as sirisys_measures.LifeCriteria judges it; the server sends each
+// criterion's result (checks) and the verdict, read every few hundred cycles
+const CRITERIA = [
+  ['durable', 'durable crystals', r => r.durable_per_1000.length ? `min ${Math.min(...r.durable_per_1000)} / 1000` : '—',
+   'at least 1 living a breath in every 1000 cycles'],
+  ['flicker', 'flicker', r => r.flicker_share != null ? `${(100 * r.flicker_share).toFixed(1)} %` : '—',
+   'at most 5 % of crystals gone within a breath'],
+  ['population', 'population trend', r => fixed(r.constructs_trend, 2), 'at most ×1.2: no growth'],
+  ['cost', 'cost per cycle', r => r.ms_first_last ? `${r.ms_first_last[0]} → ${r.ms_first_last[1]} ms` : '—',
+   'last ≤ 1.5 × first + 0.5 ms: flat'],
+  ['energy', 'top-3 energy trend', r => fixed(r.top3_energy_trend, 2), 'at most ×1.2: bounded'],
+];
+let criteriaEvery = null;          // cycles between two readings, as the server says
+function renderCriteria(c) {
+  const verdict = $('criteria-verdict'), mark = $('header-criteria-mark');
+  if (!c || c.unavailable) {
+    const why = c ? `not measured: ${c.unavailable}`
+      : criteriaEvery ? `the first reading comes at cycle ${criteriaEvery}` : '—';
+    verdict.textContent = why; verdict.className = 'criteria-verdict';
+    mark.textContent = '—'; $('header-criteria').title = why; $('header-criteria').className = 'stat-inline';
+    $('criteria-list').replaceChildren();
+    return;
+  }
+  const r = c.result, failed = CRITERIA.filter(([key]) => c.checks[key] === false).map(([, name]) => name);
+  const said = c.verdict === true ? 'holds' : c.verdict === false ? `fails: ${failed.join(', ')}`
+    : `not yet: the verdict needs 1000 cycles`;
+  verdict.textContent = `${said} · at cycle ${c.cycles}`;
+  verdict.className = 'criteria-verdict' + (c.verdict === true ? ' holds' : c.verdict === false ? ' fails' : '');
+  mark.textContent = c.verdict === true ? '✓' : c.verdict === false ? '✗' : '…';
+  $('header-criteria').className = 'stat-inline' + (c.verdict === false ? ' err' : '');
+  $('header-criteria').title = `the self-adjustment criteria of Phase 3: ${said}, at cycle ${c.cycles}`;
+  const row = (state, name, value, rule) => {
+    const div = el('div', 'crit-row' + (state ? ' ' + state : ''));
+    div.append(...spaced([el('span', 'mark', state === 'holds' ? '✓' : state === 'fails' ? '✗' : '·'),
+                          el('span', 'name', name), el('span', 'value', value)]), el('span', 'rule', rule));
+    return div;
+  };
+  const [lowest, mean, highest] = r.new_per_200 || [];
+  // Each criterion marked only once the rule can judge: before, its value alone
+  const judged = key => c.verdict == null ? null : c.checks[key] === true ? 'holds' : c.checks[key] === false ? 'fails' : null;
+  $('criteria-list').replaceChildren(
+    ...CRITERIA.map(([key, name, value, rule]) => row(judged(key), name, value(r), rule)),
+    row(null, 'new crystals', r.new_per_200 ? `${lowest} · ${mean} · ${highest}` : '—',
+        `per 200 cycles: least · mean · most; ${r.zero_windows} of ${r.windows} windows with none`),
+    row(null, 'tolerance', r.tolerance_first_last ? `${r.tolerance_first_last[0]} → ${r.tolerance_first_last[1]}` : '—',
+        'what the field set for itself, first and last'));
+}
+
 // Until the field is drawn, the field's panel says why: never cycled, paused (its
 // snapshots went to another viewer), or waiting for the next cycle
 function renderEmptyState() {
@@ -1600,6 +1672,7 @@ function applySnapshot(snap) {
   if (snap.ledger) showLedger(snap.ledger);
   renderRunInfo();
   if ('model_watch' in snap) renderModel(snap.model_watch);
+  if (snap.criteria) renderCriteria(snap.criteria);
   renderCounters(snap);
   renderBreathing(snap);
   renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: snap.modes[m] || 0, sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
@@ -1627,6 +1700,7 @@ function clearField() {
                     'header-cycle', 'header-T', 'header-n', 'header-ledger']) setText(id, '—');
   for (const id of ['inst-bar', 'b-bar']) $(id).style.width = '0%';
   for (const id of ['modes-list', 'layers-list', 'lagrangian-list']) $(id).replaceChildren();
+  renderCriteria(null);
   updateFilterCounts(null);
   logList.replaceChildren($('log-placeholder').content.cloneNode(true));
   hideTooltip();
@@ -1752,6 +1826,10 @@ function updateStatus(st) {
   }
   renderRunInfo();
   if (st.model) { model = st.model; renderModel(st.model.watch); }
+  if (st.criteria_every) criteriaEvery = st.criteria_every;
+  if (st.run !== discardedRun) {
+    renderCriteria('criteria' in st ? st.criteria : { unavailable: 'this server does not measure them' });
+  }
   if (st.ledger && !lastSnapshot) showLedger(st.ledger);     // until a snapshot keeps it current
   setRunning(!!st.running);
   if (st.cycle_delay_ms != null && document.activeElement !== slider) {      // the server's own delay
