@@ -146,7 +146,7 @@ El glosario (sección VIII) define cada contador.
 
 **Event Log** (derecha). Productos de `[::]`, colapsos cúsicos, conclusiones, narración, preguntas al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
 
-**Al señalar un constructo** se ven su tipo, capa, testigo, energía, puntuación umbragiaca, intercambio acumulado, Vc, modo de existencia, quiralidad, como qué cristalizó, etiqueta lagrangiana, pruebas y el T en que nació.
+**Al señalar un constructo** se ven su tipo, capa, testigo, energía, puntuación umbragíaca, intercambio acumulado, Vc, modo de existencia, quiralidad, como qué cristalizó, etiqueta lagrangiana, pruebas y el T en que nació.
 
 ### 3.2 Cómo se dibuja el campo
 

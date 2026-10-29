@@ -6,7 +6,7 @@
 
 A software interpretation of the SIRISYS recursive ontological system: a field of constructs that evolves cycle by cycle through concordancy operations, cussive collapse and stratified emergence across four ontological layers, with every event sealed in an irreversible, hash-chained record.
 
-STRATA is an independent interpretation in software, not an official SIRISYS work. It follows *Pre of Then: The Material Constructs* (TMC) as its primary source, together with other confidential materials and documentation, and the framework header labels every citation by source level: primary, interpretive, or design choice.
+STRATA is an independent project, not an official SIRISYS work. It follows *Pre of Then: The Material Constructs* (TMC) as its primary source, together with other confidential materials and documentation, and the framework header labels every citation by source level: primary, interpretive, or design choice.
 
 Author: Juan A. Pérez-Gómez.
 
