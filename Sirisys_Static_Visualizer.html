@@ -55,10 +55,10 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker, FALSE dashed and NEITHER fainter, so that a
-       thin TRUE line stays blue beside it: thin lines are told apart by lightness more than by
-       hue. The accent is never data */
-    --col-TRUE: #4f80ff;
+       neutral. On the canvas BOTH is also thicker, FALSE dashed, TRUE a little stronger and
+       NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are told apart
+       by lightness more than by hue. The accent is never data */
+    --col-TRUE: #5e92ff;
     --col-FALSE: #cb86db;
     --col-BOTH: #ea5202;
     --col-NEITHER: #5d646f;
@@ -541,7 +541,7 @@
       <span>anchor</span>
     </div>
     <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.35; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
       <span>apparent</span>
     </div>
     <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
@@ -610,9 +610,9 @@ const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed,
-// NEITHER fainter (alpha multiplies the edge's own opacity)
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed, TRUE
+// a little stronger, NEITHER fainter (alpha multiplies the edge's own opacity, up to 1)
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
 const EXCHANGE_QUANTUM = 12;
 
@@ -665,7 +665,7 @@ function edgeMark(state) {
   const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
   for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
-  if (style.alpha) stroke.setAttribute('stroke-opacity', style.alpha);
+  if (style.alpha < 1) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
   return svg;
 }
@@ -974,7 +974,7 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
 function drawRelation(a, b, e, alpha, extra, arrowGap) {
   const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
   const color = COLOR.state[e.state] || COLOR.dim;
-  alpha *= fade;
+  alpha = Math.min(1, alpha * fade);
   line(a, b, color, alpha, width + extra, dash);
   if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
 }
@@ -1022,8 +1022,8 @@ function render() {
     traceShape(shape, p.x, p.y, size);
     if (shape === 'hexagon') {                          // a crystal, drawn open: the active strata stand out
       ctx.globalAlpha = dim; ctx.fillStyle = COLOR.ground; ctx.fill();       // over the edges behind it
-      ctx.globalAlpha = 0.35 * dim; ctx.fillStyle = color; ctx.fill();
-      ctx.globalAlpha = 0.95 * dim; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.globalAlpha = 0.55 * dim; ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = dim; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
     } else {
       ctx.globalAlpha = dim; ctx.fillStyle = color; ctx.fill();
       if (shape !== 'circle') {

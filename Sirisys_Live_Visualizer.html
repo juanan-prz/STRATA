@@ -43,8 +43,9 @@
     --sombunal: #9b87f5;
     --sombunal-soft: rgba(155, 135, 245, 0.10);
     --sombunal-text: #c9bfff;
-    --concluded: #5a74a8;                       /* a conclusion is not an error: no alarm colour; a
-                                                   steel blue darker than the born and the narration */
+    --born: #b0b8c6;                            /* the metabolism's born: a light grey */
+    --concluded: #6f8cd0;                       /* a conclusion is not an error: no alarm colour; a
+                                                   periwinkle, apart from the born and the narration */
 
     /* Ontological layers: one warm hue from shadow to light, in the order of the layers
        (lightness rises with the layer); no other colour on the page is of this hue */
@@ -56,10 +57,10 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker, FALSE dashed and NEITHER fainter, so that a
-       thin TRUE line stays blue beside it: thin lines are told apart by lightness more than by
-       hue. The accent is never data */
-    --col-TRUE: #4f80ff;
+       neutral. On the canvas BOTH is also thicker, FALSE dashed, TRUE a little stronger and
+       NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are told apart
+       by lightness more than by hue. The accent is never data */
+    --col-TRUE: #5e92ff;
     --col-FALSE: #cb86db;
     --col-BOTH: #ea5202;
     --col-NEITHER: #5d646f;
@@ -616,7 +617,7 @@
       <span>anchor</span>
     </div>
     <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out; two rings where it crystallizes">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.35; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
       <span>apparent</span>
     </div>
     <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
@@ -641,8 +642,8 @@
     <button class="metab-toggle" id="metab-toggle" aria-expanded="true" aria-controls="metab-body"
             title="What each breath did to the population (M)">Metabolism</button>
     <span class="metab-key" aria-hidden="true">
-      <span><i style="background: var(--text-muted)"></i>born</span>
-      <span><i style="background: var(--text-muted); opacity: 0.35"></i>never on screen</span>
+      <span><i style="background: var(--born)"></i>born</span>
+      <span><i style="background: var(--born); opacity: 0.4"></i>never on screen</span>
       <span><i style="background: var(--concluded)"></i>concluded</span>
       <span><i style="background: var(--layer-UNIT_1)"></i>rose</span>
       <span><i style="background: var(--layer-APPARENT)"></i>crystallized</span>
@@ -699,9 +700,9 @@ const MODE_MEANING = {
   NEUTRAL: 'balanced, or no proofs yet',
 };
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed,
-// NEITHER fainter (alpha multiplies the edge's own opacity)
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed, TRUE
+// a little stronger, NEITHER fainter (alpha multiplies the edge's own opacity, up to 1)
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 
 // ═══ Settings ═══════════════════════════════════════════════════════════════
 
@@ -736,7 +737,7 @@ const COLOR = {
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
   accent: css('--accent'), dim: css('--text-dim'), muted: css('--text-muted'), bright: css('--text-bright'),
   ground: css('--bg-0'),                          // the field's background
-  border: css('--border-hi'), raised: css('--bg-3'), concluded: css('--concluded'),
+  border: css('--border-hi'), raised: css('--bg-3'), born: css('--born'), concluded: css('--concluded'),
 };
 const FONT_MONO = css('--font-mono');
 
@@ -759,7 +760,7 @@ function edgeMark(state) {
   const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
   for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
-  if (style.alpha) stroke.setAttribute('stroke-opacity', style.alpha);
+  if (style.alpha < 1) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
   return svg;
 }
@@ -925,7 +926,7 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
 function drawRelation(a, b, e, alpha, extra, arrowGap) {
   const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
   const color = COLOR.state[e.state] || COLOR.dim;
-  alpha *= fade;
+  alpha = Math.min(1, alpha * fade);
   line(a, b, color, alpha, width + extra, dash);
   if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
 }
@@ -973,8 +974,8 @@ function render(now) {
     traceShape(shape, n.x, n.y, size);
     if (shape === 'hexagon') {                          // a crystal, drawn open: the active strata stand out
       ctx.globalAlpha = 1; ctx.fillStyle = COLOR.ground; ctx.fill();       // over the edges behind it
-      ctx.globalAlpha = 0.35; ctx.fillStyle = color; ctx.fill();
-      ctx.globalAlpha = 0.95; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.globalAlpha = 0.55; ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
     } else {
       ctx.globalAlpha = 1; ctx.fillStyle = color; ctx.fill();
       if (shape !== 'circle') { ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.6; ctx.lineWidth = 1; ctx.stroke(); }
@@ -1482,15 +1483,15 @@ function drawMetabolism() {
     const now = i === n - 1 ? 0.6 : 1;                  // the breath under way
     const [a, r, c] = METAB_ROWS;
     const midA = a.top + a.height / 2, midR = r.top + r.height / 2, half = a.height / 2;
-    const seen = bar(i, midA, b.born - b.unseen, flow, half, true, COLOR.muted, 0.9 * now);
-    bar(i, seen, b.unseen, flow, half, true, COLOR.muted, 0.35 * now);
-    bar(i, midA, sumOf(b.concluded), flow, half, false, COLOR.concluded, 0.9 * now);
-    const rose = bar(i, midR, b.risen, rises, half, true, COLOR.layer.UNIT_1, 0.9 * now);
-    bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, 0.95 * now);
-    bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.45 * now);
+    const seen = bar(i, midA, b.born - b.unseen, flow, half, true, COLOR.born, now);
+    bar(i, seen, b.unseen, flow, half, true, COLOR.born, 0.4 * now);
+    bar(i, midA, sumOf(b.concluded), flow, half, false, COLOR.concluded, now);
+    const rose = bar(i, midR, b.risen, rises, half, true, COLOR.layer.UNIT_1, now);
+    bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, now);
+    bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.6 * now);
     let y = c.top + c.height;
     for (const layer of LAYERS) {
-      y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], 0.9 * now);
+      y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], now);
     }
   });
   mctx.globalAlpha = 1; mctx.fillStyle = COLOR.dim; mctx.textAlign = 'left';
