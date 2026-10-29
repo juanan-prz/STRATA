@@ -498,11 +498,11 @@ def function(html, name):
 
 
 DRAWN_ALIKE = ("shapeOf", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
-               "renderBreakdown", "renderLagrangian", "buildFilters")
+               "renderBreakdown", "renderLagrangian", "buildFilters", "foldableSections", "foldableLegend")
 unlike += [f"{name}()" for name in DRAWN_ALIKE if not function(views["live"], name)
            or function(views["live"], name) != function(inspector, name)]
 check("the two views agree with each other and the live view with its server: the strata rings, how each edge "
-      "state and mode is drawn and written, the functions they draw with, every colour token both define, "
+      "state and mode is drawn and written, the functions they draw and fold with, every colour token both define, "
       "the history kept", not unlike and len(shared) > 20 and not differ, ", ".join(unlike + differ)
       or f"{len(SHARED)} declarations, {len(DRAWN_ALIKE)} functions and {len(shared)} colour tokens alike")
 

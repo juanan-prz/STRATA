@@ -129,18 +129,17 @@ Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and
 | F | Fit the view to the constructs on show |
 | V | Change the layout: relations ↔ strata |
 | A | Quiet anchors |
-| M | Show or hide the metabolism |
 
 Space works right after a click on any button. A button reached with the keyboard (Tab) keeps Space and Enter for itself, as usual.
 
-**Field State panel** (left).
+**Field State panel** (left). Each section folds by its title (▾ open, ▸ folded), and the browser remembers which are folded.
 
 - *Counters*: cycle, T, constructs, edges, apparents (every crystallization in the instance; the Zero Points are crystals from the start), concluded, conflicts, BOTH edges, closures in the cycle, reincarnations, top-3 energy, instability (the share of uncrystallized constructs unstable in some way) and how many cycles ago the last crystal formed.
 - *Breathing*: completed breaths, contraction (0 at full expansion, 1 at full contraction) and the tolerance the field sets for itself once per breath.
-- *Criteria*: see below.
-- *Modes*, *Layers*, *Lagrangian*: the population by existence mode, by layer and by Lagrangian tag. The tags do not yet govern any decision.
-- *Filters*: hide or show constructs by layer and edges by tetralemmic state.
+- *Layers*, *Modes*, *Lagrangian*: the population by layer, by existence mode and by Lagrangian tag. The tags do not yet govern any decision.
 - *Pool telemetry*: the candidates for `[::]` this cycle (pools of matured BOTH, energetic conflicts and exchangeable crystals), the operations that gave a product of those tried, the foundational and exchange products, and a chart of the last 200 cycles.
+- *Criteria*: see below.
+- *Filters*: hide or show constructs by layer and edges by tetralemmic state.
 
 The glossary (section VIII) defines every counter.
 
@@ -150,7 +149,7 @@ The glossary (section VIII) defines every counter.
 
 ### 3.2 How the field is drawn
 
-The live view and the inspector draw the field alike, and the legend keys all of it.
+The live view and the inspector draw the field alike, and the legend keys all of it; its title folds it to a small box in the corner, and the browser remembers it.
 
 - **Layouts.** *relations*: placed by their relations. *strata*: the Zero Points at the centre, then the anchors, NULL_00, UMBRA_0, UNIT_1 and APPARENT outwards, so that a construct that rises a layer moves out.
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
@@ -193,6 +192,8 @@ What the live view uses, also described at the top of `Sirisys_Server.py`:
 ## 4. The inspector
 
 `Sirisys_Static_Visualizer.html` opens directly in the browser: no server and no connection, and nothing is sent anywhere. It shows one moment of an instance in depth.
+
+Its left panel folds section by section, as in the live view.
 
 **Opening.** *Open state.json…* (or O), or drop the files anywhere on the page. A run folder's `state.json` is the usual file; the framework's own `sirisys_v13_state.json` (§8) opens too.
 

@@ -43,8 +43,8 @@
     --sombunal: #9b87f5;
     --sombunal-soft: rgba(155, 135, 245, 0.10);
     --sombunal-text: #c9bfff;
-    --born: #b0b8c6;                            /* the metabolism's born: a light grey */
-    --concluded: #6f8cd0;                       /* a conclusion is not an error: no alarm colour; a
+    --born: #9da5b5;                            /* the metabolism's born: a light grey */
+    --concluded: #6580bc;                       /* a conclusion is not an error: no alarm colour; a
                                                    periwinkle, apart from the born and the narration */
 
     /* Ontological layers: one warm hue from shadow to light, in the order of the layers
@@ -57,12 +57,12 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker, FALSE dashed, TRUE a little stronger and
-       NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are told apart
-       by lightness more than by hue. The accent is never data */
+       neutral. On the canvas BOTH is also thicker and the strongest, FALSE dashed, TRUE a little
+       stronger and NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are
+       told apart by lightness more than by hue. The accent is never data */
     --col-TRUE: #5e92ff;
     --col-FALSE: #cb86db;
-    --col-BOTH: #ea5202;
+    --col-BOTH: #f05a0a;
     --col-NEITHER: #5d646f;
 
     /* Spacing, type, radii, shadows */
@@ -190,6 +190,17 @@
     text-transform: uppercase; letter-spacing: var(--ls-wider);
     color: var(--text-muted);
   }
+  /* Each section of the left panel folds by its title (▾ open, ▸ folded) */
+  .section-toggle {
+    all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-toggle::before { content: '▾'; width: 14px; font-size: 14px; line-height: 1; color: var(--text-muted); }
+  .section-toggle[aria-expanded="false"]::before { content: '▸'; }
+  .section-toggle:hover { color: var(--text-bright); }
+  .section-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .panel-section.folded > h3:first-child { margin-bottom: 0; }
+  .panel-section.folded > :not(:first-child) { display: none; }
 
   /* ───── Counters ───── */
   .stat-row {
@@ -301,18 +312,13 @@
     padding: 3px var(--sp-3);
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide); color: var(--text-dim);
   }
-  .metab-toggle {
-    flex-shrink: 0; white-space: nowrap;
-    padding: 2px 0; border: 0; background: none; cursor: pointer;
-    font: inherit; letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-muted);
+  .metab-title {
+    flex-shrink: 0; white-space: nowrap; padding: 2px 0;
+    letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-muted);
   }
-  .metab-toggle::after { content: ' ▾'; color: var(--text-dim); }
-  .metab-toggle[aria-expanded="false"]::after { content: ' ▸'; }
-  .metab-toggle:hover { color: var(--text-bright); }
   .metab-key { display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); min-width: 0; }
   .metab-key span { white-space: nowrap; }
   .metab-key i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 1px; vertical-align: -1px; }
-  .metab-body[hidden] { display: none; }
   #metab-chart { display: block; width: 100%; height: 112px; }
   .metab-read {                                 /* the bar under the pointer: two lines, three on a narrow screen */
     height: 30px; padding: 0 var(--sp-3) 4px; overflow: hidden;
@@ -370,19 +376,30 @@
   .dot.offline { background: var(--err); }
   .dot.connecting { background: var(--warn); animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-  .shape-legend {
+  .shape-legend {                              /* a title that folds it, then two rows of five */
     position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
-    max-width: calc(100% - 200px);              /* the connection status keeps the left corner */
-    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
-    gap: 6px var(--sp-3);
-    padding: 7px var(--sp-3);
+    display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+    padding: 6px var(--sp-3) 7px;
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide);
     color: var(--text-muted);
   }
+  .legend-toggle {                              /* the legend's title: it folds the legend to the corner */
+    width: auto; font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: var(--ls-wider); color: var(--text-muted);
+  }
+  .shape-legend.folded .legend-grid { display: none; }
+  .legend-grid {                                /* as wide as it needs, in columns: each symbol over the one below */
+    display: grid; grid-template-columns: repeat(5, auto); align-items: center; gap: 6px 18px;
+  }
   .shape-legend .item { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
-  .shape-legend .break { flex-basis: 100%; height: 0; }
+  .shape-legend .item > svg { width: 18px; flex-shrink: 0; }  /* one width, so the symbols centre in columns */
+  .shape-legend .break { display: none; }
   .shape-legend .items { display: contents; }
-  .shape-legend svg { flex-shrink: 0; }
+  @media (max-width: 1350px) {                  /* narrower: rows that wrap, clear of the connection status */
+    .shape-legend { align-items: flex-end; max-width: calc(100% - 200px); }
+    .legend-grid { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+    .shape-legend .break { display: block; flex-basis: 100%; height: 0; }
+  }
   @media (max-width: 1100px) { .shape-legend { display: none; } }
 
   .empty-state {                                /* until the field has constructs */
@@ -533,16 +550,9 @@
       <div class="bar-track"><div class="bar-fill" id="b-bar"></div></div>
       <div class="stat-row spaced" title="set by the field once per breath, so that crystals formed track crystals concluded"><span class="stat-key">tolerance</span><span class="stat-val" id="b-tolerance">—</span></div>
     </div>
-    <div class="panel-section">
-      <h3 title="the self-adjustment criteria of Phase 3, measured on this instance as run_report.py measures a run (sirisys_measures.LifeCriteria)">Criteria</h3>
-      <div class="criteria-verdict" id="criteria-verdict">—</div>
-      <div id="criteria-list"></div>
-    </div>
-    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3>Layers</h3><div id="layers-list"></div></div>
+    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3 title="tags on constructs and proofs (DeOS Compiler Guide pp.77–80); they do not yet govern any decision">Lagrangian</h3><div id="lagrangian-list"></div></div>
-    <div class="panel-section"><h3>Filters · layer</h3><div id="filter-layer"></div></div>
-    <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
     <div class="panel-section">
       <h3 title="the candidates for [::] this cycle, and what was done with them">Pool telemetry</h3>
       <div class="stat-row" title="matured BOTH · energetic conflicts · exchangeable crystals (the 12 most energetic)"><span class="stat-key">pools B·C·X</span><span class="stat-val" id="t-pool">—</span></div>
@@ -550,6 +560,13 @@
       <div class="stat-row" title="products with I::Am or I::AmNot as an operand · with a crystal as an operand"><span class="stat-key">foundational · exchange</span><span class="stat-val" id="t-ops">—</span></div>
       <canvas id="telem-chart"></canvas>
     </div>
+    <div class="panel-section">
+      <h3 title="the self-adjustment criteria of Phase 3, measured on this instance as run_report.py measures a run (sirisys_measures.LifeCriteria)">Criteria</h3>
+      <div class="criteria-verdict" id="criteria-verdict">—</div>
+      <div id="criteria-list"></div>
+    </div>
+    <div class="panel-section"><h3>Filters · layer</h3><div id="filter-layer"></div></div>
+    <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
   </div>
 </div>
 
@@ -607,43 +624,46 @@
     <span id="conn-text">connecting...</span>
   </div>
 
-  <div class="shape-legend floating">
-    <div class="item" title="coloured by its layer; one ring where it rises to UNIT_1">
-      <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
-      <span>construct</span>
-    </div>
-    <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
-      <span>anchor</span>
-    </div>
-    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out; two rings where it crystallizes">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
-      <span>apparent</span>
-    </div>
-    <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
-      <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
-      <span>zero point</span>
-    </div>
-    <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
-      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
-      <span>conflict</span>
-    </div>
-    <div class="break"></div>
-    <div id="edge-legend" class="items"></div>
-    <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
-      <span>crystal support</span>
+  <div id="legend" class="shape-legend floating">
+    <button class="section-toggle legend-toggle" id="legend-toggle" type="button" aria-expanded="true"
+            aria-controls="legend-grid">Legend</button>
+    <div class="legend-grid" id="legend-grid">
+      <div class="item" title="coloured by its layer; one ring where it rises to UNIT_1">
+        <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
+        <span>construct</span>
+      </div>
+      <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
+        <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+        <span>anchor</span>
+      </div>
+      <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out; two rings where it crystallizes">
+        <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
+        <span>apparent</span>
+      </div>
+      <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
+        <span>conflict</span>
+      </div>
+      <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
+        <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
+        <span>zero point</span>
+      </div>
+      <div class="break"></div>
+      <div id="edge-legend" class="items"></div>
+      <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
+        <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
+        <span>crystal support</span>
+      </div>
     </div>
   </div>
  </div>
 
  <section class="metabolism" id="metabolism">
   <div class="metab-head">
-    <button class="metab-toggle" id="metab-toggle" aria-expanded="true" aria-controls="metab-body"
-            title="What each breath did to the population (M)">Metabolism</button>
+    <span class="metab-title" title="What each breath did to the population">Metabolism</span>
     <span class="metab-key" aria-hidden="true">
       <span><i style="background: var(--born)"></i>born</span>
-      <span><i style="background: var(--born); opacity: 0.4"></i>never on screen</span>
+      <span><i style="background: var(--born); opacity: 0.375"></i>never on screen</span>
       <span><i style="background: var(--concluded)"></i>concluded</span>
       <span><i style="background: var(--layer-UNIT_1)"></i>rose</span>
       <span><i style="background: var(--layer-APPARENT)"></i>crystallized</span>
@@ -700,9 +720,10 @@ const MODE_MEANING = {
   NEUTRAL: 'balanced, or no proofs yet',
 };
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed, TRUE
-// a little stronger, NEITHER fainter (alpha multiplies the edge's own opacity, up to 1)
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker and the strongest,
+// FALSE dashed, TRUE a little stronger, NEITHER fainter (alpha multiplies the edge's own
+// opacity, up to 1)
+const EDGE_STYLE = { BOTH: { width: 2, alpha: 1.35 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 
 // ═══ Settings ═══════════════════════════════════════════════════════════════
 
@@ -1442,7 +1463,6 @@ const METAB_ROWS = [
 const METAB_GUTTER = { left: 118, right: 34 };
 function drawMetabolism() {
   const chart = $('metab-chart');
-  if ($('metab-body').hidden) return;
   const mctx = chart.getContext('2d'), W = chart.clientWidth, H = chart.clientHeight;
   chart.width = W * DPR; chart.height = H * DPR;
   mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -1483,15 +1503,15 @@ function drawMetabolism() {
     const now = i === n - 1 ? 0.6 : 1;                  // the breath under way
     const [a, r, c] = METAB_ROWS;
     const midA = a.top + a.height / 2, midR = r.top + r.height / 2, half = a.height / 2;
-    const seen = bar(i, midA, b.born - b.unseen, flow, half, true, COLOR.born, now);
-    bar(i, seen, b.unseen, flow, half, true, COLOR.born, 0.4 * now);
-    bar(i, midA, sumOf(b.concluded), flow, half, false, COLOR.concluded, now);
-    const rose = bar(i, midR, b.risen, rises, half, true, COLOR.layer.UNIT_1, now);
-    bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, now);
-    bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.6 * now);
+    const seen = bar(i, midA, b.born - b.unseen, flow, half, true, COLOR.born, 0.95 * now);
+    bar(i, seen, b.unseen, flow, half, true, COLOR.born, 0.375 * now);
+    bar(i, midA, sumOf(b.concluded), flow, half, false, COLOR.concluded, 0.95 * now);
+    const rose = bar(i, midR, b.risen, rises, half, true, COLOR.layer.UNIT_1, 0.95 * now);
+    bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, 0.975 * now);
+    bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.525 * now);
     let y = c.top + c.height;
     for (const layer of LAYERS) {
-      y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], now);
+      y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], 0.95 * now);
     }
   });
   mctx.globalAlpha = 1; mctx.fillStyle = COLOR.dim; mctx.textAlign = 'left';
@@ -1511,15 +1531,6 @@ function renderMetabRead() {
     `population ${sumOf(b.population)} (${net >= 0 ? '+' : '−'}${Math.abs(net)})`,
     `tolerance ${fixed(b.tolerance, 2)}`].join(' · '));
 }
-function setMetabolismShown(shown) {
-  $('metab-body').hidden = !shown;
-  $('metab-toggle').setAttribute('aria-expanded', String(shown));
-  try { localStorage.setItem('sirisys.metabolism', shown ? 'shown' : 'hidden'); } catch (err) { /* private mode */ }
-  resizeCanvas();
-  metabStale = true;
-  requestDraw();
-}
-$('metab-toggle').onclick = () => setMetabolismShown($('metab-body').hidden);
 $('metab-chart').addEventListener('mousemove', e => {
   const rect = $('metab-chart').getBoundingClientRect(), n = metabBins.length;
   const plotW = rect.width - METAB_GUTTER.left - METAB_GUTTER.right;
@@ -1942,10 +1953,9 @@ slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
 // Space plays or pauses, S steps, F fits, V changes the layout, A quiets the anchors'
-// relations, M shows or hides the metabolism. The slider keeps its arrows. A button reached
-// with the keyboard (or a summary) keeps Space and Enter, which press it; a button clicked
-// with the pointer hands the focus back, so Space still plays or pauses right after a click
-// on Step or Reset.
+// relations. The slider keeps its arrows. A button reached with the keyboard (or a summary)
+// keeps Space and Enter, which press it; a button clicked with the pointer hands the focus
+// back, so Space still plays or pauses right after a click on Step, Reset or a title.
 document.addEventListener('click', e => {
   if (e.detail > 0 && e.target instanceof Element) e.target.closest('button')?.blur();
 });
@@ -1956,11 +1966,52 @@ window.addEventListener('keydown', e => {
   const act = {
     ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView,
     v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
-    m: () => setMetabolismShown($('metab-body').hidden), a: () => setQuietAnchors(!quietAnchors),
+    a: () => setQuietAnchors(!quietAnchors),
   }[e.key.toLowerCase()];
   if (act) { e.preventDefault(); act(); }
 });
 window.addEventListener('resize', () => { resizeCanvas(); chartStale = metabStale = true; requestDraw(); });
+
+// Each section of the left panel folds by its title. Which ones are folded is remembered in
+// this browser, as a convenience: without storage every section simply opens unfolded
+function foldableSections(key, onUnfold) {
+  let folded = [];
+  try { folded = JSON.parse(localStorage.getItem(key) || '[]'); } catch (err) { folded = []; }
+  for (const section of document.querySelectorAll('.panel.left .panel-section')) {
+    const title = section.firstElementChild;
+    if (!title || title.tagName !== 'H3') continue;
+    const name = title.textContent.trim(), button = el('button', 'section-toggle');
+    button.type = 'button';
+    button.append(...title.childNodes);
+    title.append(button);
+    const show = open => {
+      section.classList.toggle('folded', !open);
+      button.setAttribute('aria-expanded', String(open));
+    };
+    show(!folded.includes(name));
+    button.onclick = () => {
+      const open = section.classList.contains('folded');
+      show(open);
+      folded = open ? folded.filter(n => n !== name) : [...folded, name];
+      try { localStorage.setItem(key, JSON.stringify(folded)); } catch (err) { /* private mode */ }
+      if (open && onUnfold) onUnfold();
+    };
+  }
+}
+
+// The legend folds to its title in the corner; this browser remembers it (a convenience)
+function foldableLegend(key) {
+  const box = $('legend'), button = $('legend-toggle');
+  const show = open => { box.classList.toggle('folded', !open); button.setAttribute('aria-expanded', String(open)); };
+  let open = true;
+  try { open = localStorage.getItem(key) !== 'folded'; } catch (err) { open = true; }
+  show(open);
+  button.onclick = () => {
+    const unfold = box.classList.contains('folded');
+    show(unfold);
+    try { localStorage.setItem(key, unfold ? 'open' : 'folded'); } catch (err) { /* private mode */ }
+  };
+}
 
 buildFilters();
 $('edge-legend').replaceChildren(...STATES.map(s => {
@@ -1970,9 +2021,11 @@ $('edge-legend').replaceChildren(...STATES.map(s => {
   return item;
 }));
 logList.replaceChildren($('log-placeholder').content.cloneNode(true));
-let metabShown = true;
-try { metabShown = localStorage.getItem('sirisys.metabolism') !== 'hidden'; } catch (err) { /* private mode */ }
-setMetabolismShown(metabShown);
+foldableSections('sirisys.folded.live', () => { chartStale = true; requestDraw(); });   // the telemetry chart redraws
+foldableLegend('sirisys.legend.live');
+resizeCanvas();
+metabStale = true;
+requestDraw();
 renderEmptyState();
 if (fromDisk) {                   // nothing to connect to: the field's panel says how to open it
   setConnStatus('offline');

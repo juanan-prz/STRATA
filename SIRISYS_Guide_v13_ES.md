@@ -129,18 +129,17 @@ Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servid
 | F | Encuadra la vista en los constructos visibles |
 | V | Cambia la disposición: relations ↔ strata |
 | A | Atenúa las anclas (quiet anchors) |
-| M | Muestra u oculta el metabolismo |
 
 Espacio funciona justo después de hacer clic en cualquier botón. Un botón al que se llega con el teclado (Tab) se queda Espacio e Intro para sí, como es habitual.
 
-**Panel Field State** (izquierda).
+**Panel Field State** (izquierda). Cada sección se pliega desde su título (▾ abierta, ▸ plegada), y el navegador recuerda cuáles están plegadas.
 
 - *Counters*: ciclo, T, constructos, aristas, apparents (cada cristalización de la instancia; los Zero Points son cristales desde el principio), concluidos, conflictos, aristas BOTH, cierres en el ciclo, reencarnaciones, energía top-3, inestabilidad (la parte de los constructos no cristalizados que es inestable de algún modo) y hace cuántos ciclos se formó el último cristal.
 - *Breathing*: respiraciones completas, contracción (0 en plena expansión, 1 en plena contracción) y la tolerancia que el campo se fija a sí mismo una vez por respiración.
-- *Criteria*: ver más abajo.
-- *Modes*, *Layers*, *Lagrangian*: la población por modo de existencia, por capa y por etiqueta lagrangiana. Las etiquetas aún no gobiernan ninguna decisión.
-- *Filters*: ocultan o muestran constructos por capa y aristas por estado del tetralema.
+- *Layers*, *Modes*, *Lagrangian*: la población por capa, por modo de existencia y por etiqueta lagrangiana. Las etiquetas aún no gobiernan ninguna decisión.
 - *Pool telemetry*: los candidatos a `[::]` de este ciclo (las reservas de BOTH maduros, conflictos con energía y cristales intercambiables), las operaciones que dieron producto de las intentadas, los productos fundacionales y de intercambio, y una gráfica de los últimos 200 ciclos.
+- *Criteria*: ver más abajo.
+- *Filters*: ocultan o muestran constructos por capa y aristas por estado del tetralema.
 
 El glosario (sección VIII) define cada contador.
 
@@ -150,7 +149,7 @@ El glosario (sección VIII) define cada contador.
 
 ### 3.2 Cómo se dibuja el campo
 
-La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge todo.
+La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge todo; su título la pliega en una cajita en la esquina, y el navegador lo recuerda.
 
 - **Disposiciones.** *relations*: por sus relaciones. *strata*: los Zero Points en el centro, luego las anclas, NULL_00, UMBRA_0, UNIT_1 y APPARENT hacia fuera, de modo que un constructo que sube de capa se desplaza hacia fuera.
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
@@ -193,6 +192,8 @@ Lo que usa la vista en vivo, descrito también al principio de `Sirisys_Server.p
 ## 4. El inspector
 
 `Sirisys_Static_Visualizer.html` se abre directamente en el navegador: sin servidor ni conexión, y sin enviar nada a ninguna parte. Muestra un momento de una instancia en profundidad.
+
+Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 
 **Abrir.** *Open state.json…* (u O), o suelta los archivos en cualquier punto de la página. Lo habitual es el `state.json` de una carpeta de ejecución; también se abre el `sirisys_v13_state.json` del propio framework (§8).
 

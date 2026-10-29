@@ -55,12 +55,12 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker, FALSE dashed, TRUE a little stronger and
-       NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are told apart
-       by lightness more than by hue. The accent is never data */
+       neutral. On the canvas BOTH is also thicker and the strongest, FALSE dashed, TRUE a little
+       stronger and NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are
+       told apart by lightness more than by hue. The accent is never data */
     --col-TRUE: #5e92ff;
     --col-FALSE: #cb86db;
-    --col-BOTH: #ea5202;
+    --col-BOTH: #f05a0a;
     --col-NEITHER: #5d646f;
 
     /* Spacing, type, radii, shadows */
@@ -171,6 +171,17 @@
     text-transform: uppercase; letter-spacing: var(--ls-wider);
     color: var(--text-muted);
   }
+  /* Each section of the left panel folds by its title (▾ open, ▸ folded) */
+  .section-toggle {
+    all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-toggle::before { content: '▾'; width: 14px; font-size: 14px; line-height: 1; color: var(--text-muted); }
+  .section-toggle[aria-expanded="false"]::before { content: '▸'; }
+  .section-toggle:hover { color: var(--text-bright); }
+  .section-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .panel-section.folded > h3:first-child { margin-bottom: 0; }
+  .panel-section.folded > :not(:first-child) { display: none; }
   .note { margin: var(--sp-2) 0 0; font-family: var(--font-mono); font-size: 10px; line-height: 1.6; color: var(--text-dim); }
   .note.warn { color: var(--warn); }
 
@@ -305,20 +316,33 @@
   }
   .search::placeholder { color: var(--text-dim); }
   .search[aria-invalid="true"] { border-color: var(--warn); }
-  .legend {
+  .legend {                                    /* the legend: a title that folds it, then two rows of five */
     position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
     max-width: calc(100% - 2 * var(--sp-3));
-    display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
-    gap: 6px var(--sp-4);
-    padding: 7px 14px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 5px;
+    padding: 6px 14px 7px;
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide);
     color: var(--text-muted);
   }
+  .legend-toggle {                              /* the legend's title: it folds the legend to the corner */
+    width: auto; font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: var(--ls-wider); color: var(--text-muted);
+  }
+  .legend.folded .legend-grid { display: none; }
+  .legend-grid {                                /* as wide as it needs, in columns: each symbol over the one below */
+    display: grid; grid-template-columns: repeat(5, auto); align-items: center; gap: 6px var(--sp-4);
+  }
   .legend .item { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
   .legend svg { flex-shrink: 0; }
-  .legend .break { flex-basis: 100%; height: 0; }
+  .legend-grid .item > svg { width: 18px; }     /* one width, so the symbols centre in columns */
+  .legend .break { display: none; }
   .legend .items { display: contents; }
-  .legend.proofs { top: 58px; bottom: auto; flex-direction: column; align-items: stretch; gap: 2px; padding: 7px 8px; }
+  @media (max-width: 1185px) {                  /* narrower: rows that wrap */
+    .legend:not(.proofs) { align-items: flex-end; }
+    .legend-grid { display: flex; flex-wrap: wrap; justify-content: flex-end; }
+    .legend-grid .break { display: block; flex-basis: 100%; height: 0; }
+  }
+  .legend.proofs { top: 58px; bottom: auto; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 7px 8px; }
   .legend[hidden] { display: none; }
   .legend.proofs .hint { padding: 0 6px 4px; color: var(--text-dim); }
   .rel-choice {                                 /* one relation of the proof overlay: a click rings its carriers */
@@ -401,9 +425,8 @@
     border: 1px solid var(--border); border-radius: var(--r-md);
     line-height: 1.9;
   }
-  .genesis .op { padding-left: var(--sp-3); font-weight: 700; }
+  .genesis .op { padding-left: var(--sp-3); font-weight: 700; color: var(--accent); }  /* as drawn on the canvas */
   .genesis .side { margin-right: var(--sp-2); color: var(--text-dim); }
-  .genesis .op { color: var(--accent); }                /* as its L and R are drawn on the canvas */
   .link {                                       /* a construct named in the inspector: a click selects it */
     padding: 0; border: 0; background: none;
     font-family: var(--font-mono); font-size: inherit; text-align: left;
@@ -490,8 +513,8 @@
       <div class="bar-track"><div class="bar-fill" id="b-bar"></div></div>
       <div class="stat-row spaced" title="set by the field once per breath, so that crystals formed track crystals concluded"><span class="stat-key">tolerance</span><span class="stat-val" id="b-tolerance">—</span></div>
     </div>
-    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3>Layers</h3><div id="layers-list"></div></div>
+    <div class="panel-section"><h3 title="existence mode, read from each construct's last five proofs">Modes</h3><div id="modes-list"></div></div>
     <div class="panel-section"><h3 title="tags on constructs and proofs (DeOS Compiler Guide pp.77–80); they do not yet govern any decision">Lagrangian</h3><div id="lagrangian-list"></div></div>
     <div class="panel-section"><h3>Filters · layer</h3><div id="filter-layer"></div></div>
     <div class="panel-section"><h3>Filters · edge state</h3><div id="filter-edge"></div></div>
@@ -531,32 +554,36 @@
   <div id="tooltip"><div class="tt-name" id="tt-name"></div><div class="tt-line" id="tt-line"></div></div>
 
   <div class="legend proofs floating" id="proof-legend" hidden></div>
-  <div class="legend floating">
-    <div class="item" title="coloured by its layer">
-      <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
-      <span>construct</span>
-    </div>
-    <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
-      <span>anchor</span>
-    </div>
-    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
-      <span>apparent</span>
-    </div>
-    <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
-      <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
-      <span>zero point</span>
-    </div>
-    <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
-      <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
-      <span>conflict</span>
-    </div>
-    <div class="break"></div>
-    <div id="edge-legend" class="items"></div>
-    <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
-      <span>crystal support</span>
+  <div id="legend" class="legend floating">
+    <button class="section-toggle legend-toggle" id="legend-toggle" type="button" aria-expanded="true"
+            aria-controls="legend-grid">Legend</button>
+    <div class="legend-grid" id="legend-grid">
+      <div class="item" title="coloured by its layer">
+        <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4" style="fill: var(--layer-UNIT_1)"/></svg>
+        <span>construct</span>
+      </div>
+      <div class="item" title="I::Am, I::AmNot and SYSTEM: never promoted, never pruned (the Zero Points are anchors too)">
+        <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+        <span>anchor</span>
+      </div>
+      <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out">
+        <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.55; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
+        <span>apparent</span>
+      </div>
+      <div class="item" title="NEITHER × NEITHER materialized as a construct of its own">
+        <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
+        <span>conflict</span>
+      </div>
+      <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
+        <svg width="16" height="16" viewBox="0 0 16 16"><polygon points="8,1 9.5,5.5 14,6 10.5,9 11.5,14 8,11.5 4.5,14 5.5,9 2,6 6.5,5.5" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.6"/></svg>
+        <span>zero point</span>
+      </div>
+      <div class="break"></div>
+      <div id="edge-legend" class="items"></div>
+      <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
+        <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
+        <span>crystal support</span>
+      </div>
     </div>
   </div>
 </div>
@@ -610,9 +637,10 @@ const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed, TRUE
-// a little stronger, NEITHER fainter (alpha multiplies the edge's own opacity, up to 1)
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker and the strongest,
+// FALSE dashed, TRUE a little stronger, NEITHER fainter (alpha multiplies the edge's own
+// opacity, up to 1)
+const EDGE_STYLE = { BOTH: { width: 2, alpha: 1.35 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
 const EXCHANGE_QUANTUM = 12;
 
@@ -1715,6 +1743,47 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('resize', () => { resizeCanvas(); requestDraw(); });
 
+// Each section of the left panel folds by its title. Which ones are folded is remembered in
+// this browser, as a convenience: without storage every section simply opens unfolded
+function foldableSections(key, onUnfold) {
+  let folded = [];
+  try { folded = JSON.parse(localStorage.getItem(key) || '[]'); } catch (err) { folded = []; }
+  for (const section of document.querySelectorAll('.panel.left .panel-section')) {
+    const title = section.firstElementChild;
+    if (!title || title.tagName !== 'H3') continue;
+    const name = title.textContent.trim(), button = el('button', 'section-toggle');
+    button.type = 'button';
+    button.append(...title.childNodes);
+    title.append(button);
+    const show = open => {
+      section.classList.toggle('folded', !open);
+      button.setAttribute('aria-expanded', String(open));
+    };
+    show(!folded.includes(name));
+    button.onclick = () => {
+      const open = section.classList.contains('folded');
+      show(open);
+      folded = open ? folded.filter(n => n !== name) : [...folded, name];
+      try { localStorage.setItem(key, JSON.stringify(folded)); } catch (err) { /* private mode */ }
+      if (open && onUnfold) onUnfold();
+    };
+  }
+}
+
+// The legend folds to its title in the corner; this browser remembers it (a convenience)
+function foldableLegend(key) {
+  const box = $('legend'), button = $('legend-toggle');
+  const show = open => { box.classList.toggle('folded', !open); button.setAttribute('aria-expanded', String(open)); };
+  let open = true;
+  try { open = localStorage.getItem(key) !== 'folded'; } catch (err) { open = true; }
+  show(open);
+  button.onclick = () => {
+    const unfold = box.classList.contains('folded');
+    show(unfold);
+    try { localStorage.setItem(key, unfold ? 'open' : 'folded'); } catch (err) { /* private mode */ }
+  };
+}
+
 buildFilters();
 $('edge-legend').replaceChildren(...STATES.map(s => {
   const item = el('div', 'item');
@@ -1722,6 +1791,8 @@ $('edge-legend').replaceChildren(...STATES.map(s => {
   item.append(edgeMark(s), el('span', null, s));
   return item;
 }));
+foldableSections('sirisys.folded.inspector');
+foldableLegend('sirisys.legend.inspector');
 renderInspector();
 resizeCanvas();
 </script>
