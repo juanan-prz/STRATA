@@ -286,8 +286,8 @@
   }
   .btn:hover { background: var(--bg-3); border-color: var(--border-focus); color: var(--text-bright); }
   .btn:active { transform: translateY(1px); }
-  .btn.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-  .btn.active:hover { background: var(--accent-strong); }
+  .btn.active, .btn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .btn.active:hover, .btn[aria-pressed="true"]:hover { background: var(--accent-strong); }
   .speed-control { display: flex; align-items: center; gap: var(--sp-2); padding: 5px var(--sp-3); }
   .speed-control label {
     font-family: var(--font-mono); font-size: 10px;
@@ -500,6 +500,10 @@
       <input type="range" id="speed-slider" min="0" max="500" value="80" step="10">
       <span class="val" id="speed-val">80ms</span>
     </div>
+    <div class="ctrl-group floating" role="group" aria-label="layout">
+      <button class="btn" id="btn-relations" aria-pressed="true" title="Placed by their relations (V)">relations</button>
+      <button class="btn" id="btn-strata" aria-pressed="false" title="Placed by stratum: Zero Points at the centre, then the anchors, then UMBRA_0, UNIT_1 and APPARENT outwards; a construct that rises a layer moves out (V)">strata</button>
+    </div>
     <div class="ctrl-group floating">
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
@@ -604,6 +608,11 @@ const LOG_KEPT = 150;             // event log entries of each kind
 const TELEMETRY_KEPT = 200;       // cycles in the telemetry chart
 const PULSE_MS = 1100;            // the rings drawn where a construct rises a layer
 const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
+const LAYOUT_STEPS = 120;         // force-layout steps when the layout changes
+// Strata: the distance from the centre of each stratum, after the ladder of being, inwards
+// to outwards (Understanding TMC pp.49–50: an interpretation, not TMC's own text); the
+// Zero Points at the centre, as origin and anchor (a design choice). As in the inspector.
+const RINGS = { zero: 0, anchor: 60, NULL_00: 110, UMBRA_0: 170, UNIT_1: 240, APPARENT: 330 };
 const POLL_MS = 300;              // polling, while the field cycles
 const RECONNECT_MS = 2000;        // a WebSocket that closed
 const WS_RETRY_MS = 30000;        // a WebSocket that failed while the server answered
@@ -616,7 +625,8 @@ const COLOR = {
   layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
   mode: { OMEGA: css('--col-TRUE'), LEMNISCATE: css('--col-BOTH'), NEUTRAL: css('--col-NEITHER') },
-  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), bright: css('--text-bright'),
+  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), muted: css('--text-muted'),
+  bright: css('--text-bright'),
 };
 const FONT_MONO = css('--font-mono');
 
@@ -661,13 +671,21 @@ function shapeOf(name, layer) {
 const SHAPE_GROWTH = { circle: 0, diamond: 2, hexagon: 1, star: 3 };
 const sizeOf = (name, n) => ([3, 4, 5, 7][n.c.layer] ?? 3) + SHAPE_GROWTH[shapeOf(name, n.c.layer)];
 
+let layout = 'relations';         // 'relations' | 'strata'
+function stratumOf(name, layer) {
+  if (ZERO_POINTS.has(name)) return 'zero';
+  if (ANCHORS.has(name)) return 'anchor';
+  return LAYERS[layer];
+}
+
 // A new construct starts at a place fixed by its name (FNV-1a hash), not by a
-// random draw: the same run gives the same picture.
-function birthplace(name) {
+// random draw: the same run gives the same picture. In strata, on its ring.
+function birthplace(name, layer) {
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619);
   h >>>= 0;
-  const angle = (h % 3600) / 3600 * 2 * Math.PI, r = 20 + (h >>> 12) % 30;
+  const angle = (h % 3600) / 3600 * 2 * Math.PI;
+  const r = layout === 'strata' ? RINGS[stratumOf(name, layer)] : 20 + (h >>> 12) % 30;
   return { x: r * Math.cos(angle), y: r * Math.sin(angle) };
 }
 
@@ -675,7 +693,7 @@ function syncNodes(field) {
   const live = new Set();
   for (const c of field.constructs) {
     let n = nodes.get(c.name);
-    if (!n) nodes.set(c.name, n = { ...birthplace(c.name), vx: 0, vy: 0 });
+    if (!n) nodes.set(c.name, n = { ...birthplace(c.name, c.layer), vx: 0, vy: 0 });
     n.c = c;
     live.add(c.name);
   }
@@ -684,10 +702,13 @@ function syncNodes(field) {
 }
 
 // A few steps of a force layout per snapshot: edges pull to a rest length,
-// every pair of nodes repels (the first 500 nodes, to keep a cycle cheap).
+// every pair of nodes repels (the first 500 nodes, to keep a cycle cheap). In strata
+// each construct is also drawn to its ring, so the distance from the centre says its
+// stratum and the angle what it relates to; one that rises a layer moves outward.
 function relaxLayout(steps) {
   const arr = Array.from(nodes.values());
   const many = Math.min(arr.length, 500);
+  const rings = layout === 'strata' ? Array.from(nodes, ([name, n]) => RINGS[stratumOf(name, n.c.layer)]) : null;
   for (let s = 0; s < steps; s++) {
     for (const e of edges) {
       const a = nodes.get(e.src), b = nodes.get(e.tgt);
@@ -709,11 +730,24 @@ function relaxLayout(steps) {
         b.vx += fx; b.vy += fy;
       }
     }
-    for (const n of arr) {
+    arr.forEach((n, i) => {
+      if (rings) {
+        const r = Math.hypot(n.x, n.y) + 0.01, pull = (rings[i] - r) * 0.2;
+        n.vx += n.x / r * pull; n.vy += n.y / r * pull;
+      }
       n.vx *= 0.6; n.vy *= 0.6;
       n.x += n.vx; n.y += n.vy;
-    }
+    });
   }
+}
+
+function setLayout(next) {
+  if (next === layout) return;
+  layout = next;
+  $('btn-relations').setAttribute('aria-pressed', String(layout === 'relations'));
+  $('btn-strata').setAttribute('aria-pressed', String(layout === 'strata'));
+  relaxLayout(LAYOUT_STEPS);
+  fitView();
 }
 
 function tracePolygon(cx, cy, points) {
@@ -739,10 +773,23 @@ function line(a, b, color, alpha, width) {
   ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
   ctx.stroke();
 }
-function ring(x, y, r, color, alpha, width) {
+function ring(x, y, r, color, alpha, width, dash) {
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.setLineDash(dash || []);
   ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
   ctx.stroke();
+  ctx.setLineDash([]);
+}
+// In strata, the rings that hold someone, each named at its upper left (as in the inspector)
+function drawStrata(px) {
+  const held = new Set(Array.from(nodes, ([name, n]) => stratumOf(name, n.c.layer)));
+  ctx.font = `${9 * px}px ${FONT_MONO}`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  for (const [stratum, r] of Object.entries(RINGS)) {
+    if (!r || !held.has(stratum)) continue;
+    ring(0, 0, r, COLOR.layer[stratum] || COLOR.muted, 0.22, px, [4 * px, 4 * px]);
+    ctx.globalAlpha = 0.6; ctx.fillStyle = COLOR.muted;
+    ctx.fillText(stratum === 'anchor' ? 'anchors' : stratum, -r * Math.SQRT1_2 - 4 * px, -r * Math.SQRT1_2);
+  }
 }
 
 function render(now) {
@@ -751,6 +798,7 @@ function render(now) {
   ctx.save();
   ctx.translate(viewX + W / 2, viewY + H / 2);
   ctx.scale(viewK, viewK);
+  if (layout === 'strata') drawStrata(1 / viewK);
 
   for (const e of edges) {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
@@ -1459,14 +1507,21 @@ $('btn-reset').onclick = () => {
   }
 };
 $('btn-fit').onclick = fitView;
+$('btn-relations').onclick = () => setLayout('relations');
+$('btn-strata').onclick = () => setLayout('strata');
 slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
-// Space plays or pauses, S steps, F fits; a focused control keeps its own keys
+// Space plays or pauses, S steps, F fits, V changes the layout. The slider keeps its
+// arrows; a focused button or summary keeps Space and Enter, which press it.
 window.addEventListener('keydown', e => {
-  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
-  if (e.target instanceof Element && e.target.closest('button, input, summary')) return;
-  const act = { ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView }[e.key.toLowerCase()];
+  if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !(e.target instanceof Element)) return;
+  if (e.target.closest('input, textarea, select')) return;
+  if (e.target.closest('button, summary') && (e.key === ' ' || e.key === 'Enter')) return;
+  const act = {
+    ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView,
+    v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
+  }[e.key.toLowerCase()];
   if (act) { e.preventDefault(); act(); }
 });
 window.addEventListener('resize', () => { resizeCanvas(); chartStale = true; requestDraw(); });

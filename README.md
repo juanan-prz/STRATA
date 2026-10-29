@@ -62,7 +62,7 @@ python3 test_sirisys.py                    # integrity, determinism, bounded mem
 python3 Sirisys_Server.py --play           # experiment mode, live percepts
 ```
 
-Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; Fit recentres the view (keys: Space, S, F); `Ctrl+C` in the terminal stops the server.
+Open `http://127.0.0.1:8000`. Play, Step and Reset control the field; Fit recentres the view; relations and strata change the layout (keys: Space, S, F, V); `Ctrl+C` in the terminal stops the server.
 
 ```bash
 python3 run_report.py --cycles 20 --seeds 1 --backend ollama    # short measured run
@@ -83,7 +83,7 @@ For calibration and refinement. Every start and every Reset is a new instance in
 | `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
 | `--port` | Web port (default 8000) |
 
-The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". Its header shows the ledger (proofs sealed and the head) and the model with its watch; the event log can be filtered by kind of entry. The server can be left cycling with no browser open: it keeps only the latest 200 snapshots for the next viewer. The interface (the routes and the control actions) is described at the top of `Sirisys_Server.py`; details are in `Sirisys_Guia_v13.md`.
+The visualizer connects over a WebSocket; where that is blocked, it falls back to polling over HTTP and shows "connected (polling)". Its header shows the ledger (proofs sealed and the head) and the model with its watch; the event log can be filtered by kind of entry. The field is laid out by its relations, or by strata: the Zero Points at the centre, then the anchors, UMBRA_0, UNIT_1 and APPARENT outwards, so that a construct that rises a layer moves out. The inspector offers the same two layouts. The server can be left cycling with no browser open: it keeps only the latest 200 snapshots for the next viewer. The interface (the routes and the control actions) is described at the top of `Sirisys_Server.py`; details are in `Sirisys_Guia_v13.md`.
 
 -----
 

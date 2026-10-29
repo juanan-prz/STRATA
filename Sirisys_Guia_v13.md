@@ -37,13 +37,14 @@ python3 Sirisys_Server.py --stream 0 --play       # perceptos sintéticos: ejecu
 python3 Sirisys_Server.py --profile minimal       # sin narración ni hora del día
 ```
 
-- Abre `http://127.0.0.1:8000`. Play, Step y Reset controlan el campo; Fit recentra la vista (teclas: Espacio, S, F).
+- Abre `http://127.0.0.1:8000`. Play, Step y Reset controlan el campo; Fit recentra la vista; relations y strata cambian la disposición (teclas: Espacio, S, F, V).
 - Cada arranque y cada Reset crean una instancia nueva en `sirisys_runs/<fecha-hora>_live/` (o `_stream0/`), que contiene `state.json` y `ledger.jsonl`. Nada se borra. Para examinar una instancia después, abre su `state.json` con `Sirisys_Static_Visualizer.html`.
 - **No hay semilla.** El framework no usa ningún generador aleatorio: cada elección se deriva de la historia (el hash de cabeza del ledger). Con `--stream N` y los mismos perceptos, dos ejecuciones son idénticas; con `live`, los perceptos de la máquina las hacen únicas.
 - `--profile minimal` quita la narración y la hora del día: el campo solo percibe la máquina en la que corre.
 - `--host` fija la dirección en la que escucha el servidor. Por defecto es `127.0.0.1`: solo se puede abrir desde la misma máquina.
 - El visualizador se conecta por WebSocket. Si el entorno lo bloquea, consulta al servidor por HTTP y muestra «connected (polling)»; cada 30 s vuelve a probar el WebSocket.
 - La cabecera muestra el ledger (pruebas selladas y cabeza) y el modelo con su vigilancia. El registro de eventos se filtra por tipo de entrada: productos de `[::]`, colapsos cúsicos, conclusiones, narración, preguntas al Sombunal y avisos del modelo.
+- El campo se dispone por sus relaciones o por estratos: los Zero Points en el centro, luego las anclas, UMBRA_0, UNIT_1 y APPARENT hacia fuera, de modo que un constructo que sube de capa se desplaza hacia fuera. El inspector ofrece las mismas dos disposiciones.
 - El servidor puede quedarse ciclando sin ningún navegador abierto: guarda solo las 200 instantáneas más recientes para quien abra el visualizador después. Las rutas y las acciones de control están descritas al principio de `Sirisys_Server.py`.
 - Modelo: `SIRISYS_LLM_BACKEND=anthropic|ollama|none`, `SIRISYS_LLM_MODEL`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`.
 
