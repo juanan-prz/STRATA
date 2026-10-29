@@ -1,8 +1,8 @@
 # =============================================================================
 # SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field
 #
-# An interpretation, in software, of the framework M. Daniel Walsh describes
-# with Sirisys.
+# An independent interpretation, in software, of the framework M. Daniel Walsh
+# describes with Sirisys; not an official SIRISYS work.
 #
 # SOURCES AND LEVELS (every citation in this file is labelled):
 #   Level 1  primary          TMC  — Pre of Then: The Material Constructs
@@ -2876,7 +2876,7 @@ def run(steps: int = 8):
     STATE_FILE and LEDGER_FILE, begun at genesis or resumed."""
     print(f"\n{'═' * 72}")
     print("  SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field")
-    print("  Walsh Theoretical Framework Implementation")
+    print("  An independent interpretation of the framework of M. Daniel Walsh")
     print("  [I::Am] :: [I::AmNot]  |  Lagrangian Points + Proof-Carrying Constructs")
     print(f"{'═' * 72}")
 
