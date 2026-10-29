@@ -264,9 +264,34 @@
   }
 
   /* ───── The field ───── */
-  .center { grid-area: center; position: relative; overflow: hidden; background: var(--bg-0); }
+  .center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-0); }
+  .field { position: relative; flex: 1; min-height: 0; overflow: hidden; }
   #canvas { display: block; width: 100%; height: 100%; cursor: grab; }
   #canvas:active { cursor: grabbing; }
+  /* ───── The metabolism, under the field ───── */
+  .metabolism { flex: none; border-top: 1px solid var(--border); background: var(--bg-1); }
+  .metab-head {
+    display: flex; align-items: center; gap: var(--sp-3); min-width: 0;
+    padding: 3px var(--sp-3);
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide); color: var(--text-dim);
+  }
+  .metab-toggle {
+    padding: 2px 0; border: 0; background: none; cursor: pointer;
+    font: inherit; letter-spacing: var(--ls-wider); text-transform: uppercase; color: var(--text-muted);
+  }
+  .metab-toggle::after { content: ' ▾'; color: var(--text-dim); }
+  .metab-toggle[aria-expanded="false"]::after { content: ' ▸'; }
+  .metab-toggle:hover { color: var(--text-bright); }
+  .metab-key { display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); min-width: 0; }
+  .metab-key span { white-space: nowrap; }
+  .metab-key i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 1px; vertical-align: -1px; }
+  .metab-body[hidden] { display: none; }
+  #metab-chart { display: block; width: 100%; height: 112px; }
+  .metab-read {                                 /* two lines at most: the bar under the pointer */
+    height: 30px; padding: 0 var(--sp-3) 4px; overflow: hidden;
+    font-family: var(--font-mono); font-size: 10px; line-height: 13px; color: var(--text-muted);
+  }
+
   .floating {                                   /* the boxes over the field */
     background: var(--bg-elevated);
     border: 1px solid var(--border-hi); border-radius: var(--r-md);
@@ -496,6 +521,7 @@
 
 <!-- ═══════════════ The field ═══════════════ -->
 <div class="center">
+ <div class="field">
   <div class="controls">
     <div class="ctrl-group floating">
       <button class="btn" id="btn-play" title="Play / Pause (Space)">Play</button>
@@ -574,6 +600,26 @@
       <span>crystal support</span>
     </div>
   </div>
+ </div>
+
+ <section class="metabolism" id="metabolism">
+  <div class="metab-head">
+    <button class="metab-toggle" id="metab-toggle" aria-expanded="true" aria-controls="metab-body"
+            title="What each breath did to the population (M)">Metabolism</button>
+    <span class="metab-key" aria-hidden="true">
+      <span><i style="background: var(--text-muted)"></i>born</span>
+      <span><i style="background: var(--text-muted); opacity: 0.35"></i>never on screen</span>
+      <span><i style="background: var(--concluded)"></i>concluded</span>
+      <span><i style="background: var(--layer-UNIT_1)"></i>rose</span>
+      <span><i style="background: var(--layer-APPARENT)"></i>crystallized</span>
+      <span>· population by layer</span>
+    </span>
+  </div>
+  <div class="metab-body" id="metab-body">
+    <canvas id="metab-chart" role="img" aria-label="The metabolism, breath by breath: born and concluded, rises and crystallizations with the crystals that concluded, the population by layer. The line below reads the breath under the pointer."></canvas>
+    <div class="metab-read" id="metab-read"></div>
+  </div>
+ </section>
 </div>
 
 <!-- ═══════════════ Event log ═══════════════ -->
@@ -636,6 +682,9 @@ const LAYOUT_STEPS = 120;         // force-layout steps when the layout changes
 // to outwards (Understanding TMC pp.49–50: an interpretation, not TMC's own text); the
 // Zero Points at the centre, as origin and anchor (a design choice). As in the inspector.
 const RINGS = { zero: 0, anchor: 60, NULL_00: 110, UMBRA_0: 170, UNIT_1: 240, APPARENT: 330 };
+const HISTORY_KEPT = 2048;        // metabolism records before the oldest are merged in pairs (as the server)
+const METAB_BAR_PX = 12;          // the widest bar of the metabolism, and the narrowest
+const METAB_MIN_BAR_PX = 2;
 const POLL_MS = 300;              // polling, while the field cycles
 const RECONNECT_MS = 2000;        // a WebSocket that closed
 const WS_RETRY_MS = 30000;        // a WebSocket that failed while the server answered
@@ -649,6 +698,7 @@ const COLOR = {
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
   accent: css('--accent'), dim: css('--text-dim'), muted: css('--text-muted'), bright: css('--text-bright'),
   ground: css('--bg-0'),                          // the field's background
+  border: css('--border-hi'), raised: css('--bg-3'), concluded: css('--concluded'),
 };
 const FONT_MONO = css('--font-mono');
 
@@ -892,7 +942,7 @@ function render(now) {
 
 // One frame draws whatever changed: the field, its rings while they last, the chart
 const pulses = [];                // { name, crystal, x, y, start }
-let framePending = false, chartStale = false;
+let framePending = false, chartStale = false, metabStale = false;
 function requestDraw() {
   if (!framePending) { framePending = true; requestAnimationFrame(frame); }
 }
@@ -901,6 +951,7 @@ function frame(now) {
   for (let i = pulses.length - 1; i >= 0; i--) if (now - pulses[i].start > PULSE_MS) pulses.splice(i, 1);
   render(now);
   if (chartStale) { chartStale = false; drawTelemetry(); }
+  if (metabStale) { metabStale = false; drawMetabolism(); }
   if (pulses.length) requestDraw();
 }
 function pulse(name, crystal) {
@@ -1200,6 +1251,182 @@ function drawTelemetry() {
   tctx.fillStyle = COLOR.muted; tctx.fillText('▮ contraction  ', W - 5 - tctx.measureText('— exchange').width, 3);
 }
 
+// ═══ The metabolism, breath by breath ═══════════════════════════════════════
+
+// The server's history of the instance (GET /api/history), then each snapshot's cycle
+// added to it as the server adds them (Sirisys_Server.py: _add_metabolism and
+// _merge_metabolism). Born minus concluded is the change in the population.
+const freshMetabolism = run => ({ run, through: -1, last: null, records: [], pending: null, again: false });
+let metabolism = freshMetabolism(null);
+let metabBins = [], metabHover = null;          // the bars drawn, and the one under the pointer
+
+function addCycle(records, cycle) {
+  let r = records[records.length - 1];
+  if (!r || r.breaths[1] !== cycle.breath) {
+    records.push(r = { breaths: [cycle.breath, cycle.breath], cycles: [cycle.cycle, cycle.cycle], born: 0, unseen: 0,
+                       risen: 0, crystallized: 0, concluded: Object.fromEntries(LAYERS.map(l => [l, 0])) });
+  }
+  r.breaths[1] = cycle.breath;
+  r.cycles[1] = cycle.cycle;
+  for (const k of ['born', 'unseen', 'risen', 'crystallized']) r[k] += cycle[k];
+  for (const l of LAYERS) r.concluded[l] += cycle.concluded[l] || 0;
+  r.population = { ...cycle.population };
+  r.tolerance = cycle.tolerance;
+  if (records.length > HISTORY_KEPT) {                  // the oldest half, merged in pairs
+    const half = Math.floor(records.length / 4) * 2, merged = [];
+    for (let i = 0; i < half; i += 2) merged.push(mergeRecords(records[i], records[i + 1]));
+    records.splice(0, half, ...merged);
+  }
+}
+function mergeRecords(a, b) {
+  const m = { breaths: [a.breaths[0], b.breaths[1]], cycles: [a.cycles[0], b.cycles[1]],
+              concluded: Object.fromEntries(LAYERS.map(l => [l, a.concluded[l] + b.concluded[l]])),
+              population: b.population, tolerance: b.tolerance };
+  for (const k of ['born', 'unseen', 'risen', 'crystallized']) m[k] = a[k] + b[k];
+  return m;
+}
+
+// A snapshot's cycle: added, unless the history already holds it. A new instance starts
+// its own; a gap in the cycles (another viewer read them) asks the server again.
+function recordCycle(snap) {
+  if (!snap.metabolism) return;                 // an older server
+  if (snap.run !== metabolism.run) {
+    metabolism = freshMetabolism(snap.run);
+    fetchHistory();
+  } else if (metabolism.last != null && snap.cycle !== metabolism.last + 1) {
+    fetchHistory();
+  }
+  metabolism.last = snap.cycle;
+  const cycle = { ...snap.metabolism, cycle: snap.cycle, population: snap.layers, tolerance: snap.tolerance };
+  if (metabolism.pending) metabolism.pending.push(cycle);
+  if (cycle.cycle > metabolism.through) addCycle(metabolism.records, cycle);
+  metabStale = true;
+}
+// One request at a time; what arrives meanwhile is kept and added after it
+async function fetchHistory() {
+  const asked = metabolism;
+  if (asked.pending) { asked.again = true; return; }
+  asked.pending = [];
+  const history = await getJSON('/api/history').catch(() => null);     // an older server has none
+  if (metabolism !== asked) return;                                     // another instance meanwhile
+  const pending = asked.pending;
+  asked.pending = null;
+  if (history && history.run === asked.run && Array.isArray(history.records)) {
+    asked.records = history.records;
+    asked.through = history.through_cycle;
+    for (const cycle of pending) if (cycle.cycle > asked.through) addCycle(asked.records, cycle);
+    metabStale = true;
+    requestDraw();
+  }
+  if (asked.again) { asked.again = false; fetchHistory(); }
+}
+
+// As many bars as fit: consecutive records merged into one when they do not
+function binRecords(records, width) {
+  const fit = Math.max(1, Math.floor(width / (METAB_MIN_BAR_PX + 1)));
+  const k = Math.ceil(records.length / fit);
+  if (k <= 1) return records.slice();
+  const bins = [];
+  for (let i = 0; i < records.length; i += k) bins.push(records.slice(i, i + k).reduce(mergeRecords));
+  return bins;
+}
+const sumOf = counts => Object.values(counts || {}).reduce((sum, n) => sum + n, 0);
+
+// Three rows, each on its own scale: born above, concluded below; rises above (to UNIT_1,
+// then to APPARENT), crystals that concluded below; the population by layer at the end
+const METAB_ROWS = [
+  { top: 4, height: 34, up: '↑ born', down: '↓ concluded' },
+  { top: 44, height: 34, up: '↑ rose', down: '↓ crystals concluded' },
+  { top: 84, height: 24, up: 'population' },
+];
+const METAB_GUTTER = { left: 118, right: 34 };
+function drawMetabolism() {
+  const chart = $('metab-chart');
+  if ($('metab-body').hidden) return;
+  const mctx = chart.getContext('2d'), W = chart.clientWidth, H = chart.clientHeight;
+  chart.width = W * DPR; chart.height = H * DPR;
+  mctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  mctx.clearRect(0, 0, W, H);
+  const x0 = METAB_GUTTER.left, plotW = Math.max(10, W - METAB_GUTTER.left - METAB_GUTTER.right);
+  metabBins = binRecords(metabolism.records, plotW);
+  const n = metabBins.length;
+  mctx.font = `9px ${FONT_MONO}`; mctx.textBaseline = 'middle';
+  for (const row of METAB_ROWS) {                       // the row labels, and its baseline
+    mctx.fillStyle = COLOR.dim; mctx.textAlign = 'right';
+    const mid = row.down ? row.top + row.height / 2 : row.top + row.height;
+    mctx.fillText(row.up, x0 - 8, row.down ? row.top + row.height / 4 : row.top + row.height / 2);
+    if (row.down) mctx.fillText(row.down, x0 - 8, row.top + row.height * 3 / 4);
+    mctx.fillStyle = COLOR.border; mctx.fillRect(x0, mid - 0.5, plotW, 1);
+  }
+  if (!n) {
+    mctx.fillStyle = COLOR.dim; mctx.textAlign = 'left';
+    mctx.fillText('the first breath appears with the first cycle', x0 + 8, METAB_ROWS[1].top + 17);
+    renderMetabRead();
+    return;
+  }
+  const step = Math.min(METAB_BAR_PX + 1, plotW / n), bw = Math.max(1, step - 1);
+  const xAt = i => x0 + i * step;
+  const flow = Math.max(1, ...metabBins.map(b => Math.max(b.born, sumOf(b.concluded))));
+  const rises = Math.max(1, ...metabBins.map(b => Math.max(b.risen + b.crystallized, b.concluded.APPARENT)));
+  const people = Math.max(1, ...metabBins.map(b => sumOf(b.population)));
+  if (metabHover != null && metabHover < n) {           // the bar under the pointer, across the rows
+    mctx.fillStyle = COLOR.raised; mctx.fillRect(xAt(metabHover) - 0.5, 0, bw + 1, H);
+  }
+  const bar = (i, from, value, scale, half, up, color, alpha) => {
+    if (!value) return from;
+    const h = Math.max(1, value / scale * half);
+    mctx.globalAlpha = alpha; mctx.fillStyle = color;
+    mctx.fillRect(xAt(i), up ? from - h : from, bw, h);
+    return up ? from - h : from + h;
+  };
+  metabBins.forEach((b, i) => {
+    const now = i === n - 1 ? 0.6 : 1;                  // the breath under way
+    const [a, r, c] = METAB_ROWS;
+    const midA = a.top + a.height / 2, midR = r.top + r.height / 2, half = a.height / 2;
+    const seen = bar(i, midA, b.born - b.unseen, flow, half, true, COLOR.muted, 0.9 * now);
+    bar(i, seen, b.unseen, flow, half, true, COLOR.muted, 0.35 * now);
+    bar(i, midA, sumOf(b.concluded), flow, half, false, COLOR.concluded, 0.9 * now);
+    const rose = bar(i, midR, b.risen, rises, half, true, COLOR.layer.UNIT_1, 0.9 * now);
+    bar(i, rose, b.crystallized, rises, half, true, COLOR.layer.APPARENT, 0.95 * now);
+    bar(i, midR, b.concluded.APPARENT, rises, half, false, COLOR.layer.APPARENT, 0.45 * now);
+    let y = c.top + c.height;
+    for (const layer of LAYERS) y = bar(i, y, (b.population || {})[layer] || 0, people, c.height, true, COLOR.layer[layer], 0.9 * now);
+  });
+  mctx.globalAlpha = 1; mctx.fillStyle = COLOR.dim; mctx.textAlign = 'left';
+  [[flow, METAB_ROWS[0]], [rises, METAB_ROWS[1]], [people, METAB_ROWS[2]]].forEach(([max, row]) =>
+    mctx.fillText(String(max), x0 + plotW + 6, row.top + 5));
+  renderMetabRead();
+}
+// The line under the strip: the bar under the pointer, or the latest
+function renderMetabRead() {
+  const b = metabBins[metabHover ?? metabBins.length - 1];
+  if (!b) { setText('metab-read', ''); return; }
+  const span = (name, [first, last]) => first === last ? `${name} ${first}` : `${name}s ${first}–${last}`;
+  const net = b.born - sumOf(b.concluded);
+  setText('metab-read', [span('breath', b.breaths), span('cycle', b.cycles),
+    `born ${b.born} (${b.unseen} never on screen)`, `concluded ${sumOf(b.concluded)}`, `rose ${b.risen}`,
+    `crystallized ${b.crystallized}`, `crystals concluded ${b.concluded.APPARENT}`,
+    `population ${sumOf(b.population)} (${net >= 0 ? '+' : '−'}${Math.abs(net)})`,
+    `tolerance ${fixed(b.tolerance, 2)}`].join(' · '));
+}
+function setMetabolismShown(shown) {
+  $('metab-body').hidden = !shown;
+  $('metab-toggle').setAttribute('aria-expanded', String(shown));
+  try { localStorage.setItem('sirisys.metabolism', shown ? 'shown' : 'hidden'); } catch (err) { /* private mode */ }
+  resizeCanvas();
+  metabStale = true;
+  requestDraw();
+}
+$('metab-toggle').onclick = () => setMetabolismShown($('metab-body').hidden);
+$('metab-chart').addEventListener('mousemove', e => {
+  const rect = $('metab-chart').getBoundingClientRect(), n = metabBins.length;
+  const plotW = rect.width - METAB_GUTTER.left - METAB_GUTTER.right, step = Math.min(METAB_BAR_PX + 1, plotW / Math.max(1, n));
+  const i = Math.floor((e.clientX - rect.left - METAB_GUTTER.left) / step);
+  const hover = i >= 0 && i < n ? i : null;
+  if (hover !== metabHover) { metabHover = hover; metabStale = true; requestDraw(); }
+});
+$('metab-chart').addEventListener('mouseleave', () => { metabHover = null; metabStale = true; requestDraw(); });
+
 // Until the field is drawn, the field's panel says why: never cycled, paused (its
 // snapshots went to another viewer), or waiting for the next cycle
 function renderEmptyState() {
@@ -1382,6 +1609,7 @@ function applySnapshot(snap) {
   renderPoolTelemetry(snap);
   renderEmptyState();
 
+  recordCycle(snap);
   logSnapshot(snap, crystallized);
   snap.promoted_names.forEach(name => pulse(name, crystals.has(name)));
   refreshTooltip();
@@ -1391,6 +1619,7 @@ function applySnapshot(snap) {
 // After a reset: nothing of the previous instance stays on screen
 function clearField() {
   nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0; questions.clear();
+  metabolism = freshMetabolism(null); metabHover = null; metabStale = true;
   lastSnapshot = null; currentRun = null; lastCrystalCycle = null; watchReported = false;
   for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-concluded', 's-conflicts',
                     's-both', 's-closures', 's-reinc', 's-energy3', 's-instability', 's-crystal-ago',
@@ -1517,6 +1746,10 @@ function updateStatus(st) {
   lastStatus = st;
   if (st.mode || st.framework_version) runInfo = [st.mode, st.framework_version && 'v' + st.framework_version];
   statusRun = st.run || statusRun;
+  if (st.run && st.run !== metabolism.run && st.run !== discardedRun && !lastSnapshot) {
+    metabolism = freshMetabolism(st.run);       // an instance that already ran: its history before any cycle
+    fetchHistory();
+  }
   renderRunInfo();
   if (st.model) { model = st.model; renderModel(st.model.watch); }
   if (st.ledger && !lastSnapshot) showLedger(st.ledger);     // until a snapshot keeps it current
@@ -1562,7 +1795,8 @@ $('btn-strata').onclick = () => setLayout('strata');
 slider.oninput = () => setText('speed-val', slider.value + 'ms');
 slider.onchange = () => send('speed', { cycle_delay_ms: parseInt(slider.value, 10) });   // once, on release
 
-// Space plays or pauses, S steps, F fits, V changes the layout. The slider keeps its
+// Space plays or pauses, S steps, F fits, V changes the layout, M shows or hides the
+// metabolism. The slider keeps its
 // arrows; a focused button or summary keeps Space and Enter, which press it.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || !(e.target instanceof Element)) return;
@@ -1571,10 +1805,11 @@ window.addEventListener('keydown', e => {
   const act = {
     ' ': () => $('btn-play').click(), s: () => $('btn-step').click(), f: fitView,
     v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
+    m: () => setMetabolismShown($('metab-body').hidden),
   }[e.key.toLowerCase()];
   if (act) { e.preventDefault(); act(); }
 });
-window.addEventListener('resize', () => { resizeCanvas(); chartStale = true; requestDraw(); });
+window.addEventListener('resize', () => { resizeCanvas(); chartStale = metabStale = true; requestDraw(); });
 
 buildFilters();
 $('edge-legend').replaceChildren(...STATES.map(s => {
@@ -1584,7 +1819,9 @@ $('edge-legend').replaceChildren(...STATES.map(s => {
   return item;
 }));
 logList.replaceChildren($('log-placeholder').content.cloneNode(true));
-resizeCanvas();
+let metabShown = true;
+try { metabShown = localStorage.getItem('sirisys.metabolism') !== 'hidden'; } catch (err) { /* private mode */ }
+setMetabolismShown(metabShown);
 renderEmptyState();
 connectWS();
 </script>

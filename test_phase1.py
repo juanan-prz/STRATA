@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from sirisys_measures import ModelHealth
-from sirisys_testkit import HERE, Checks, FakeModel, environment, quiet, raises, read_jsonl, scratch
+from sirisys_testkit import HERE, Checks, FakeModel, environment, fresh_framework, quiet, raises, read_jsonl, scratch
 
 with quiet():
     import Sirisys_Server as server
@@ -57,9 +57,11 @@ with quiet():
     wait_for(lambda: engine.cycle >= 30)
     engine.running = False
     time.sleep(0.2)
-snapshots, first_run = engine.drain(), engine.run_dir
+snapshots, first_run, history = engine.drain(), engine.run_dir, engine.history()
+cycles_run, head_then = engine.cycle, engine.ledger.head
 expected = {"run", "cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded", "field",
-            "ledger", "instability", "modes", "layers", "action", "breath", "crystallized", "model_watch"}
+            "ledger", "instability", "modes", "layers", "action", "breath", "crystallized", "model_watch",
+            "metabolism"}
 check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys()
       and all("energy" in c for c in snapshots[-1]["field"]["constructs"]), f"{len(snapshots)} snapshots")
 check("snapshot is JSON-serializable", bool(json.dumps(snapshots[-1])))
@@ -68,6 +70,30 @@ check("a snapshot says which of the cycle's promotions crystallized, from the fi
       all(set(s["crystallized"]) <= set(s["promoted_names"]) for s in snapshots) and 0 < crystallized
       == snapshots[-1]["apparents"] - snapshots[0]["apparents"] + len(snapshots[0]["crystallized"]),
       f"{crystallized} of {sum(s['promoted'] for s in snapshots)} promotions")
+
+# The metabolism: born minus concluded is the change in the population, every cycle
+flows = [s["metabolism"] for s in snapshots]
+balanced = all(m["born"] - sum(m["concluded"].values()) == s["constructs"] - p["constructs"]
+               for p, s, m in zip(snapshots, snapshots[1:], flows[1:]))
+check("each snapshot says what its cycle did to the population: born minus concluded is the change, every cycle",
+      balanced and all(m["risen"] + m["crystallized"] == s["promoted"] and m["unseen"] <= m["born"]
+                       for s, m in zip(snapshots, flows)) and sum(m["unseen"] for m in flows) > 0,
+      f"{sum(m['born'] for m in flows)} born ({sum(m['unseen'] for m in flows)} never on a snapshot), "
+      f"{sum(sum(m['concluded'].values()) for m in flows)} concluded")
+records = history["records"]
+check("the history adds the cycles up breath by breath, for the whole instance",
+      history["run"] == first_run.name and history["through_cycle"] == snapshots[-1]["cycle"]
+      and [r["breaths"][0] for r in records] == sorted({m["breath"] for m in flows})
+      and all(sum(r[k] for r in records) == sum(m[k] for m in flows) for k in ("born", "unseen", "risen", "crystallized"))
+      and records[-1]["population"] == snapshots[-1]["layers"], f"{len(records)} breaths, cycles 0–{history['through_cycle']}")
+bare = fresh_framework()                            # the same cycles, with nothing watching
+bare.set_ledger(bare.ProofLedger(scratch() / "ledger.jsonl"))
+with quiet():
+    session = bare.new_session()
+    for n in range(cycles_run):
+        bare.run_cycle(session, n, percepts=bare.synthetic_percepts(n, 0, True), **server.PROFILES["standard"])
+check("serving the field changes nothing in it: the same ledger head as the bare cycle",
+      bare.get_ledger().head == head_then, f"{cycles_run} cycles, head {head_then[:12]}…")
 with quiet():                                       # the visualizer's buttons
     engine.control("pause")
     time.sleep(0.1)
@@ -89,15 +115,33 @@ check("controls: pause holds, step advances one cycle and pauses, play, speed; a
       f"held {held}, one cycle {one}, paused after step {stopped}, {unknown.get('error')}")
 with quiet():
     reset = engine.control("reset", stream="live")
-check("reset opens a new run folder, old one kept",
+check("reset opens a new run folder, old one kept, and starts its history again",
       reset["ok"] and first_run.exists() and (first_run / "state.json").exists()
-      and engine.run_dir != first_run,
+      and engine.run_dir != first_run and engine.history() == {"run": engine.run_dir.name, "through_cycle": -1, "records": []},
       f"{first_run.name} → {engine.run_dir.name}")
 check("old run's ledger verifies", S.verify_ledger(first_run / "ledger.jsonl")["ok"])
 check("live-percept reset recorded", engine.stream is None and engine.run_dir.name.endswith("_live"))
 with quiet():
     engine.shutdown()
 check("shutdown saves the current run", (engine.run_dir / "state.json").exists())
+
+# A long instance: past HISTORY_KEPT records the oldest are merged in pairs, nothing lost
+kept, server.HISTORY_KEPT = server.HISTORY_KEPT, 4
+with quiet():
+    long = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    long.running = True
+    wait_for(lambda: long.history()["records"] and long.history()["records"][-1]["breaths"][1] >= 9)
+    long.running = False
+    time.sleep(0.2)
+    merged, last_cycle = long.history(), long.cycle - 1
+    long.shutdown()
+server.HISTORY_KEPT = kept
+spans = [r["breaths"] for r in merged["records"]]
+check("a long history stays bounded: the oldest breaths merged in pairs, every cycle still counted",
+      len(spans) <= 5 and spans[0][0] == 0 and all(a[1] + 1 == b[0] for a, b in zip(spans, spans[1:]))
+      and merged["records"][0]["cycles"][0] == 0 and merged["through_cycle"] == last_cycle
+      and all(a["cycles"][1] + 1 == b["cycles"][0] for a, b in zip(merged["records"], merged["records"][1:])),
+      f"breaths {spans}")
 
 check.section("2 · Model backends")
 with FakeModel("counter") as model:

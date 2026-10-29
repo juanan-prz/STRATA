@@ -22,6 +22,7 @@ INTERFACE (what the visualizer uses)
     GET  /                       the visualizer
     GET  /api/status             the instance: cycle, stream, run folder, ledger, model
     GET  /api/snapshot           the snapshots not yet delivered, as a list
+    GET  /api/history            the instance's metabolism, breath by breath (METABOLISM)
     POST /api/control/<action>   play · pause · step · reset {"stream": "live" | N}
                                  · speed {"cycle_delay_ms": N}
     WS   /ws                     the status first, then each snapshot as it is made;
@@ -29,6 +30,15 @@ INTERFACE (what the visualizer uses)
                                  status is sent again when the engine starts or stops otherwise
   A snapshot is delivered once, to whichever client reads it first: one viewer
   at a time. While nobody reads, only the last MAX_PENDING are kept.
+
+METABOLISM
+  Each snapshot carries what its cycle did to the population: the constructs
+  born (those that concluded before the cycle ended, never on any snapshot,
+  among them), those that concluded by their last layer, the rises and the
+  crystallizations. Born minus concluded is the change in the population,
+  exactly, every cycle. The engine also adds them up breath by breath for the
+  whole instance (/api/history), so a viewer that arrives late sees all of it;
+  past HISTORY_KEPT breaths the oldest are merged in pairs.
 
 THE MODEL WATCH
   With a model, the engine watches every call as run_report.py does
@@ -67,6 +77,8 @@ if not all(hasattr(S, name) for name in ("run_cycle", "new_session", "ProofLedge
 PROFILES = {"standard": {"narrate": True, "include_hour": True},
             "minimal": {"narrate": False, "include_hour": False}}
 MAX_PENDING = 200               # snapshots kept while nobody reads them
+HISTORY_KEPT = 2048             # metabolism records before the oldest are merged in pairs
+LAYER_NAMES = ("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT")
 log = logging.getLogger("sirisys")
 
 
@@ -96,6 +108,30 @@ def _conclusion(meta):
     """What a TERMINATE proof records about the construct that concluded."""
     return {"name": meta.get("name"), "layer": meta.get("final_layer"),
             "mode": meta.get("final_mode"), "vc": meta.get("final_Vc")}
+
+
+def _add_metabolism(record, cycle):
+    """A record of the history with one more cycle's metabolism (the cycle's own
+    record, with its cycle number, population and tolerance) added to it."""
+    record["breaths"][1] = cycle["breath"]
+    record["cycles"][1] = cycle["cycle"]
+    for key in ("born", "unseen", "risen", "crystallized"):
+        record[key] += cycle[key]
+    for layer, n in cycle["concluded"].items():
+        record["concluded"][layer] += n
+    record["population"], record["tolerance"] = dict(cycle["population"]), cycle["tolerance"]
+    return record
+
+
+def _merge_metabolism(older, newer):
+    """Two neighbouring records of the history as one: the flows added, the ending kept."""
+    merged = {"breaths": [older["breaths"][0], newer["breaths"][1]],
+              "cycles": [older["cycles"][0], newer["cycles"][1]],
+              "concluded": {layer: older["concluded"][layer] + newer["concluded"][layer] for layer in LAYER_NAMES},
+              "population": newer["population"], "tolerance": newer["tolerance"]}
+    for key in ("born", "unseen", "risen", "crystallized"):
+        merged[key] = older[key] + newer[key]
+    return merged
 
 
 class ExperimentEngine:
@@ -134,6 +170,7 @@ class ExperimentEngine:
         self.cycle, self.last_T = 0, tuple(self.ss.clock.T)
         self._terminations_seen = self.ss.field.terminations_total
         self._apparents_seen = self.ss.field.apparents_total
+        self._history = []                      # the metabolism, breath by breath (METABOLISM)
         self.health = None                      # the model watch; watching changes nothing in the calls
         if self.ss.llm.available:
             # Only a run with a model needs the watch: importing this file does not
@@ -169,6 +206,7 @@ class ExperimentEngine:
         profile = PROFILES[self.profile]
         printed = io.StringIO()                 # the framework's own lines go to the visualizer's console
         with self._cycle_lock:
+            before = set(self.ss.field.constructs)
             with contextlib.redirect_stdout(printed):
                 percepts = (None if self.stream is None
                             else S.synthetic_percepts(self.cycle, self.stream, profile["include_hour"]))
@@ -181,9 +219,10 @@ class ExperimentEngine:
                 self._paused_for_model, self.running = True, False   # once: Play goes on
                 log.warning("The model watch tripped: %s. Paused: press Play to go on regardless.",
                             self.health.reason)
-            snapshot = self._snapshot(r, [line for line in printed.getvalue().splitlines() if line.strip()])
+            snapshot = self._snapshot(r, [line for line in printed.getvalue().splitlines() if line.strip()], before)
             with self._queue_lock:
                 self._queue.append(snapshot)
+                self._record_metabolism(snapshot)
                 listeners = list(self._listeners)
             self.cycle += 1
         for loop, event in listeners:
@@ -191,12 +230,13 @@ class ExperimentEngine:
                 loop.call_soon_threadsafe(event.set)
 
     # ── snapshots (the visualizer reads these keys: add, never rename) ───
-    def _snapshot(self, r: dict, console: list[str]) -> dict:
+    def _snapshot(self, r: dict, console: list[str], before: set) -> dict:
         f = self.ss.field
         new = f.terminations_total - self._terminations_seen
         self._terminations_seen = f.terminations_total
         crystallized = f.apparents_since(self._apparents_seen)  # the promotions that reached APPARENT
         self._apparents_seen = f.apparents_total
+        concluded = [_conclusion(t.meta or {}) for t in (f.termination_log[-new:] if new > 0 else [])]
         energy = self.ss.concordancy._energy_map(f)            # what [::] selection weighs
         modes = dict.fromkeys(("OMEGA", "LEMNISCATE", "NEUTRAL"), 0)
         layers = dict.fromkeys(("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT"), 0)
@@ -234,11 +274,51 @@ class ExperimentEngine:
             "both_edges": r["both_count"], "reincarnations": f.reincarnations,
             "action": r["action"], "narration": r["narration"], "question": r["question"],
             "breath": f.breaths, "contraction": r["contraction"], "tolerance": round(f.tolerance, 3),
-            "concluded": [_conclusion(t.meta or {}) for t in (f.termination_log[-new:] if new > 0 else [])],
+            "concluded": concluded,
+            "metabolism": self._metabolism(before, concluded, r["promoted"], crystallized),
             "telemetry": telemetry[-1] if telemetry else {},
             "ledger": {"count": self.ledger.count, "head": self.ledger.head[:16]},
             "field": {"constructs": constructs, "edges": edges},
         }
+
+    def _metabolism(self, before: set, concluded: list, promoted: list, crystallized: list) -> dict:
+        """What the cycle did to the population. Born: the names in the field now that
+        were not before it, and those that concluded in it without having been there
+        (born and concluded in the same cycle: never on any snapshot)."""
+        f = self.ss.field
+        arrived = set(f.constructs) - before
+        unseen = {c["name"] for c in concluded} - before - set(f.constructs)
+        by_layer = dict.fromkeys(LAYER_NAMES, 0)
+        for c in concluded:
+            if c["layer"] in by_layer:
+                by_layer[c["layer"]] += 1
+        return {"breath": f.breaths, "born": len(arrived) + len(unseen), "unseen": len(unseen),
+                "concluded": by_layer, "risen": len(promoted) - len(crystallized),
+                "crystallized": len(crystallized)}
+
+    def _record_metabolism(self, snapshot: dict) -> None:
+        """Add a cycle to the history (under _queue_lock): to its breath's record, or to a new one."""
+        cycle = {**snapshot["metabolism"], "cycle": snapshot["cycle"],
+                 "population": snapshot["layers"], "tolerance": snapshot["tolerance"]}
+        history = self._history
+        if not history or history[-1]["breaths"][1] != cycle["breath"]:
+            history.append({"breaths": [cycle["breath"]] * 2, "cycles": [cycle["cycle"]] * 2,
+                            "born": 0, "unseen": 0, "risen": 0, "crystallized": 0,
+                            "concluded": dict.fromkeys(LAYER_NAMES, 0)})
+        _add_metabolism(history[-1], cycle)
+        if len(history) > HISTORY_KEPT:                 # the oldest half, merged in pairs
+            half = len(history) // 2 // 2 * 2
+            history[:half] = [_merge_metabolism(history[i], history[i + 1]) for i in range(0, half, 2)]
+
+    def history(self) -> dict:
+        """The instance's metabolism so far, breath by breath, oldest first; through_cycle
+        is the last cycle it includes (-1 before the first)."""
+        with self._queue_lock:
+            records = [{**h, "breaths": list(h["breaths"]), "cycles": list(h["cycles"]),
+                        "concluded": dict(h["concluded"]), "population": dict(h["population"])}
+                       for h in self._history]
+        return {"run": self.run_dir.name, "through_cycle": records[-1]["cycles"][1] if records else -1,
+                "records": records}
 
     def _model_watch(self) -> dict | None:
         """The model watch so far; None without a model."""
@@ -273,6 +353,7 @@ class ExperimentEngine:
                 self._new_instance()
                 with self._queue_lock:
                     self._queue.clear()
+                    self._history = []
             return {"ok": True, "reset": True, "stream": self.stream, "previous_run": previous}
         if action == "speed":
             try:
@@ -366,6 +447,10 @@ def create_app(engine):
     @app.get("/api/snapshot")
     def api_snapshot():
         return JSONResponse(engine.drain())
+
+    @app.get("/api/history")
+    def api_history():
+        return JSONResponse(engine.history())
 
     @app.post("/api/control/{action}")
     async def api_control(action: str, request: Request):

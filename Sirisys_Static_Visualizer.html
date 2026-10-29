@@ -173,6 +173,7 @@
 
   /* ───── Files and timeline ───── */
   .btn-wide { width: 100%; }
+  #tl-interval { margin-top: var(--sp-3); }
   .timeline input[type="range"] { width: 100%; margin: var(--sp-2) 0; accent-color: var(--accent); }
   .timeline .ctrl-row { display: flex; gap: var(--sp-1); }
   .timeline .ctrl-row .btn { flex: 1; }
@@ -448,6 +449,16 @@
         <button class="btn" id="btn-next" title="Next state (→)">▶</button>
       </div>
       <p class="note">a ring marks each construct the field did not hold in the previous state</p>
+      <div id="tl-interval" hidden>
+        <h3>Since the previous file</h3>
+        <div class="stat-row"><span class="stat-key">cycles</span><span class="stat-val" id="tl-span">—</span></div>
+        <div class="stat-row" title="the constructs the field made or took in: the change in the population plus those that concluded, exactly"><span class="stat-key">born</span><span class="stat-val" id="tl-born">—</span></div>
+        <div class="stat-row"><span class="stat-key">concluded</span><span class="stat-val" id="tl-concluded">—</span></div>
+        <div class="stat-row"><span class="stat-key">crystallized</span><span class="stat-val" id="tl-crystallized">—</span></div>
+        <div class="stat-row"><span class="stat-key">population</span><span class="stat-val" id="tl-population">—</span></div>
+        <p class="note">from the two files' counters; born minus concluded is the change in the population</p>
+      </div>
+      <p class="note warn" id="tl-interval-note" hidden></p>
     </div>
     <div class="panel-section">
       <h3>Counters</h3>
@@ -1514,9 +1525,32 @@ function show(index) {
   $('tl-slider').value = index;
   setText('tl-position', `${index + 1} / ${timeline.length} · ${file}`);
   setText('tl-cycles', `${state.cycle ?? '—'} cycles`);
+  renderInterval(index);
   $('btn-prev').disabled = index === 0;
   $('btn-next').disabled = index === timeline.length - 1;
   requestDraw();
+}
+
+// What the field did between the previous file and this one, from their cumulative
+// counters: exact, but only where both files keep them, of the same instance, in order
+function renderInterval(index) {
+  const prev = timeline[index - 1], cur = timeline[index];
+  const why = !prev ? null
+    : runOf(prev.state) !== runOf(cur.state) ? 'the previous file is of another run: no metabolism between them'
+    : prev.estimated.length || cur.estimated.length ? 'a file written before v13.3 keeps no exact totals: no metabolism between them'
+    : null;
+  $('tl-interval').hidden = !prev || !!why;
+  $('tl-interval-note').hidden = !why;
+  if (why) setText('tl-interval-note', why);
+  if (!prev || why) return;
+  const a = prev.state.field, b = cur.state.field;
+  const concluded = b.terminations_total - a.terminations_total, change = b.constructs.length - a.constructs.length;
+  const signed = n => (n >= 0 ? '+' : '−') + Math.abs(n);
+  setText('tl-span', `${prev.state.cycle ?? '—'} → ${cur.state.cycle ?? '—'}`);
+  setText('tl-born', change + concluded);
+  setText('tl-concluded', concluded);
+  setText('tl-crystallized', b.apparents_total - a.apparents_total);
+  setText('tl-population', `${b.constructs.length} (${signed(change)})`);
 }
 
 function stopPlaying() {
