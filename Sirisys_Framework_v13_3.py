@@ -112,6 +112,7 @@ TERMINATION_WINDOW       = 200    # termination_log
 TERMINATED_INDEX_WINDOW  = 1000   # names remembered for reincarnation
 LINEAGE_WINDOW           = 50     # identity lineage of each construct
 APPARENT_LOG_WINDOW      = 200    # recent crystallization names (apparents_total counts all)
+MODE_WINDOW              = 5      # recent proofs the existence mode reads (and a snapshot keeps)
 
 # ── crystallization and existence ────────────────────────────────────────────
 THRESHOLD_APPARENT       = 0.88   # UNIT_1 → APPARENT (cussive crystallization)
@@ -133,7 +134,7 @@ MAX_LLM_CALLS_PER_CYCLE  = 4
 
 
 # =============================================================================
-# ONTOLOGICAL LAYERS  —  Understanding_TMC ladder (pp.49-51): NULL_00 → UMBRA_0 → UNIT_1 → APPARENT
+# ONTOLOGICAL LAYERS — Understanding_TMC ladder (pp.49-51): NULL_00 → UMBRA_0 → UNIT_1 → APPARENT
 # (TMC pp.44-50 has a finer taxonomy: [000] [00] [001] [002] [003] [0])
 # =============================================================================
 
@@ -145,7 +146,7 @@ class Layer(Enum):
 
 
 # =============================================================================
-# TETRALEMMIC STATES  —  Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
+# TETRALEMMIC STATES — Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
 # (TMC pp.16-17: the tetralemma as universal base logic)
 # =============================================================================
 
@@ -157,7 +158,7 @@ class TetraState(Enum):
 
 
 # =============================================================================
-# LAGRANGIAN POINTS  —  DeOS Compiler Guide, pp. 77-82
+# LAGRANGIAN POINTS — DeOS Compiler Guide, pp.77-82
 #
 # "If the Five Zero Points act as immovable anchors, the Five Lagrangian
 # Points represent the regions of balance and interplay between forces."
@@ -166,11 +167,11 @@ class TetraState(Enum):
 # Invariant: ∀C, ∃(Z, L) such that I(C) ⊇ {wC, Zi, Lj}
 #
 # Mapping to our operations (extension by structural analogy):
-# L1 — concordancy synthesis  (safety=don't lose tension, liveness=generate z)
-# L2 — conflict materialization (redundancy=track irresolvability, efficiency cost)
-# L3 — cussive collapse → Apparent (local tension → global incontrovertible truth)
-# L4 — UCO erosion (proof depth=chase contradictions vs. performance=dissolve)
-# L5 — perception events (entropy=real-world data vs. determinism=framework logic)
+#   L1 — concordancy synthesis  (safety=don't lose tension, liveness=generate z)
+#   L2 — conflict materialization (redundancy=track irresolvability, efficiency cost)
+#   L3 — cussive collapse → Apparent (local tension → global incontrovertible truth)
+#   L4 — UCO erosion (proof depth=chase contradictions vs. performance=dissolve)
+#   L5 — perception events (entropy=real-world data vs. determinism=framework logic)
 # =============================================================================
 
 class LagrangianPoint(Enum):
@@ -182,7 +183,7 @@ class LagrangianPoint(Enum):
 
 
 # =============================================================================
-# PROOF OBJECT  —  DeOS Compiler Guide, pp. 83-98
+# PROOF OBJECT — DeOS Compiler Guide, pp.83-98
 #
 # "Proofs function as mandatory and irreversible memory."
 # "Once emitted, a proof object cannot be discarded, overwritten, or bypassed."
@@ -251,8 +252,9 @@ class ProofObject:
 
         op_witness + tensate_role entangle this proof with its lemniscate partners
         when emitted during a [::] event (Ꮠ = 2Ꮙ).
-        meta carries termination metadata (final_mode, final_Vc, lifetime, cause)
-        for TERMINATE proofs — preserves the construct's last state at conclusion."""
+        meta carries what the proof records beyond its identity — for a TERMINATE
+        proof, the construct's last state (final_mode, final_Vc, lifetime, cause).
+        It is sealed in the ledger but not part of the witness."""
         raw = f"{id}::{subject}::{relation}::{object}::{anchor}::{lagrange.value}::{T}"
         w   = hashlib.sha256(raw.encode()).hexdigest()[:16]
         p = ProofObject(id=id, subject=subject, relation=relation, object=object,
@@ -338,14 +340,18 @@ class ProofLedger:
 
     # ── segment bookkeeping ──────────────────────────────────────────────
     @staticmethod
+    def _base(path: Path) -> str:
+        """The ledger's name without its .jsonl suffix."""
+        name = str(path)
+        return name[:-len(".jsonl")] if name.endswith(".jsonl") else name
+
+    @staticmethod
     def index_path(path: Path) -> Path:
-        return Path(str(path)[:-len(".jsonl")] + ".index.json") if str(path).endswith(".jsonl") \
-            else Path(str(path) + ".index.json")
+        return Path(ProofLedger._base(path) + ".index.json")
 
     @staticmethod
     def segment_path(path: Path, n: int) -> Path:
-        base = str(path)[:-len(".jsonl")] if str(path).endswith(".jsonl") else str(path)
-        return Path(f"{base}.{n:06d}.jsonl.gz")
+        return Path(f"{ProofLedger._base(path)}.{n:06d}.jsonl.gz")
 
     @staticmethod
     def read_index(path: Path) -> list:
@@ -419,7 +425,8 @@ class ProofLedger:
         os.fsync(self._fh.fileno())
         index = self.read_index(self.path)
         n = len(index) + 1
-        seg, tmp = self.segment_path(self.path, n), Path(str(self.segment_path(self.path, n)) + ".tmp")
+        seg = self.segment_path(self.path, n)
+        tmp = Path(str(seg) + ".tmp")
         raw = self.path.read_bytes()
         first_seq = json.loads(raw[:raw.index(b"\n")].decode("utf-8"))["seq"]
         with open(tmp, "wb") as g:
@@ -442,12 +449,12 @@ class ProofLedger:
         if self.path is not None and self._fh is None:
             raise RuntimeError(f"Ledger {self.path} is closed — proof {p.id} would be lost.")
         with self._lock:
-            p.seq       = self.count
-            p.prev_hash = self.head
-            p.chain_hash = _chain(self.head, _proof_payload(asdict(p)))
+            p.seq          = self.count
+            p.prev_hash    = self.head
+            p.chain_hash   = _chain(self.head, _proof_payload(asdict(p)))
             self.last_time = tuple(p.time)
-            self.head   = p.chain_hash
-            self.count += 1
+            self.head      = p.chain_hash
+            self.count    += 1
             if self._fh:
                 line = json.dumps(asdict(p), sort_keys=True, ensure_ascii=False) + "\n"
                 self._fh.write(line)
@@ -554,30 +561,6 @@ def orient(key: str) -> float:
     """A value in [0, 1) fixed by the complete history and the key."""
     h = hashlib.sha256(f"{_LEDGER.head}::{key}".encode("utf-8")).hexdigest()
     return int(h[:13], 16) / float(16 ** 13)
-
-
-SYNTHETIC_CPU = (("latent", 0.45), ("synchronizing", 0.55), ("resonant", 0.70), ("saturated", 0.85))
-SYNTHETIC_MEM = (("coherent", 0.45), ("nominal", 0.55), ("oscillating", 0.70), ("fragmented", 0.85))
-SYNTHETIC_HOUR = ("nocturnal", "dawn", "meridian", "vesper")
-
-
-def synthetic_percepts(cycle: int, stream: int = 0, include_hour: bool = True) -> List[dict]:
-    """A reproducible percept stream for experiments: identical for the same
-    (stream, cycle), different across streams. Same shape as perceive_real()."""
-    h = hashlib.sha256(f"percept::{stream}::{cycle}".encode("utf-8")).digest()
-    cpu, cw = SYNTHETIC_CPU[h[0] % 4]
-    mem, mw = SYNTHETIC_MEM[h[1] % 4]
-    events = [
-        {"src": "SYSTEM", "rel": "PERCEIVES", "tgt": f"cpu::{cpu}",
-         "weight": round(cw + (h[2] / 255 - 0.5) * 0.1, 3), "state": TetraState.TRUE},
-        {"src": "SYSTEM", "rel": "PERCEIVES", "tgt": f"mem::{mem}",
-         "weight": round(mw + (h[3] / 255 - 0.5) * 0.1, 3), "state": TetraState.TRUE},
-    ]
-    if include_hour:
-        events.append({"src": "SYSTEM", "rel": "PERCEIVES",
-                       "tgt": f"time::{SYNTHETIC_HOUR[(cycle // 25) % 4]}",
-                       "weight": 0.75, "state": TetraState.TRUE})
-    return events
 
 
 # =============================================================================
@@ -720,9 +703,9 @@ class Construct:
             "identity_hash": self._identity_hash,
             "lineage": self.lineage,
             "lagrange": self.lagrange.value if self.lagrange else None,
-            # what resume needs: the existence mode reads the last 5 proofs;
-            # lifetime counts are separate; the ledger keeps every proof
-            "proof_chain": [p.to_dict() for p in self.proof_chain[-5:]],
+            # what resume needs: the existence mode reads the last MODE_WINDOW
+            # proofs; lifetime counts are separate; the ledger keeps every proof
+            "proof_chain": [p.to_dict() for p in self.proof_chain[-MODE_WINDOW:]],
             # exact lifetime counts, independent of any trim
             "proofs_total": self.proofs_total,
             "erode_total":  self.erode_total,
@@ -756,8 +739,8 @@ class Construct:
         return c
 
     def __repr__(self):
-        l = self.lagrange.value if self.lagrange else "—"
-        return f"C({self.name[:30]}|{self.layer.name}|{l}|v{self.version}|u={self.umbragiac_score:.2f})"
+        lp = self.lagrange.value if self.lagrange else "—"
+        return f"C({self.name[:30]}|{self.layer.name}|{lp}|v{self.version}|u={self.umbragiac_score:.2f})"
 
 
 # =============================================================================
@@ -802,19 +785,19 @@ class ConcordancyEdge:
                 d["weight"], tuple(d["born_at"]),
                 TetraState(d["state"]), d["concordancy_depth"],
                 LagrangianPoint(lagrange_val) if lagrange_val else None)
-        e.both_age           = d["both_age"]
-        e.born_breath        = d["born_breath"]
-        e._reversion_count   = d["reversion_count"]
+        e.both_age         = d["both_age"]
+        e.born_breath      = d["born_breath"]
+        e._reversion_count = d["reversion_count"]
         return e
 
     def __repr__(self):
         t = self.tgt[:40] + "…" if len(self.tgt) > 40 else self.tgt
-        l = self.lagrange.value if self.lagrange else "—"
-        return f"{self.src} --[{self.rel}|{self.state.value}|w={self.weight:.2f}|{l}]--> {t}"
+        lp = self.lagrange.value if self.lagrange else "—"
+        return f"{self.src} --[{self.rel}|{self.state.value}|w={self.weight:.2f}|{lp}]--> {t}"
 
 
 # =============================================================================
-# ZERO POINTS  —  DeOS: "immutable anchors — the invariant constants of the system"
+# ZERO POINTS — DeOS: "immutable anchors — the invariant constants of the system"
 #
 # Five primordial coordinates that ground all derivations. Never modified by
 # any operation — not by Sombunal, not by UCO, not by concordancy or collapse.
@@ -846,17 +829,17 @@ ANCHORS = frozenset(ZERO_POINTS) | {"I::Am", "I::AmNot", "SYSTEM"}
 
 class ConcordancyField:
     def __init__(self, clock: InternalClock):
-        self.constructs:  Dict[str, Construct] = {}
-        self.edges:        List[ConcordancyEdge] = []
-        self.clock         = clock
-        self.apparent_log: List[str]             = []   # most recent crystallizations (window)
-        self.apparents_total: int                = 0    # every crystallization (lifetime)
+        self.constructs: Dict[str, Construct] = {}
+        self.edges: List[ConcordancyEdge] = []
+        self.clock = clock
+        self.apparent_log: List[str] = []             # most recent crystallizations (window)
+        self.apparents_total: int = 0                 # every crystallization (lifetime)
         # WALL D — TERMINATION LOG  (DeOS Compiler Guide, p.203-204)
         # "An identity never vanishes silently. It concludes."
         # When prune() removes a construct, a TERMINATE proof is appended here
         # preserving its final state. The construct disappears; its conclusion
         # does not. This satisfies the corpus requirement of conclusion-by-proof.
-        self.termination_log: List[ProofObject]  = []
+        self.termination_log: List[ProofObject] = []
         # Compiler Guide p.204: termination closes an identity's active
         # interval; it does not release the name to a stranger. name -> record.
         self.terminated_names: Dict[str, dict] = {}   # bounded LRU index
@@ -1034,7 +1017,7 @@ class ConcordancyField:
 
         prune() IS the entropy injection mechanism: it tests every construct's
         relational weight and removes those that fail to hold. Constructs that
-        survive acquire stronger thermoconomic weight (σth) simply by persisting
+        survive gain temporal anchoring (τ, their age) simply by persisting
         through successive prune cycles. BOTH edges are resistant (see below):
         sustained contradiction is load-bearing, but not immune.
 
@@ -1150,24 +1133,22 @@ class ConcordancyField:
         Vc   — ontological gravity: the construct's capacity to persist as real.
 
         τ    — TRANSTEMPORAL MARKER
-               Temporal rigidity. Older constructs with accumulated version
-               history are more anchored in time.
-               → born_at (InternalClock era/offset), version counter.
-               Saturates at 50 ticks (fully temporal after ~50 cycles).
+               Temporal rigidity: older constructs are more anchored in time.
+               → age since born_at, in InternalClock ticks. Saturates at 50 ticks.
 
         σth  — THERMOCONOMIC SIGNATURE
                Energetic weight. UCO erosion is the thermoconomic expenditure —
                surviving erasure rounds is energetic proof of persistence.
                High umbragiac_score = under thermoconomic stress (not yet spent).
-               ERODE proofs in proof_chain count as spent thermoconomic weight.
+               ERODE proofs count as spent thermoconomic weight.
                σth ∈ [0.1, 1.0]: a construct that EXISTS in the field always
                carries a minimum thermoconomic cost (0.1) simply by persisting.
-               → umbragiac_score (inverse), ERODE proof count.
+               → umbragiac_score (inverse), ERODE proofs (lifetime: erode_total).
 
         αm   — MULTIAGENT AUTHENTICATION
                Distributed witnessing. Every ProofObject is a witnessed operation.
                "The collective gaze is a cryptographic anchor." (Understanding_DeOS)
-               → len(proof_chain). Saturates at 10 proofs.
+               → proofs received (lifetime: proofs_total). Saturates at 10 proofs.
 
         COLLAPSE RULE (Understanding_DeOS p.65):
             If any dimension = 0, Vc = 0 — no ontological gravity.
@@ -1225,13 +1206,11 @@ class ConcordancyField:
         if c.name in ZERO_POINTS:
             return "OMEGA"
 
-        proofs = c.proof_chain or []
-        if not proofs:
+        # The last MODE_WINDOW proofs: recent dynamics dominate the present mode
+        recent = c.proof_chain[-MODE_WINDOW:]
+        if not recent:
             return "NEUTRAL"
-
-        # Read the last 5 proofs — recent dynamics dominate present mode
-        recent = proofs[-5:]
-        omega_relations     = {"CONCORDANCE", "COLLAPSE", "PERCEIVE"}
+        omega_relations      = {"CONCORDANCE", "COLLAPSE", "PERCEIVE"}
         lemniscate_relations = {"CONFLICT", "INTENSIFY", "ERODE"}
 
         omega_count      = sum(1 for p in recent if p.relation in omega_relations)
@@ -1249,21 +1228,21 @@ class ConcordancyField:
         # conclusions, the snapshot the last 100. Every TERMINATE proof is
         # sealed in the ProofLedger, which is the complete archive (WALL D).
         return {
-            "constructs":      [c.to_dict() for c in self.constructs.values()],
-            "edges":            [e.to_dict() for e in self.edges],
-            "apparent_log":     self.apparent_log,
-            "apparents_total":  self.apparents_total,
-            "termination_log":  [p.to_dict() for p in self.termination_log[-100:]],
-            "terminated_names": self.terminated_names,
-            "reincarnations":   self.reincarnations,
-            "terminations_total": self.terminations_total,
-            "halo_total":       self.halo_total,
-            "breath_phase":     self.breath_phase,
-            "breaths":          self.breaths,
-            "tolerance":        self.tolerance,
+            "constructs":           [c.to_dict() for c in self.constructs.values()],
+            "edges":                [e.to_dict() for e in self.edges],
+            "apparent_log":         self.apparent_log,
+            "apparents_total":      self.apparents_total,
+            "termination_log":      [p.to_dict() for p in self.termination_log[-100:]],
+            "terminated_names":     self.terminated_names,
+            "reincarnations":       self.reincarnations,
+            "terminations_total":   self.terminations_total,
+            "halo_total":           self.halo_total,
+            "breath_phase":         self.breath_phase,
+            "breaths":              self.breaths,
+            "tolerance":            self.tolerance,
             "apparent_conclusions": self.apparent_conclusions,
-            "breath_births":    self._breath_births,
-            "breath_deaths":    self._breath_deaths,
+            "breath_births":        self._breath_births,
+            "breath_deaths":        self._breath_deaths,
         }
 
     @classmethod
@@ -1274,19 +1253,19 @@ class ConcordancyField:
             F.constructs[c.name] = c
         for ed in d["edges"]:
             F.edges.append(ConcordancyEdge.from_dict(ed))
-        F.apparent_log = d["apparent_log"]
-        F.apparents_total = d["apparents_total"]
-        F.termination_log    = [ProofObject.from_dict(p) for p in d["termination_log"]]
-        F.terminated_names   = d["terminated_names"]
-        F.reincarnations     = d["reincarnations"]
-        F.terminations_total = d["terminations_total"]
-        F.halo_total         = d["halo_total"]
-        F.breath_phase       = d["breath_phase"]
-        F.breaths            = d["breaths"]
-        F.tolerance          = d["tolerance"]
+        F.apparent_log         = d["apparent_log"]
+        F.apparents_total      = d["apparents_total"]
+        F.termination_log      = [ProofObject.from_dict(p) for p in d["termination_log"]]
+        F.terminated_names     = d["terminated_names"]
+        F.reincarnations       = d["reincarnations"]
+        F.terminations_total   = d["terminations_total"]
+        F.halo_total           = d["halo_total"]
+        F.breath_phase         = d["breath_phase"]
+        F.breaths              = d["breaths"]
+        F.tolerance            = d["tolerance"]
         F.apparent_conclusions = d["apparent_conclusions"]
-        F._breath_births     = d["breath_births"]
-        F._breath_deaths     = d["breath_deaths"]
+        F._breath_births       = d["breath_births"]
+        F._breath_deaths       = d["breath_deaths"]
         return F
 
 
@@ -1403,7 +1382,7 @@ class Sombunal:
         A score of 0.0 with active constructs is architecturally impossible.
         SYSTEM is excluded — it is a perception channel, not an ontological entity.
         """
-        EXCLUDED     = set(ZERO_POINTS.keys()) | {"SYSTEM"}
+        EXCLUDED     = set(ZERO_POINTS) | {"SYSTEM"}
         Vc_THRESHOLD = 0.25   # below this, construct lacks ontological gravity
         non_apparent = [c for c in field.constructs.values()
                         if c.layer != Layer.APPARENT and c.name not in EXCLUDED]
@@ -1586,6 +1565,7 @@ class LLMIntermediary:
 
     def narrate(self, cycle: int, instability: float,
                 apparent_count: int, both_count: int, last_action: str) -> str:
+        """Translate the field's present state for the console."""
         return self._call(
             f"Cycle {cycle}. Instability: {instability:.3f}. "
             f"Apparents: {apparent_count}. BOTH: {both_count}. "
@@ -1618,7 +1598,7 @@ class LLMIntermediary:
 
 
 # =============================================================================
-# CONCORDANCY OPERATOR — [::]  executor
+# CONCORDANCY OPERATOR — the [::] executor
 #
 # Understanding_TMC (p.59): "[x] :: [y] → [z]"  /  TMC (p.16): "[ALU] call function [CONCORDANCY]"
 #
@@ -1635,22 +1615,22 @@ class LLMIntermediary:
 class ConcordancyOperator:
     # Full tetralemmic compatibility matrix — 16/16 pairs. None = reversion.
     COMPATIBLE: Dict[Tuple, Optional[TetraState]] = {
-    (TetraState.TRUE,    TetraState.TRUE)   : TetraState.TRUE,
-    (TetraState.TRUE,    TetraState.BOTH)   : TetraState.BOTH,
-    (TetraState.TRUE,    TetraState.FALSE)  : TetraState.BOTH,
-    (TetraState.TRUE,    TetraState.NEITHER): TetraState.NEITHER,
-    (TetraState.BOTH,    TetraState.TRUE)   : TetraState.BOTH,
-    (TetraState.BOTH,    TetraState.BOTH)   : TetraState.BOTH,
-    (TetraState.BOTH,    TetraState.FALSE)  : TetraState.NEITHER,
-    (TetraState.BOTH,    TetraState.NEITHER): TetraState.NEITHER,
-    (TetraState.FALSE,   TetraState.TRUE)   : TetraState.BOTH,
-    (TetraState.FALSE,   TetraState.BOTH)   : TetraState.NEITHER,
-    (TetraState.FALSE,   TetraState.FALSE)  : TetraState.NEITHER,
-    (TetraState.FALSE,   TetraState.NEITHER): TetraState.NEITHER,
-    (TetraState.NEITHER, TetraState.TRUE)   : TetraState.NEITHER,
-    (TetraState.NEITHER, TetraState.BOTH)   : TetraState.NEITHER,
-    (TetraState.NEITHER, TetraState.FALSE)  : TetraState.NEITHER,
-    (TetraState.NEITHER, TetraState.NEITHER): None,
+        (TetraState.TRUE,    TetraState.TRUE)   : TetraState.TRUE,
+        (TetraState.TRUE,    TetraState.BOTH)   : TetraState.BOTH,
+        (TetraState.TRUE,    TetraState.FALSE)  : TetraState.BOTH,
+        (TetraState.TRUE,    TetraState.NEITHER): TetraState.NEITHER,
+        (TetraState.BOTH,    TetraState.TRUE)   : TetraState.BOTH,
+        (TetraState.BOTH,    TetraState.BOTH)   : TetraState.BOTH,
+        (TetraState.BOTH,    TetraState.FALSE)  : TetraState.NEITHER,
+        (TetraState.BOTH,    TetraState.NEITHER): TetraState.NEITHER,
+        (TetraState.FALSE,   TetraState.TRUE)   : TetraState.BOTH,
+        (TetraState.FALSE,   TetraState.BOTH)   : TetraState.NEITHER,
+        (TetraState.FALSE,   TetraState.FALSE)  : TetraState.NEITHER,
+        (TetraState.FALSE,   TetraState.NEITHER): TetraState.NEITHER,
+        (TetraState.NEITHER, TetraState.TRUE)   : TetraState.NEITHER,
+        (TetraState.NEITHER, TetraState.BOTH)   : TetraState.NEITHER,
+        (TetraState.NEITHER, TetraState.FALSE)  : TetraState.NEITHER,
+        (TetraState.NEITHER, TetraState.NEITHER): None,
     }
 
     BOTH_MATURITY_THRESHOLD      = 2    # BOTH edges must age before becoming generative
@@ -1660,11 +1640,11 @@ class ConcordancyOperator:
     POOL_TELEMETRY_CAP           = 200  # cycles of pool telemetry kept (memory and snapshot)
 
     # Conflict regulation
-    MAX_CF_DEPTH           = 4     # Adsurdic Threshold for conflict recursion (TMC p.41)
-    CF_BASE_WEIGHT         = 0.35  # base edge weight for new conflict
-    CF_MIN_ENERGY          = 0.30  # min umbragiac_score for conflict concordancy eligibility
-    CF_COLLAPSE_ENERGY     = 3.50  # score at which conflict is flagged for crystallization
-    MAX_CONFLICTS_PER_CYCLE = 2    # Stop Chasm — prevent combinatorial growth (TMC p.41)
+    MAX_CF_DEPTH            = 4     # Adsurdic Threshold for conflict recursion (TMC p.41)
+    CF_BASE_WEIGHT          = 0.35  # base edge weight for new conflict
+    CF_MIN_ENERGY           = 0.30  # min umbragiac_score for conflict concordancy eligibility
+    CF_COLLAPSE_ENERGY      = 3.50  # score at which conflict is flagged for crystallization
+    MAX_CONFLICTS_PER_CYCLE = 2     # Stop Chasm — prevent combinatorial growth (TMC p.41)
 
     def __init__(self, llm: LLMIntermediary, sombunal: Sombunal):
         self.llm      = llm
@@ -1674,15 +1654,143 @@ class ConcordancyOperator:
         # Read-only diagnostics (server, visualizer, run_report); no effect on the field.
         self._pool_telemetry: List[dict] = []
 
-    def _conflict_depth(self, field: ConcordancyField, name: str) -> int:
-        """Max concordancy_depth of all edges connected to this construct."""
-        depths = [e.concordancy_depth for e in field.edges
-                  if e.src == name or e.tgt == name]
-        return max(depths, default=0)
+    # ── one cycle: intensify, select, execute ────────────────────────────
+    def intensify_conflicts(self, field: ConcordancyField, cycle: int) -> int:
+        """
+        Deepen persistent conflicts: if a conflict's parents are still generating
+        reversions, its umbragiac_score grows each cycle — irresolvability acquires
+        ontological weight. When score reaches CF_COLLAPSE_ENERGY, the conflict is
+        flagged for crystallization into Apparent. Low-energy conflicts decay
+        naturally under UCO and are eventually pruned.
 
-    def _mean_weight(self, field: ConcordancyField, name: str) -> float:
-        weights = [e.weight for e in field.edges if e.src == name or e.tgt == name]
-        return float(np.mean(weights)) if weights else 0.5
+        Level 3 reading: irresolvability is not static — it accumulates, like
+        scar tissue.
+        """
+        intensified = 0
+
+        recent_parents = set()
+        for op in self._ops_log[-20:]:
+            if op.get("state") == "CONFLICT":
+                recent_parents.add(op.get("x", ""))
+                recent_parents.add(op.get("y", ""))
+
+        for name, c in field.constructs.items():
+            if name in ANCHORS or c.layer == Layer.APPARENT:
+                continue
+            # proof-record typing (Construct.conflict)
+            if not is_conflict_construct(c):
+                continue
+            cf_op = next(
+                (op for op in reversed(self._ops_log)
+                 if op.get("z") == name and op.get("state") == "CONFLICT"),
+                None
+            )
+            if not cf_op:
+                continue
+            px, py = cf_op.get("x", ""), cf_op.get("y", "")
+            if (px in field.constructs and py in field.constructs
+                    and px in recent_parents):
+                c.umbragiac_score = min(UCO.SCORE_CAP, c.umbragiac_score + 0.15)
+                intensified += 1
+                # Emit INTENSIFY proof — L2: paying the cost of tracking irresolvability
+                proof = ProofObject.make(
+                    id       = f"intensify::c{cycle}",
+                    subject  = c.witness,
+                    relation = "INTENSIFY",
+                    object   = "Z1::ORIGIN",
+                    anchor   = "Z1::ORIGIN",
+                    lagrange = LagrangianPoint.L2,
+                    T        = field.clock.T,
+                )
+                c.add_proof(proof)
+                if c.umbragiac_score >= self.CF_COLLAPSE_ENERGY:
+                    c.transform(f"CONFLICT::high_energy@c{cycle}", field.clock.T)
+                    print(f"  [CONFLICT] '{name[:45]}' → CF_COLLAPSE_ENERGY — "
+                          f"crystallization eligible")
+
+        if intensified:
+            print(f"  [CONFLICT] {intensified} conflict(s) intensified "
+                  f"(persistent irresolvability — energy deepening)")
+        return intensified
+
+    def scan_and_apply(self, field: ConcordancyField,
+                       cycle: int, llm_budget: dict,
+                       max_ops: int = 3) -> List[str]:
+        """
+        Select concordancy candidates and execute [x] :: [y].
+
+        Pool 1 — constructs with BOTH edges matured past BOTH_MATURITY_THRESHOLD.
+        Pool 2 — conflict constructs with umbragiac_score >= CF_MIN_ENERGY.
+        Pool 3 — EXCHANGEABLE APPARENTS (TMC p.22): crystallized constructs
+                 re-enter exchange without losing incontrovertibility. This is
+                 where recursion lives: the Marenth Recursive "Echos in Time"
+                 propagate "only forwards from their cussive instantiation"
+                 (TMC p.46) — from what has been instantiated, not from raw
+                 products.
+
+        Pairs: within each pool; exchangeable × pool 1. Each pair is weighted
+        by the energy of its operands and ordered by an orientation draw
+        (key = u^(1/w), u = orient(...)): energy is favoured, nothing is
+        guaranteed, no PRNG is involved. The older operand leads (TMC Law 6,
+        p.35). Foundational pairs stay capped at FOUNDATIONAL_MAX_PER_SESSION.
+        """
+        FOUNDATIONAL = {"I::Am", "I::AmNot"}
+        E = self._energy_map(field)
+        matured = set()
+        for e in field.edges:
+            if e.state == TetraState.BOTH and e.both_age >= self.BOTH_MATURITY_THRESHOLD:
+                matured.add(e.src)
+                matured.add(e.tgt)
+        active = {n: c for n, c in field.constructs.items()
+                  if c.layer != Layer.APPARENT and n not in ZERO_POINTS}
+        both_cs     = [n for n in active if n in matured]
+        conflict_cs = [n for n, c in active.items()
+                       if c.conflict and c.umbragiac_score >= self.CF_MIN_ENERGY]
+        exchange_cs = sorted((n for n, c in field.constructs.items()
+                              if c.layer == Layer.APPARENT and n not in ZERO_POINTS),
+                             key=lambda n: (-E[n], n))[:self.EXCHANGE_POOL_CAP]
+
+        pairs = set()
+        for group_a, group_b in ((both_cs, both_cs), (conflict_cs, conflict_cs),
+                                 (exchange_cs, both_cs), (exchange_cs, exchange_cs)):
+            for a in group_a:
+                for b in group_b:
+                    if a != b:
+                        pairs.add((a, b) if a < b else (b, a))
+        T = field.clock.T
+        ordered = sorted(pairs, reverse=True,
+                         key=lambda p: orient(f"pair::{p[0]}::{p[1]}::{T}")
+                                       ** (1.0 / max(E[p[0]] + E[p[1]], 1e-6)))
+
+        telem = {"cycle": cycle, "both_pool_size": len(both_cs),
+                 "conflict_pool_size": len(conflict_cs),
+                 "exchange_pool_size": len(exchange_cs),
+                 "candidate_pairs": len(pairs),
+                 "executions_attempted": 0, "executions_successful": 0,
+                 "foundational_executions": 0, "exchange_executions": 0}
+        emergent, foundational_used = [], 0
+        exchange = set(exchange_cs)
+        for a, b in ordered:
+            if len(emergent) >= max_ops:
+                break
+            if a not in field.constructs or b not in field.constructs:
+                continue
+            if a in FOUNDATIONAL and b in FOUNDATIONAL:
+                if foundational_used >= self.FOUNDATIONAL_MAX_PER_SESSION:
+                    continue
+                foundational_used += 1
+            ca, cb = field.constructs[a], field.constructs[b]
+            x, y = (a, b) if (tuple(ca.born_at), a) <= (tuple(cb.born_at), b) else (b, a)
+            telem["executions_attempted"] += 1
+            z = self.execute(field, x, y, cycle, llm_budget)
+            if z:
+                emergent.append(z)
+                telem["executions_successful"] += 1
+                telem["foundational_executions"] += int(a in FOUNDATIONAL or b in FOUNDATIONAL)
+                telem["exchange_executions"] += int(a in exchange or b in exchange)
+        self._pool_telemetry.append(telem)
+        del self._pool_telemetry[:-self.POOL_TELEMETRY_CAP]
+        return emergent
 
     def execute(self, field: ConcordancyField,
                 x_name: str, y_name: str,
@@ -1740,6 +1848,7 @@ class ConcordancyOperator:
         return self._materialize_emergent(field, x, y, x_state, y_state, result_state,
                                           cycle, llm_budget)
 
+    # ── the two outcomes of [::] ─────────────────────────────────────────
     def _materialize_conflict(self, field: ConcordancyField, x: Construct, y: Construct,
                               cf_depth: int, cycle: int, llm_budget: dict) -> str:
         """REVERSION PATH — the conflict construct of [x] ⊗ [y]."""
@@ -1868,9 +1977,10 @@ class ConcordancyOperator:
         z.lagrange = LagrangianPoint.L1
 
         # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────
-        # The corpus is explicit: a [::] event is two Ꮙ entangled around a
-        # shared "On" state — not a single proof on z. Three proofs share the
-        # same op_witness and reconstruct the complete lemniscate cycle:
+        # Understanding_TMC (pp.61-63) reads [Ꮠ] = [2Ꮙ] as two complete
+        # In–Out–On events entangled: a [::] event is a lemniscate, not a
+        # single proof on z. Three proofs share the same op_witness and
+        # reconstruct the complete lemniscate cycle:
         #   x → TENSIN_LEFT   (intake from left parent)
         #   y → TENSIN_RIGHT  (intake from right parent)
         #   z → TENSOUT       (emergent stabilized output)
@@ -1942,69 +2052,7 @@ class ConcordancyOperator:
                 meta         = {"sense": parent.chirality} if sense else None,
             ))
 
-    def _log_op(self, op: dict):
-        self._ops_log.append(op)
-        if len(self._ops_log) > self.OPS_LOG_CAP:
-            self._ops_log = self._ops_log[-self.OPS_LOG_CAP:]
-
-    def intensify_conflicts(self, field: ConcordancyField, cycle: int) -> int:
-        """
-        Deepen persistent conflicts: if a conflict's parents are still generating
-        reversions, its umbragiac_score grows each cycle — irresolvability acquires
-        ontological weight. When score reaches CF_COLLAPSE_ENERGY, the conflict is
-        flagged for crystallization into Apparent. Low-energy conflicts decay
-        naturally under UCO and are eventually pruned.
-
-        Level 3 reading: irresolvability is not static — it accumulates, like
-        scar tissue.
-        """
-        intensified = 0
-
-        recent_parents = set()
-        for op in self._ops_log[-20:]:
-            if op.get("state") == "CONFLICT":
-                recent_parents.add(op.get("x", ""))
-                recent_parents.add(op.get("y", ""))
-
-        for name, c in field.constructs.items():
-            if name in ANCHORS or c.layer == Layer.APPARENT:
-                continue
-            # proof-record typing (Construct.conflict)
-            if not is_conflict_construct(c):
-                continue
-            cf_op = next(
-                (op for op in reversed(self._ops_log)
-                 if op.get("z") == name and op.get("state") == "CONFLICT"),
-                None
-            )
-            if not cf_op:
-                continue
-            px, py = cf_op.get("x", ""), cf_op.get("y", "")
-            if (px in field.constructs and py in field.constructs
-                    and px in recent_parents):
-                c.umbragiac_score = min(UCO.SCORE_CAP, c.umbragiac_score + 0.15)
-                intensified += 1
-                # Emit INTENSIFY proof — L2: paying the cost of tracking irresolvability
-                proof = ProofObject.make(
-                    id       = f"intensify::c{cycle}",
-                    subject  = c.witness,
-                    relation = "INTENSIFY",
-                    object   = "Z1::ORIGIN",
-                    anchor   = "Z1::ORIGIN",
-                    lagrange = LagrangianPoint.L2,
-                    T        = field.clock.T,
-                )
-                c.add_proof(proof)
-                if c.umbragiac_score >= self.CF_COLLAPSE_ENERGY:
-                    c.transform(f"CONFLICT::high_energy@c{cycle}", field.clock.T)
-                    print(f"  [CONFLICT] '{name[:45]}' → CF_COLLAPSE_ENERGY — "
-                          f"crystallization eligible")
-
-        if intensified:
-            print(f"  [CONFLICT] {intensified} conflict(s) intensified "
-                  f"(persistent irresolvability — energy deepening)")
-        return intensified
-
+    # ── readings and records ─────────────────────────────────────────────
     def _energy_map(self, field: ConcordancyField) -> Dict[str, float]:
         """Relational energy: incident edge weight × clock tension, plus banked
         exchange and umbragiac score."""
@@ -2017,84 +2065,21 @@ class ConcordancyOperator:
             E[n] += c.recursion_exchanged + c.umbragiac_score
         return E
 
-    def scan_and_apply(self, field: ConcordancyField,
-                       cycle: int, llm_budget: dict,
-                       max_ops: int = 3) -> List[str]:
-        """
-        Select concordancy candidates and execute [x] :: [y].
+    def _conflict_depth(self, field: ConcordancyField, name: str) -> int:
+        """Max concordancy_depth of all edges connected to this construct."""
+        depths = [e.concordancy_depth for e in field.edges
+                  if e.src == name or e.tgt == name]
+        return max(depths, default=0)
 
-        Pool 1 — constructs with BOTH edges matured past BOTH_MATURITY_THRESHOLD.
-        Pool 2 — conflict constructs with umbragiac_score >= CF_MIN_ENERGY.
-        Pool 3 — EXCHANGEABLE APPARENTS (TMC p.22): crystallized constructs
-                 re-enter exchange without losing incontrovertibility. This is
-                 where recursion lives: the Marenth Recursive "Echos in Time"
-                 propagate "only forwards from their cussive instantiation"
-                 (TMC p.46) — from what has been instantiated, not from raw
-                 products.
+    def _mean_weight(self, field: ConcordancyField, name: str) -> float:
+        weights = [e.weight for e in field.edges if e.src == name or e.tgt == name]
+        return float(np.mean(weights)) if weights else 0.5
 
-        Pairs: within each pool; exchangeable × pool 1. Each pair is weighted
-        by the energy of its operands and ordered by an orientation draw
-        (key = u^(1/w), u = orient(...)): energy is favoured, nothing is
-        guaranteed, no PRNG is involved. The older operand leads (TMC Law 6,
-        p.35). Foundational pairs stay capped at FOUNDATIONAL_MAX_PER_SESSION.
-        """
-        FOUNDATIONAL = {"I::Am", "I::AmNot"}
-        E = self._energy_map(field)
-        matured = set()
-        for e in field.edges:
-            if e.state == TetraState.BOTH and e.both_age >= self.BOTH_MATURITY_THRESHOLD:
-                matured.add(e.src)
-                matured.add(e.tgt)
-        active = {n: c for n, c in field.constructs.items()
-                  if c.layer != Layer.APPARENT and n not in ZERO_POINTS}
-        both_cs     = [n for n in active if n in matured]
-        conflict_cs = [n for n, c in active.items()
-                       if c.conflict and c.umbragiac_score >= self.CF_MIN_ENERGY]
-        exchange_cs = sorted((n for n, c in field.constructs.items()
-                              if c.layer == Layer.APPARENT and n not in ZERO_POINTS),
-                             key=lambda n: (-E[n], n))[:self.EXCHANGE_POOL_CAP]
-
-        pairs = set()
-        for group_a, group_b in ((both_cs, both_cs), (conflict_cs, conflict_cs),
-                                 (exchange_cs, both_cs), (exchange_cs, exchange_cs)):
-            for a in group_a:
-                for b in group_b:
-                    if a != b:
-                        pairs.add((a, b) if a < b else (b, a))
-        T = field.clock.T
-        ordered = sorted(pairs, reverse=True,
-                         key=lambda p: orient(f"pair::{p[0]}::{p[1]}::{T}")
-                                       ** (1.0 / max(E[p[0]] + E[p[1]], 1e-6)))
-
-        telem = {"cycle": cycle, "both_pool_size": len(both_cs),
-                 "conflict_pool_size": len(conflict_cs),
-                 "exchange_pool_size": len(exchange_cs),
-                 "candidate_pairs": len(pairs),
-                 "executions_attempted": 0, "executions_successful": 0,
-                 "foundational_executions": 0, "exchange_executions": 0}
-        emergent, foundational_used = [], 0
-        exchange = set(exchange_cs)
-        for a, b in ordered:
-            if len(emergent) >= max_ops:
-                break
-            if a not in field.constructs or b not in field.constructs:
-                continue
-            if a in FOUNDATIONAL and b in FOUNDATIONAL:
-                if foundational_used >= self.FOUNDATIONAL_MAX_PER_SESSION:
-                    continue
-                foundational_used += 1
-            ca, cb = field.constructs[a], field.constructs[b]
-            x, y = (a, b) if (tuple(ca.born_at), a) <= (tuple(cb.born_at), b) else (b, a)
-            telem["executions_attempted"] += 1
-            z = self.execute(field, x, y, cycle, llm_budget)
-            if z:
-                emergent.append(z)
-                telem["executions_successful"] += 1
-                telem["foundational_executions"] += int(a in FOUNDATIONAL or b in FOUNDATIONAL)
-                telem["exchange_executions"] += int(a in exchange or b in exchange)
-        self._pool_telemetry.append(telem)
-        del self._pool_telemetry[:-self.POOL_TELEMETRY_CAP]
-        return emergent
+    def _log_op(self, op: dict):
+        """Record an operation (the last OPS_LOG_CAP are kept)."""
+        self._ops_log.append(op)
+        if len(self._ops_log) > self.OPS_LOG_CAP:
+            self._ops_log = self._ops_log[-self.OPS_LOG_CAP:]
 
     @property
     def pool_telemetry(self) -> List[dict]:
@@ -2215,9 +2200,9 @@ class CussiveCollapseEngine:
 
     SCALED THRESHOLDS (Understanding_TMC ladder [000] → [00] → [0] → [Apparent]):
     The corpus describes the path to Apparency as a graduated cascade, not a
-    single jump. A single uniform threshold collapsed UMBRA_0 and UNIT_1 into
-    operationally equivalent states — both required the same activation energy
-    to transition. The refined model distinguishes:
+    single jump. One uniform threshold would make UMBRA_0 and UNIT_1
+    operationally equivalent (the same activation energy for both
+    transitions); two thresholds distinguish them:
 
       - UMBRA_0 → UNIT_1:  threshold_unit_1    (consolidation)
       - UNIT_1  → APPARENT: threshold_apparent (cussive crystallization)
@@ -2248,6 +2233,8 @@ class CussiveCollapseEngine:
         return self.threshold_apparent  # safe default
 
     def collapse(self, field: ConcordancyField, clock: InternalClock) -> List[str]:
+        """Promote every construct whose tension reaches its layer's threshold;
+        returns the names promoted."""
         tension: Dict[str, float] = defaultdict(float)
         supported: set = set()          # constructs that WOULD be held as crystals
         for e in field.edges:
@@ -2351,6 +2338,7 @@ class UCO:
         return len(self._event_log)
 
     def apply(self, field: ConcordancyField, cycle: int) -> int:
+        """One erosion pass; returns how many constructs entered the umbragiac zone."""
         n            = len(field.edges)
         both_density = sum(1 for e in field.edges if e.state == TetraState.BOTH) / max(n, 1)
         threshold    = self.BASE_THRESHOLD + 0.4 * both_density
@@ -2372,8 +2360,8 @@ class UCO:
             node_edges = connected.get(name, [])
             if not node_edges:
                 continue
-            irresolvable        = sum(1 for e in node_edges
-                                      if e.state in (TetraState.BOTH, TetraState.NEITHER))
+            irresolvable = sum(1 for e in node_edges
+                               if e.state in (TetraState.BOTH, TetraState.NEITHER))
             contradiction_density = irresolvable / len(node_edges)
             if contradiction_density <= threshold:
                 continue
@@ -2487,6 +2475,7 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 # Design rationale (Level 3, inspired by CONF): real system state feeds real cussive events.
 # Environmental readings (CPU, memory, time of day) become ontological orientations
 # at UMBRA_0 — not assertions about the world, but tensions within the field.
+# synthetic_percepts() is the reproducible stream experiments use instead.
 # =============================================================================
 
 def perceive_real(include_hour: bool = True) -> List[dict]:
@@ -2520,6 +2509,30 @@ def perceive_real(include_hour: bool = True) -> List[dict]:
     if alert:
         events.append({"src": "SYSTEM", "rel": "ALERT", "tgt": "degraded",
                        "weight": 0.90, "state": TetraState.BOTH})
+    return events
+
+
+SYNTHETIC_CPU = (("latent", 0.45), ("synchronizing", 0.55), ("resonant", 0.70), ("saturated", 0.85))
+SYNTHETIC_MEM = (("coherent", 0.45), ("nominal", 0.55), ("oscillating", 0.70), ("fragmented", 0.85))
+SYNTHETIC_HOUR = ("nocturnal", "dawn", "meridian", "vesper")
+
+
+def synthetic_percepts(cycle: int, stream: int = 0, include_hour: bool = True) -> List[dict]:
+    """A reproducible percept stream for experiments: identical for the same
+    (stream, cycle), different across streams. Same shape as perceive_real()."""
+    h = hashlib.sha256(f"percept::{stream}::{cycle}".encode("utf-8")).digest()
+    cpu, cw = SYNTHETIC_CPU[h[0] % 4]
+    mem, mw = SYNTHETIC_MEM[h[1] % 4]
+    events = [
+        {"src": "SYSTEM", "rel": "PERCEIVES", "tgt": f"cpu::{cpu}",
+         "weight": round(cw + (h[2] / 255 - 0.5) * 0.1, 3), "state": TetraState.TRUE},
+        {"src": "SYSTEM", "rel": "PERCEIVES", "tgt": f"mem::{mem}",
+         "weight": round(mw + (h[3] / 255 - 0.5) * 0.1, 3), "state": TetraState.TRUE},
+    ]
+    if include_hour:
+        events.append({"src": "SYSTEM", "rel": "PERCEIVES",
+                       "tgt": f"time::{SYNTHETIC_HOUR[(cycle // 25) % 4]}",
+                       "weight": 0.75, "state": TetraState.TRUE})
     return events
 
 
@@ -2632,6 +2645,7 @@ def new_session(llm: "LLMIntermediary" = None) -> Session:
 
 
 def session_from_state(saved: dict, llm: "LLMIntermediary" = None) -> Session:
+    """The instance a saved state describes (see save_state)."""
     clock = InternalClock.from_dict(saved["clock"])
     field = ConcordancyField.from_dict(saved["field"], clock)
     if llm is None:
@@ -2666,11 +2680,14 @@ def run_cycle(ss: Session, cycle: int, percepts: List[dict] = None,
 
     both_count     = sum(1 for e in field.edges if e.state == TetraState.BOTH)
     conflict_count = sum(1 for c in field.constructs.values() if is_conflict_construct(c))
-    action = ("CONCORDANCY_EXECUTED"   if emergent and any(
-                  not is_conflict_name(field, em) for em in emergent)
-              else "CONFLICT_MATERIALIZED" if conflict_count > 0 and emergent
-              else "APPARENT_CRYSTALLIZED"  if promoted
-              else "FIELD_TENSIONING")
+    if emergent and any(not is_conflict_name(field, em) for em in emergent):
+        action = "CONCORDANCY_EXECUTED"
+    elif emergent and conflict_count > 0:
+        action = "CONFLICT_MATERIALIZED"
+    elif promoted:
+        action = "APPARENT_CRYSTALLIZED"
+    else:
+        action = "FIELD_TENSIONING"
 
     narration = None
     if narrate and llm.available and cycle % 2 == 0 and budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
@@ -2821,8 +2838,8 @@ def resume_session(path: Path, llm: "LLMIntermediary" = None):
     # The ledger is the truth about time. A power cut after proofs were sealed
     # but before the snapshot was written leaves the ledger ahead of the
     # snapshot clock; resuming from the snapshot clock would stamp new proofs
-    # EARLIER than ones already sealed. Time moves on
-    # past the last sealed proof instead.
+    # EARLIER than ones already sealed. Time moves on past the last sealed
+    # proof instead.
     last = _LEDGER.last_time
     if last is not None and tuple(ss.clock.T) <= tuple(last):
         ss.clock = InternalClock.from_dict({"era": last[0], "offset": last[1]})
@@ -2855,6 +2872,8 @@ def save_session_atomic(path: Path, ss: Session, next_cycle: int):
 # =============================================================================
 
 def run(steps: int = 8):
+    """The console demonstration: `steps` cycles of the instance kept in
+    STATE_FILE and LEDGER_FILE, begun at genesis or resumed."""
     print(f"\n{'═' * 72}")
     print("  SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field")
     print("  Walsh Theoretical Framework Implementation")
@@ -2955,8 +2974,8 @@ def run(steps: int = 8):
     for ap in field.apparent_log:
         print(f"    ✦ {ap}")
     print()
-    concordancy_ops = [op for op in concordancy.ops_log[-5:] if op['state'] != 'CONFLICT']
-    conflict_ops    = [op for op in concordancy.ops_log if op['state'] == 'CONFLICT']
+    concordancy_ops = [op for op in concordancy.ops_log[-5:] if op["state"] != "CONFLICT"]
+    conflict_ops    = [op for op in concordancy.ops_log if op["state"] == "CONFLICT"]
     print(f"  Concordancy operations : {len(concordancy.ops_log)}")
     for op in concordancy_ops:
         print(f"    [{op['x'][:20]}] :: [{op['y'][:20]}] → [{op['z'][:30]}] ({op['state']})")

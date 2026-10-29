@@ -168,8 +168,9 @@ class ArmIntermediary(S.LLMIntermediary):
         if self.active:                             # otherwise it stays unavailable
             super()._init()
 
-    # The control's names, as ConcordancyOperator.execute writes them when no model is
-    # available. If the framework changes them, the "none" check in test_phase1.py fails.
+    # The control's names, as the framework's ConcordancyOperator writes them when no model
+    # is available (_materialize_emergent, _materialize_conflict). If the framework changes
+    # them, the "none" check in test_phase1.py fails.
     def propose_emergent(self, x, y, x_state, y_state):
         if self.channels == "all":
             return super().propose_emergent(x, y, x_state, y_state)
