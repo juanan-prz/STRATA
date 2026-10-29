@@ -667,12 +667,6 @@ function edgeMark(state) {
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
   if (style.alpha) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
-  if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
-    stroke.setAttribute('stroke-opacity', '0.4');
-    const exchanged = stroke.cloneNode();
-    exchanged.setAttribute('x1', '5'); exchanged.setAttribute('x2', '13'); exchanged.removeAttribute('stroke-opacity');
-    svg.append(exchanged);
-  }
   return svg;
 }
 
@@ -975,23 +969,13 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
   ctx.fillStyle = color; ctx.globalAlpha = alpha;
   ctx.fill();
 }
-// An edge as the canvas draws it: its state's colour and line, and from ARROW_ZOOM on an
-// arrowhead at its target (src → tgt). A BOTH channel is faint, with what it has exchanged
-// brighter from its middle outwards: whole when it closes at the quantum.
+// An edge as the canvas draws it: its state's colour and line, one tone from end to end,
+// and from ARROW_ZOOM on an arrowhead at its target (src → tgt)
 function drawRelation(a, b, e, alpha, extra, arrowGap) {
   const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
   const color = COLOR.state[e.state] || COLOR.dim;
   alpha *= fade;
-  if (e.state === 'BOTH' && e.both_age != null) {
-    const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
-    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
-    line(a, b, color, alpha * 0.4, width + extra);
-    if (share > 0) {
-      line({ x: mx - hx, y: my - hy }, { x: mx + hx, y: my + hy }, color, Math.min(1, alpha * 1.15), width + extra);
-    }
-  } else {
-    line(a, b, color, alpha, width + extra, dash);
-  }
+  line(a, b, color, alpha, width + extra, dash);
   if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
 }
 

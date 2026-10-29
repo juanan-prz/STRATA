@@ -156,7 +156,6 @@ The live view and the inspector draw the field alike, and the legend keys all of
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
 - **Shapes.** A construct is a dot in the colour of its layer; an anchor (I::Am, I::AmNot, SYSTEM), a diamond; a crystal the field formed, an open hexagon, so that the active strata stand out; a Zero Point, a star; a conflict, a ringed dot. One ring is drawn where a construct rises to UNIT_1, two where it crystallizes.
 - **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and thicker, NEITHER grey and fainter, so that a thin blue line stands out beside it. An edge into a crystal, BOTH aside, is drawn with a faint halo, as crystal support: it ages on breaths, not on cycles.
-- **A BOTH channel** is drawn faint, with what it has exchanged (weight × age) brighter from its middle outwards: whole when it closes at the exchange quantum.
 - **Direction.** From zoom ×2 each edge shows its direction.
 - **Existence modes** are written with their signs, [Ω] and [Ꮠ].
 - **Quiet anchors** (A) makes the anchors' relations, often most of the edges, faint, so that the rest of the structure shows.
@@ -197,7 +196,7 @@ What the live view uses, also described at the top of `Sirisys_Server.py`:
 
 **Opening.** *Open state.json…* (or O), or drop the files anywhere on the page. A run folder's `state.json` is the usual file; the framework's own `sirisys_v13_state.json` (§8) opens too.
 
-**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first name that contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations. Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
+**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first name that contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how much it has exchanged of the quantum it closes at (12). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
 
 **Several files of one instance** make a timeline: a slider, ◀ ▶ (or ← →) and Play, about one state per second. Stepping forward, a ring marks each construct the previous state did not hold, and *Since the previous file* gives the cycles, born, concluded, crystallized and the population, from the two files' own totals. Files of different runs are shown, with a warning and no counts between them.
 

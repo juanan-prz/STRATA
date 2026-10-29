@@ -156,7 +156,6 @@ La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge t
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
 - **Formas.** Un constructo es un punto del color de su capa; un ancla (I::Am, I::AmNot, SYSTEM), un rombo; un cristal que formó el campo, un hexágono abierto, para que destaquen los estratos activos; un Zero Point, una estrella; un conflicto, un punto con anillo. Se dibuja un anillo donde un constructo sube a UNIT_1 y dos donde cristaliza.
 - **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y más gruesa, NEITHER gris y más tenue, para que una línea azul fina destaque a su lado. Una arista hacia un cristal, salvo BOTH, se dibuja con un halo tenue, como soporte del cristal: envejece por respiraciones, no por ciclos.
-- **Un canal BOTH** se dibuja tenue, con lo que ha intercambiado (peso × edad) más brillante desde su centro hacia fuera: entero cuando se cierra al alcanzar el cuanto de intercambio.
 - **Dirección.** Desde el zoom ×2, cada arista muestra su dirección.
 - **Los modos de existencia** se escriben con su signo, [Ω] y [Ꮠ].
 - **Quiet anchors** (A) atenúa las relaciones de las anclas, a menudo la mayoría de las aristas, para que se vea el resto de la estructura.
@@ -197,7 +196,7 @@ Lo que usa la vista en vivo, descrito también al principio de `Sirisys_Server.p
 
 **Abrir.** *Open state.json…* (u O), o suelta los archivos en cualquier punto de la página. Lo habitual es el `state.json` de una carpeta de ejecución; también se abre el `sirisys_v13_state.json` del propio framework (§8).
 
-**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer nombre que contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones. Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
+**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer nombre que contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones; una relación BOTH dice además cuánto ha intercambiado del cuanto al que se cierra (12). Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
 
 **Varios archivos de una misma instancia** forman una línea de tiempo: un deslizador, ◀ ▶ (o ← →) y Play, a un estado por segundo aproximadamente. Al avanzar, un anillo marca cada constructo que el estado anterior no tenía, y *Since the previous file* da los ciclos, nacidos, concluidos, cristalizados y la población, a partir de los totales de los dos archivos. Los archivos de ejecuciones distintas se muestran, con un aviso y sin cuentas entre ellos.
 

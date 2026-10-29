@@ -477,7 +477,7 @@ live_tokens, inspector_tokens = tokens(views["live"]), tokens(inspector)
 shared = set(live_tokens) & set(inspector_tokens)
 differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
 # Written once in each file, alike: the strata, how an edge state and a mode are drawn and written
-SHARED = ("RINGS", "EDGE_STYLE", "EXCHANGE_QUANTUM", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
+SHARED = ("RINGS", "EDGE_STYLE", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
           "LAGRANGE", "lagrangeText", "ARROW_ZOOM", "QUIET")
 unlike = [name for name in SHARED if not declared(views["live"], name) or declared(views["live"], name) != declared(inspector, name)]
 if declared(views["live"], "HISTORY_KEPT") != str(server.HISTORY_KEPT):     # the live view merges as the server does
