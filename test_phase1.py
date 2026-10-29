@@ -356,9 +356,11 @@ def tokens(html):
 views = {name: (HERE / f).read_text(encoding="utf-8") for name, f in
          (("live", "Sirisys_Live_Visualizer.html"), ("inspector", "Sirisys_Static_Visualizer.html"))}
 framework_source = Path(S.__file__).read_text(encoding="utf-8")
+modes_source = inspect.getsource(S.ConcordancyField.compute_existence_mode)
 framework_names = {
     "layers": [layer.name for layer in sorted(S.Layer, key=lambda layer: layer.value)],
-    "states": {s.value for s in S.TetraState},
+    "states": [s.value for s in S.TetraState],
+    "modes": set(re.findall(r'return "([A-Z]+)"', modes_source)),
     "zero points": set(S.ZERO_POINTS),
     "anchors": set(S.ANCHORS),
     "Lagrangian points": {p.value for p in S.LagrangianPoint},
@@ -369,7 +371,8 @@ for view, html in views.items():
     anchors = set(quoted(declared(html, "ANCHORS"))) | (zero_points if "...ZERO_POINTS" in declared(html, "ANCHORS") else set())
     carried = {
         "layers": quoted(declared(html, "LAYERS")),
-        "states": set(quoted(declared(html, "STATES"))),
+        "states": quoted(declared(html, "STATES")),
+        "modes": set(quoted(declared(html, "MODES"))),
         "zero points": zero_points,
         "anchors": anchors,
         "Lagrangian points": set(re.findall(r"\b(L\d):", declared(html, "LAGRANGE"))),
@@ -377,11 +380,10 @@ for view, html in views.items():
     drift += [f"{view}: {what}" for what in framework_names if carried[what] != framework_names[what]]
     if declared(html, "APPARENT") != str(S.Layer.APPARENT.value):
         drift.append(f"{view}: APPARENT")
-check("both visualizers carry the framework's names: layers in order, edge states, Zero Points, anchors, "
-      "Lagrangian points", not drift, ", ".join(drift) or "live and inspector agree with the framework")
+check("both visualizers carry the framework's names: layers and edge states in order, existence modes, "
+      "Zero Points, anchors, Lagrangian points", not drift, ", ".join(drift) or "live and inspector agree with the framework")
 
 inspector = views["inspector"]
-modes_source = inspect.getsource(S.ConcordancyField.compute_existence_mode)
 relations_of = lambda kind: set(re.findall(r'"([A-Z]+)"', re.search(rf"{kind}_relations\s*=\s*\{{([^}}]*)\}}", modes_source).group(1)))
 LEDGER_ONLY = {"TERMINATE", "SHIFT"}                # sealed in the ledger, never attached to a construct
 constants = {
@@ -390,25 +392,23 @@ constants = {
     "VC_UNSTABLE": float(re.search(r"Vc_THRESHOLD\s*=\s*([\d.]+)", inspect.getsource(S.Sombunal.global_instability)).group(1)),
 }
 drift = [name for name, value in constants.items() if float(declared(inspector, name) or "nan") != value]
-if set(quoted(declared(inspector, "MODES"))) != set(re.findall(r'return "([A-Z]+)"', modes_source)):
-    drift.append("MODES")
 for kind in ("omega", "lemniscate"):
     if set(quoted(declared(inspector, f"{kind.upper()}_RELATIONS"))) != relations_of(kind):
         drift.append(f"{kind.upper()}_RELATIONS")
 if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY:
     drift.append("PROOF_RELATIONS")
-check("the inspector's constants are the framework's: the clock, the Vc threshold, the existence modes "
-      "and their relations, the relations a construct's proofs can carry",
-      not drift, ", ".join(drift) or f"{len(constants) + 4} constants agree")
+check("the inspector's constants are the framework's: the clock, the Vc threshold, the relations of each "
+      "existence mode, the relations a construct's proofs can carry",
+      not drift, ", ".join(drift) or f"{len(constants) + 3} constants agree")
 
 live_tokens, inspector_tokens = tokens(views["live"]), tokens(inspector)
 shared = set(live_tokens) & set(inspector_tokens)
 differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
-rings = {view: declared(html, "RINGS") for view, html in views.items()}
-rings_alike = bool(rings["live"]) and rings["live"] == rings["inspector"]
-check("the two views agree with each other: the strata rings, and every colour token both define",
-      rings_alike and len(shared) > 20 and not differ,
-      f"rings {'alike' if rings_alike else 'differ'}; "
-      + (f"tokens differ: {', '.join(differ)}" if differ else f"{len(shared)} shared tokens alike"))
+# Written once in each file, alike: the strata, how an edge state and a mode are drawn and written
+SHARED = ("RINGS", "EDGE_STYLE", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText")
+unlike = [name for name in SHARED if not declared(views["live"], name) or declared(views["live"], name) != declared(inspector, name)]
+check("the two views agree with each other: the strata rings, how each edge state and mode is drawn and "
+      "written, and every colour token both define", not unlike and len(shared) > 20 and not differ,
+      ", ".join(unlike + differ) or f"{len(SHARED)} declarations and {len(shared)} colour tokens alike")
 
 check.finish()

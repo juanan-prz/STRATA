@@ -45,26 +45,20 @@
     --accent-strong: rgba(74, 240, 196, 0.28);
     --warn: #f0a832;
 
-    /* Tetralemmic states */
-    --col-BOTH: #f0a832;
-    --col-TRUE: #4af0c4;
-    --col-FALSE: #ff5571;
-    --col-NEITHER: #5c6475;
+    /* Ontological layers: one warm hue from shadow to light, in the order of the layers
+       (lightness rises with the layer); no other colour on the page is of this hue */
+    --layer-NULL_00: #585243;
+    --layer-UMBRA_0: #928660;
+    --layer-UNIT_1: #d7c56e;
+    --layer-APPARENT: #ede9d2;
 
-    /* Ontological layers */
-    --layer-NULL_00: #4a4f5a;
-    --layer-UMBRA_0: #6a7c9a;
-    --layer-UNIT_1: #4af0c4;
-    --layer-APPARENT: #f0a832;
-
-    /* Proof relations (the proof overlay, the proofs in the inspector) */
-    --rel-CONCORDANCE: #4af0c4;
-    --rel-COLLAPSE: #a070f0;
-    --rel-PERCEIVE: #50c0f0;
-    --rel-CONFLICT: #f0a832;
-    --rel-INTENSIFY: #f0a832;
-    --rel-ERODE: #f05090;
-    --rel-REINCARNATE: #c9bfff;
+    /* Tetralemmic states, on the edges: three hues apart from the layers and from the
+       interface's own, told apart with any colour vision; NEITHER, the most of them, is
+       neutral. On the canvas BOTH is also thicker and FALSE dashed. The accent is never data */
+    --col-TRUE: #4475f6;
+    --col-FALSE: #cb86db;
+    --col-BOTH: #ea5202;
+    --col-NEITHER: #5d646f;
 
     /* Spacing, type, radii, shadows */
     --sp-1: 4px;
@@ -226,11 +220,13 @@
     content: '';
     position: absolute; inset: 0; z-index: -1;
     width: var(--pct, 0%);
-    background: var(--bar-color, var(--accent));
+    background: var(--bar-color, var(--text-dim));
     opacity: 0.10;
     border-radius: var(--r-sm);
   }
   .swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .sign { width: 10px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: 1; color: var(--text-bright); }
+  .edge-mark { flex-shrink: 0; }
   .breakdown-row .label,
   .filter-row .label { flex: 1; color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--ls-wide); }
   .breakdown-row .count { color: var(--text-bright); }
@@ -313,9 +309,23 @@
   }
   .legend .item { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
   .legend svg { flex-shrink: 0; }
-  .legend.proofs { top: 58px; bottom: auto; flex-direction: column; align-items: flex-start; gap: 4px; }
+  .legend .break { flex-basis: 100%; height: 0; }
+  .legend .items { display: contents; }
+  .legend.proofs { top: 58px; bottom: auto; flex-direction: column; align-items: stretch; gap: 2px; padding: 7px 8px; }
   .legend[hidden] { display: none; }
-  .legend .line { width: 16px; height: 0; border-top: 2px solid; }
+  .legend.proofs .hint { padding: 0 6px 4px; color: var(--text-dim); }
+  .rel-choice {                                 /* one relation of the proof overlay: a click rings its carriers */
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: 3px 6px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide); text-align: left;
+    color: var(--text-muted); background: none;
+    border: 1px solid transparent; border-radius: var(--r-sm);
+    cursor: pointer;
+  }
+  .rel-choice:hover { color: var(--text-bright); }
+  .rel-choice[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .rel-choice .name { flex: 1; }
+  .rel-choice .count { color: var(--text-bright); }
   @media (max-width: 1100px) { .legend:not(.proofs) { display: none; } }
 
   .empty-state {                                /* until a state is loaded */
@@ -374,9 +384,9 @@
   .proof {
     margin-bottom: 4px; padding: var(--sp-1) var(--sp-2);
     background: var(--bg-2);
-    border-left: 2px solid var(--rel, var(--border-hi)); border-radius: 0 var(--r-sm) var(--r-sm) 0;
+    border-left: 2px solid var(--border-hi); border-radius: 0 var(--r-sm) var(--r-sm) 0;
   }
-  .proof .rel { color: var(--rel, var(--text)); font-weight: 600; }
+  .proof .rel { color: var(--text-bright); font-weight: 600; }
   .proof .meta { color: var(--text-dim); font-size: 10px; overflow-wrap: anywhere; }
   .genesis {
     padding: var(--sp-2) var(--sp-3);
@@ -386,8 +396,7 @@
   }
   .genesis .op { padding-left: var(--sp-3); font-weight: 700; }
   .genesis .side { margin-right: var(--sp-2); color: var(--text-dim); }
-  .genesis .op.concordance { color: var(--accent); }
-  .genesis .op.conflict { color: var(--warn); }
+  .genesis .op { color: var(--accent); }                /* as its L and R are drawn on the canvas */
   .link {                                       /* a construct named in the inspector: a click selects it */
     padding: 0; border: 0; background: none;
     font-family: var(--font-mono); font-size: inherit; text-align: left;
@@ -479,7 +488,7 @@
       <button class="btn" id="btn-strata" aria-pressed="false" title="Placed by stratum: Zero Points at the centre, then the anchors, then UMBRA_0, UNIT_1 and APPARENT outwards (V)">strata</button>
     </div>
     <div class="ctrl-group floating">
-      <button class="btn" id="btn-proofs" aria-pressed="false" title="A ring on each construct, in the colour of the relation its saved proofs repeat most (P)">proofs</button>
+      <button class="btn" id="btn-proofs" aria-pressed="false" title="Rings the constructs whose saved proofs carry the relation chosen in its list (P)">proofs</button>
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
     <div class="ctrl-group floating">
@@ -512,8 +521,8 @@
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
       <span>anchor</span>
     </div>
-    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="11,7 9,11 5,11 3,7 5,3 9,3" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out">
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.35; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
       <span>apparent</span>
     </div>
     <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
@@ -524,8 +533,10 @@
       <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
       <span>conflict</span>
     </div>
+    <div class="break"></div>
+    <div id="edge-legend" class="items"></div>
     <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-TRUE)" stroke-width="1"/></svg>
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1"/></svg>
       <span>crystal support</span>
     </div>
   </div>
@@ -548,7 +559,11 @@
 
 const LAYERS = ['NULL_00', 'UMBRA_0', 'UNIT_1', 'APPARENT'];        // index = a construct's layer value
 const APPARENT = 3;
-const STATES = ['BOTH', 'TRUE', 'FALSE', 'NEITHER'];
+const STATES = ['TRUE', 'FALSE', 'BOTH', 'NEITHER'];             // the tetralemma, in the framework's order
+const STATE_MEANING = {                                               // as the framework's TetraState says
+  TRUE: 'orientation confirmed', FALSE: 'orientation negated',
+  BOTH: 'sustained contradiction: generative tension', NEITHER: 'pre-ontological suspension, approaching [00]',
+};
 const MODES = ['OMEGA', 'LEMNISCATE', 'NEUTRAL'];
 // The Zero Points: the Universal apparents (TMC p.22), Z1::ORIGIN in NULL_00
 const ZERO_POINTS = new Set(['Z0::IDENTITY', 'Z1::ORIGIN', 'Z2::CONCORDANCY', 'Z3::RECURSION', 'Z4::APPARENCY']);
@@ -563,11 +578,18 @@ const LAGRANGE = {
 // TMC pp.26, 75: the relations that densify toward apparency, and those that oscillate
 const OMEGA_RELATIONS = new Set(['CONCORDANCE', 'COLLAPSE', 'PERCEIVE']);
 const LEMNISCATE_RELATIONS = new Set(['CONFLICT', 'INTENSIFY', 'ERODE']);
+// A construct's existence mode, written with its sign, never with a colour
+const MODE_SIGN = { OMEGA: 'Ω', LEMNISCATE: 'Ꮠ', NEUTRAL: '·' };
 const MODE_MEANING = {
   OMEGA: 'densifying toward apparency', LEMNISCATE: 'oscillating in unresolved recursion',
   NEUTRAL: 'balanced, or no proofs yet',
 };
+const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
+// The relations a construct's proofs can carry, each with the sign of the mode it counts toward
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
+const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
 
 // ═══ The framework's constants, and settings ════════════════════════════════
 
@@ -591,10 +613,8 @@ const css = name => getComputedStyle(document.documentElement).getPropertyValue(
 const COLOR = {
   layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
-  mode: { OMEGA: css('--col-TRUE'), LEMNISCATE: css('--col-BOTH'), NEUTRAL: css('--col-NEITHER') },
-  relation: Object.fromEntries(PROOF_RELATIONS.map(r => [r, css('--rel-' + r)])),
-  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), muted: css('--text-muted'),
-  bright: css('--text-bright'),
+  accent: css('--accent'), dim: css('--text-dim'), muted: css('--text-muted'), bright: css('--text-bright'),
+  ground: css('--bg-0'),                          // the field's background
 };
 const FONT_MONO = css('--font-mono');
 
@@ -610,6 +630,19 @@ const atT = T => T ? `(${T[0]},${T[1]})` : '—';
 const ticks = n => n == null ? '?' : `${n} tick${n === 1 ? '' : 's'}`;
 // Parts of a row, a space apart: invisible in a flex row, but read aloud and copied as words
 const spaced = parts => parts.flatMap((part, i) => i ? [' ', part] : [part]);
+// An edge state as the canvas draws it, for the legend and the filters
+function edgeMark(state) {
+  const NS = 'http://www.w3.org/2000/svg', style = EDGE_STYLE[state];
+  const svg = document.createElementNS(NS, 'svg'), stroke = document.createElementNS(NS, 'line');
+  svg.setAttribute('class', 'edge-mark');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '8'); svg.setAttribute('viewBox', '0 0 18 8');
+  for (const [k, v] of Object.entries({ x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 })) {
+    stroke.setAttribute(k, v);
+  }
+  if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
+  svg.append(stroke);
+  return svg;
+}
 
 
 // ═══ What the framework derives at run time, computed as it computes it ═════
@@ -724,6 +757,7 @@ function deriveView(state, file) {
     state, file, constructs: new Map(), edges: field.edges, edgesOf: new Map(),
     mode: new Map(), vc: new Map(), dominant: new Map(), questions: new Set(), percepts: new Set(),
     ops: new Map(),                                 // product name → the [::] that made it
+    carriers: new Map(PROOF_RELATIONS.map(r => [r, new Set()])),   // relation → whose saved proofs carry it
   };
   for (const c of field.constructs) { view.constructs.set(c.name, c); view.edgesOf.set(c.name, []); }
   for (const e of field.edges) {
@@ -738,6 +772,7 @@ function deriveView(state, file) {
     view.mode.set(name, existenceMode(name, c));
     view.vc.set(name, anchoringWeight(name, c, clock));
     view.dominant.set(name, dominantState(name, c, view.edgesOf.get(name)));
+    for (const p of c.proof_chain || []) view.carriers.get(p.relation)?.add(name);
   }
   view.instability = globalInstability(view);
   view.violations = invariantViolations(field);
@@ -837,7 +872,8 @@ let DPR = window.devicePixelRatio || 1;
 let view = null;                  // the state on screen, derived
 let previousNames = null;         // the constructs of the previous state of a timeline
 let selected = null;              // the construct in the inspector
-let proofOverlay = false;
+let proofOverlay = false;        // the constructs whose saved proofs carry one relation, ringed
+let overlayRelation = PROOF_RELATIONS[0];
 
 function resizeCanvas() {
   DPR = window.devicePixelRatio || 1;
@@ -903,15 +939,6 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
   ctx.fillStyle = color; ctx.globalAlpha = alpha;
   ctx.fill();
 }
-// The relation a construct's saved proofs repeat most; on a tie, the most recent
-function dominantRelation(c) {
-  const count = new Map();
-  for (const p of c.proof_chain || []) count.set(p.relation, (count.get(p.relation) || 0) + 1);
-  let best = null, most = 0;
-  for (const p of c.proof_chain || []) if (count.get(p.relation) >= most) { best = p.relation; most = count.get(p.relation); }
-  return best;
-}
-
 function render() {
   const W = canvas.width / DPR, H = canvas.height / DPR;
   ctx.clearRect(0, 0, W, H);
@@ -922,6 +949,7 @@ function render() {
   const px = 1 / viewK;                             // one screen pixel, in field units
   const focus = selected && view.constructs.has(selected) ? selected : null;
   const near = focus ? new Set([focus, ...view.edgesOf.get(focus).flatMap(e => [e.src, e.tgt])]) : null;
+  const ringed = proofOverlay ? view.carriers.get(overlayRelation) : null;
 
   if (layout === 'strata') drawStrata(px);
 
@@ -929,12 +957,12 @@ function render() {
     const a = positions.get(e.src), b = positions.get(e.tgt);
     const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
     if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state] || !onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
-    const width = e.state === 'BOTH' ? 2 : 1, dim = near && !emphasis ? 0.25 : 1;
+    const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, dim = near && !emphasis ? 0.25 : ringed ? 0.45 : 1;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
     if (cb.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12 * dim, width + 2);
     const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
-    line(a, b, COLOR.state[e.state] || COLOR.dim, alpha, emphasis ? width + 0.5 : width);
+    line(a, b, COLOR.state[e.state] || COLOR.dim, alpha, emphasis ? width + 0.5 : width, dash);
     if (emphasis) arrowhead(a, b, { gap: sizeOf(e.tgt, cb) + 2, len: 5 }, COLOR.state[e.state], 0.95);
   };
   for (const e of view.edges) if (!focus || (e.src !== focus && e.tgt !== focus)) drawEdge(e, false);
@@ -944,16 +972,17 @@ function render() {
     const p = positions.get(name);
     if (!p || !onShow(name, c)) continue;
     const color = COLOR.layer[LAYERS[c.layer]] || '#888';
-    const shape = shapeOf(name, c.layer), size = sizeOf(name, c), dim = near && !near.has(name) ? 0.3 : 1;
-    if (c.layer === APPARENT) ring(p.x, p.y, size + 2, color, 0.4 * dim, 1.5);      // a crystal's halo
-    ctx.globalAlpha = dim;
+    const shape = shapeOf(name, c.layer), size = sizeOf(name, c);
+    const dim = (near && !near.has(name)) || (ringed && !ringed.has(name)) ? 0.3 : 1;
     ctx.beginPath();
     traceShape(shape, p.x, p.y, size);
-    ctx.fillStyle = color;
-    ctx.fill();
-    if (shape !== 'circle') {
-      ctx.strokeStyle = 'rgba(238,241,246,0.6)'; ctx.lineWidth = 1;
-      ctx.stroke();
+    if (shape === 'hexagon') {                          // a crystal, drawn open: the active strata stand out
+      ctx.globalAlpha = dim; ctx.fillStyle = COLOR.ground; ctx.fill();       // over the edges behind it
+      ctx.globalAlpha = 0.35 * dim; ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = 0.95 * dim; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+    } else {
+      ctx.globalAlpha = dim; ctx.fillStyle = color; ctx.fill();
+      if (shape !== 'circle') { ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.6 * dim; ctx.lineWidth = 1; ctx.stroke(); }
     }
     if (c.conflict) {                                 // ⊗: a conflict, a structure of its own
       const k = size + 2, d = k * Math.SQRT1_2;
@@ -964,10 +993,7 @@ function render() {
       ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7 * dim; ctx.lineWidth = 0.9;
       ctx.stroke();
     }
-    if (proofOverlay && !ZERO_POINTS.has(name)) {
-      const relation = dominantRelation(c);
-      if (relation) ring(p.x, p.y, size + 5, COLOR.relation[relation] || COLOR.dim, 0.75 * dim, 1.5 * px);
-    }
+    if (ringed && ringed.has(name)) ring(p.x, p.y, size + 5 * px, COLOR.bright, 0.85 * dim, 1.5 * px);
     if (previousNames && !previousNames.has(name)) ring(p.x, p.y, size + 4, COLOR.accent, 0.7, 1.2 * px);
   }
 
@@ -998,7 +1024,7 @@ function drawStrata(px) {
 function drawGenesis(name, px) {
   const op = view.ops.get(name), z = positions.get(name);
   if (!op || !z) return;
-  const color = op.state === 'CONFLICT' ? COLOR.warn : COLOR.accent;
+  const color = COLOR.accent;                      // an annotation of the selection; '::' or '⊗' says which
   const parents = [[op.x, 'L'], [op.y, 'R']].filter(([p]) => positions.has(p) && view.constructs.has(p));
   ctx.font = `bold ${10 * px}px ${FONT_MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   for (const [parent, side] of parents) {
@@ -1105,7 +1131,7 @@ const tooltip = $('tooltip');
 function showTooltip(name, mx, my) {
   const c = view.constructs.get(name), kind = kindOf(name, c, view);
   setText('tt-name', c.conflict ? '⊗ ' + name : name);
-  setText('tt-line', [LAYERS[c.layer], kind, view.mode.get(name), 'Vc ' + view.vc.get(name).vc.toFixed(3)]
+  setText('tt-line', [LAYERS[c.layer], kind, modeText(view.mode.get(name)), 'Vc ' + view.vc.get(name).vc.toFixed(3)]
     .filter(Boolean).join(' · '));
   tooltip.style.left = tooltip.style.top = '0px';
   tooltip.classList.add('visible');
@@ -1121,19 +1147,25 @@ function hideTooltip() { tooltip.classList.remove('visible'); }
 
 // ═══ The header and the panels ══════════════════════════════════════════════
 
-// Rows of { label, count, color, title }, each with a bar as long as its share
+// Rows of { label, count, color?, sign?, title }, each with a bar as long as its share
 function renderBreakdown(id, rows) {
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
   $(id).replaceChildren(...rows.map(r => {
     const pct = 100 * r.count / total;
     const row = el('div', 'breakdown-row');
     row.style.setProperty('--pct', pct.toFixed(2) + '%');
-    row.style.setProperty('--bar-color', r.color);
-    const swatch = el('span', 'swatch');
-    swatch.style.background = r.color;
+    // A layer's row in its colour; a mode's with its sign; the others neutral
+    let marker = null;
+    if (r.color) {
+      row.style.setProperty('--bar-color', r.color);
+      marker = el('span', 'swatch');
+      marker.style.background = r.color;
+    } else if (r.sign) {
+      marker = el('span', 'sign', r.sign);
+    }
     const label = el('span', 'label', r.label);
     if (r.title) label.title = r.title;
-    row.append(...spaced([swatch, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')]));
+    row.append(...spaced([marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')].filter(Boolean)));
     return row;
   }));
 }
@@ -1145,17 +1177,16 @@ function renderLagrangian(constructs) {
   const keys = Object.keys(counts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   renderBreakdown('lagrangian-list', keys.map(k => ({
     label: LAGRANGE[k] ? `${k} ${LAGRANGE[k][0]}` : k, title: LAGRANGE[k] ? LAGRANGE[k][1] : '',
-    count: counts[k], color: k === 'untagged' ? COLOR.dim : COLOR.accent,
+    count: counts[k],
   })));
 }
 
 // The filters: one switch per layer and per edge state, built once
 const filterCounts = { layer: {}, state: {} };
-function filterSwitch(label, color, isOn, toggle) {
-  const row = el('button', 'filter-row'), count = el('span', 'count', '—'), swatch = el('span', 'swatch');
+function filterSwitch(label, marker, isOn, toggle) {
+  const row = el('button', 'filter-row'), count = el('span', 'count', '—');
   row.type = 'button';
-  swatch.style.background = color;
-  row.append(...spaced([el('span', 'checkbox', '✓'), swatch, el('span', 'label', label), count]));
+  row.append(...spaced([el('span', 'checkbox', '✓'), marker, el('span', 'label', label), count]));
   row.setAttribute('aria-pressed', String(isOn()));
   row.onclick = () => {
     toggle();
@@ -1167,14 +1198,17 @@ function filterSwitch(label, color, isOn, toggle) {
 }
 function buildFilters() {
   $('filter-layer').replaceChildren(...LAYERS.map((name, i) => {
-    const [row, count] = filterSwitch(name, COLOR.layer[name],
+    const swatch = el('span', 'swatch');
+    swatch.style.background = COLOR.layer[name];
+    const [row, count] = filterSwitch(name, swatch,
       () => FILTERS.layer[i], () => { FILTERS.layer[i] = !FILTERS.layer[i]; });
     filterCounts.layer[name] = count;
     return row;
   }));
   $('filter-edge').replaceChildren(...STATES.map(s => {
-    const [row, count] = filterSwitch(s, COLOR.state[s],
+    const [row, count] = filterSwitch(s, edgeMark(s),
       () => FILTERS.edgeState[s], () => { FILTERS.edgeState[s] = !FILTERS.edgeState[s]; });
+    row.title = STATE_MEANING[s];
     filterCounts.state[s] = count;
     return row;
   }));
@@ -1240,7 +1274,7 @@ function renderCounters(t) {
 }
 
 function renderBreakdowns(t) {
-  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: t.modes[m], color: COLOR.mode[m], title: MODE_MEANING[m] })));
+  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: t.modes[m], sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
   renderBreakdown('layers-list', LAYERS.map(l => ({ label: l, count: t.layers[l], color: COLOR.layer[l] })));
   renderLagrangian(view.state.field.constructs);
   for (const l of LAYERS) filterCounts.layer[l].textContent = t.layers[l];
@@ -1340,7 +1374,7 @@ function renderInspector() {
     bar,
     kv('τ · σth · αm', `${tau.toFixed(2)} · ${sigma.toFixed(2)} · ${alpha.toFixed(2)}`,
        'τ age (full at 50 ticks) · σth persistence under erosion · αm witnessing (full at 10 proofs)'),
-    kv('mode', `${mode === 'OMEGA' ? '[Ω] ' : mode === 'LEMNISCATE' ? '[Ꮠ] ' : ''}${mode}`, MODE_MEANING[mode]),
+    kv('mode', modeText(mode), `${MODE_MEANING[mode]}: Ω relations against Ꮠ ones among its last five proofs`),
     kv('dominant state', view.dominant.get(name), 'a crystal: the state it crystallized in; otherwise its edges, by weight'));
 
   const proofs = c.proof_chain || [];
@@ -1353,8 +1387,7 @@ function renderInspector() {
       : `newest first:`));
     for (const p of [...proofs].reverse()) {
       const entry = el('div', 'proof');
-      entry.style.setProperty('--rel', COLOR.relation[p.relation] || COLOR.dim);
-      entry.append(el('div', 'rel', p.relation + (p.tensate_role ? ' · ' + p.tensate_role : '')),
+      entry.append(el('div', 'rel', `${relationSign(p.relation)} ${p.relation}` + (p.tensate_role ? ' · ' + p.tensate_role : '')),
         el('div', 'meta', `anchor ${p.anchor} · ${p.lagrange || '—'} · T${atT(p.time)}`),
         el('div', 'meta', p.id));
       parts.push(entry);
@@ -1477,6 +1510,7 @@ function show(index) {
   renderCounters(t);
   renderBreakdowns(t);
   renderInspector();
+  renderProofPicker();
   $('tl-slider').value = index;
   setText('tl-position', `${index + 1} / ${timeline.length} · ${file}`);
   setText('tl-cycles', `${state.cycle ?? '—'} cycles`);
@@ -1542,14 +1576,22 @@ function setProofOverlay(on) {
   proofOverlay = on;
   $('btn-proofs').setAttribute('aria-pressed', String(on));
   $('proof-legend').hidden = !on;
+  renderProofPicker();
   requestDraw();
 }
-$('proof-legend').replaceChildren(...PROOF_RELATIONS.map(r => {
-  const item = el('div', 'item'), mark = el('span', 'line');
-  mark.style.borderColor = COLOR.relation[r];
-  item.append(mark, el('span', null, r.toLowerCase()));
-  return item;
-}));
+// The overlay's list: each relation with its sign and how many constructs carry it; one chosen
+function renderProofPicker() {
+  if (!proofOverlay) return;
+  $('proof-legend').replaceChildren(el('div', 'hint', 'saved proofs carrying'), ...PROOF_RELATIONS.map(r => {
+    const choice = el('button', 'rel-choice');
+    choice.type = 'button';
+    choice.setAttribute('aria-pressed', String(r === overlayRelation));
+    choice.append(...spaced([el('span', 'sign', relationSign(r)), el('span', 'name', r.toLowerCase()),
+                             el('span', 'count', view ? view.carriers.get(r).size : '—')]));
+    choice.onclick = () => { overlayRelation = r; renderProofPicker(); requestDraw(); };
+    return choice;
+  }));
+}
 $('btn-relations').onclick = () => setLayout('relations');
 $('btn-strata').onclick = () => setLayout('strata');
 $('btn-proofs').onclick = () => setProofOverlay(!proofOverlay);
@@ -1594,6 +1636,12 @@ window.addEventListener('keydown', e => {
 window.addEventListener('resize', () => { resizeCanvas(); requestDraw(); });
 
 buildFilters();
+$('edge-legend').replaceChildren(...STATES.map(s => {
+  const item = el('div', 'item');
+  item.title = `an edge in ${s}: ${STATE_MEANING[s]}`;
+  item.append(edgeMark(s), el('span', null, s));
+  return item;
+}));
 renderInspector();
 resizeCanvas();
 </script>

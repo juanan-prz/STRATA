@@ -36,7 +36,6 @@
     --accent-soft: rgba(74, 240, 196, 0.12);
     --accent-strong: rgba(74, 240, 196, 0.28);
     --warn: #f0a832;
-    --warn-soft: rgba(240, 168, 50, 0.14);
     --err: #ff5571;
     --err-soft: rgba(255, 85, 113, 0.14);
     --sombunal: #9b87f5;
@@ -44,17 +43,21 @@
     --sombunal-text: #c9bfff;
     --concluded: #7a8aa8;                       /* a conclusion is not an error: no alarm colour */
 
-    /* Tetralemmic states */
-    --col-BOTH: #f0a832;
-    --col-TRUE: #4af0c4;
-    --col-FALSE: #ff5571;
-    --col-NEITHER: #5c6475;
+    /* Ontological layers: one warm hue from shadow to light, in the order of the layers
+       (lightness rises with the layer); no other colour on the page is of this hue */
+    --layer-NULL_00: #585243;
+    --layer-UMBRA_0: #928660;
+    --layer-UNIT_1: #d7c56e;
+    --layer-APPARENT: #ede9d2;
+    --apparent-soft: rgba(237, 233, 210, 0.07);
 
-    /* Ontological layers */
-    --layer-NULL_00: #4a4f5a;
-    --layer-UMBRA_0: #6a7c9a;
-    --layer-UNIT_1: #4af0c4;
-    --layer-APPARENT: #f0a832;
+    /* Tetralemmic states, on the edges: three hues apart from the layers and from the
+       interface's own, told apart with any colour vision; NEITHER, the most of them, is
+       neutral. On the canvas BOTH is also thicker and FALSE dashed. The accent is never data */
+    --col-TRUE: #4475f6;
+    --col-FALSE: #cb86db;
+    --col-BOTH: #ea5202;
+    --col-NEITHER: #5d646f;
 
     /* Spacing, type, radii, shadows */
     --sp-1: 4px;
@@ -214,13 +217,15 @@
     content: '';
     position: absolute; inset: 0; z-index: -1;
     width: var(--pct, 0%);
-    background: var(--bar-color, var(--accent));
+    background: var(--bar-color, var(--text-dim));
     opacity: 0.10;
     border-radius: var(--r-sm);
     transition: width 0.4s ease, opacity 0.2s;
   }
   .breakdown-row:hover::before { opacity: 0.18; }
   .swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .sign { width: 10px; flex-shrink: 0; text-align: center; font-size: 12px; line-height: 1; color: var(--text-bright); }
+  .edge-mark { flex-shrink: 0; }
   .breakdown-row .label,
   .filter-row .label { flex: 1; color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--ls-wide); }
   .breakdown-row .count { color: var(--text-bright); }
@@ -314,14 +319,16 @@
   @keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   .shape-legend {
     position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
-    max-width: calc(100% - 240px);              /* the connection status keeps the left corner */
+    max-width: calc(100% - 200px);              /* the connection status keeps the left corner */
     display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center;
-    gap: 6px var(--sp-4);
-    padding: 7px 14px;
+    gap: 6px var(--sp-3);
+    padding: 7px var(--sp-3);
     font-family: var(--font-mono); font-size: 10px; letter-spacing: var(--ls-wide);
     color: var(--text-muted);
   }
   .shape-legend .item { display: flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+  .shape-legend .break { flex-basis: 100%; height: 0; }
+  .shape-legend .items { display: contents; }
   .shape-legend svg { flex-shrink: 0; }
   @media (max-width: 1100px) { .shape-legend { display: none; } }
 
@@ -411,7 +418,7 @@
   .log-entry.event[open] summary::after { content: ' ▾'; }
   .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; white-space: pre-line; }
   .log-entry.cussive { border-left-color: var(--layer-UNIT_1); color: var(--layer-UNIT_1); }
-  .log-entry.cussive.crystal { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+  .log-entry.cussive.crystal { border-left-color: var(--layer-APPARENT); background: var(--apparent-soft); color: var(--layer-APPARENT); }
   .log-entry.terminate { border-left-color: var(--concluded); color: var(--text-muted); }
   .log-entry.narration { border-left-color: var(--text-dim); color: var(--text-muted); font-style: italic; }
   .log-entry.sombunal { border-left-color: var(--sombunal); background: var(--sombunal-soft); color: var(--sombunal-text); }
@@ -548,8 +555,8 @@
       <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="7,1 13,7 7,13 1,7" style="fill: var(--layer-UNIT_1); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
       <span>anchor</span>
     </div>
-    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; two amber rings where it crystallizes">
-      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="11,7 9,11 5,11 3,7 5,3 9,3" style="fill: var(--layer-APPARENT); stroke: var(--text-bright)" stroke-width="0.8"/></svg>
+    <div class="item" title="a crystal the field formed: incontrovertible, exchangeable; drawn open, so the active strata stand out; two rings where it crystallizes">
+      <svg width="14" height="14" viewBox="0 0 14 14"><polygon points="12,7 9.5,11.3 4.5,11.3 2,7 4.5,2.7 9.5,2.7" style="fill: var(--layer-APPARENT); fill-opacity: 0.35; stroke: var(--layer-APPARENT)" stroke-width="1.2"/></svg>
       <span>apparent</span>
     </div>
     <div class="item" title="the five immutable anchors; four of them universal apparents from the start">
@@ -560,8 +567,10 @@
       <svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="3.5" style="fill: var(--layer-UMBRA_0)"/><circle cx="7" cy="7" r="5.5" fill="none" style="stroke: var(--text-bright)" stroke-width="0.9"/><path d="M3.1 3.1 L10.9 10.9 M10.9 3.1 L3.1 10.9" style="stroke: var(--text-bright)" stroke-width="0.9"/></svg>
       <span>conflict</span>
     </div>
+    <div class="break"></div>
+    <div id="edge-legend" class="items"></div>
     <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-TRUE)" stroke-width="1"/></svg>
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1"/></svg>
       <span>crystal support</span>
     </div>
   </div>
@@ -585,7 +594,12 @@
 
 const LAYERS = ['NULL_00', 'UMBRA_0', 'UNIT_1', 'APPARENT'];        // index = a construct's layer value
 const APPARENT = 3;
-const STATES = ['BOTH', 'TRUE', 'FALSE', 'NEITHER'];
+const STATES = ['TRUE', 'FALSE', 'BOTH', 'NEITHER'];             // the tetralemma, in the framework's order
+const STATE_MEANING = {                                               // as the framework's TetraState says
+  TRUE: 'orientation confirmed', FALSE: 'orientation negated',
+  BOTH: 'sustained contradiction: generative tension', NEITHER: 'pre-ontological suspension, approaching [00]',
+};
+const MODES = ['OMEGA', 'LEMNISCATE', 'NEUTRAL'];
 // The Zero Points: the Universal apparents (TMC p.22), Z1::ORIGIN in NULL_00
 const ZERO_POINTS = new Set(['Z0::IDENTITY', 'Z1::ORIGIN', 'Z2::CONCORDANCY', 'Z3::RECURSION', 'Z4::APPARENCY']);
 // The anchors: never promoted, never pruned
@@ -596,12 +610,21 @@ const LAGRANGE = {
   L3: ['local/global', 'local vs. global identity'], L4: ['depth/perf', 'proof depth vs. performance'],
   L5: ['entropy/det', 'entropy vs. determinism'],
 };
+// TMC pp.26, 75: a construct's existence mode, written with its sign, never with a colour
+const MODE_SIGN = { OMEGA: 'Ω', LEMNISCATE: 'Ꮠ', NEUTRAL: '·' };
+const MODE_MEANING = {
+  OMEGA: 'densifying toward apparency', LEMNISCATE: 'oscillating in unresolved recursion',
+  NEUTRAL: 'balanced, or no proofs yet',
+};
+const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
 
 // ═══ Settings ═══════════════════════════════════════════════════════════════
 
 // The kinds of entry in the event log: the label of each chip, and its colour
 const LOG_KINDS = {
-  event: ['[::]', '--accent'], cussive: ['cussive', '--warn'], terminate: ['concluded', '--concluded'],
+  event: ['[::]', '--accent'], cussive: ['cussive', '--layer-UNIT_1'], terminate: ['concluded', '--concluded'],
   narration: ['narration', '--text-dim'], sombunal: ['Sombunal', '--sombunal'], model: ['model', '--err'],
 };
 const LOG_KEPT = 150;             // event log entries of each kind
@@ -624,9 +647,8 @@ const css = name => getComputedStyle(document.documentElement).getPropertyValue(
 const COLOR = {
   layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
-  mode: { OMEGA: css('--col-TRUE'), LEMNISCATE: css('--col-BOTH'), NEUTRAL: css('--col-NEITHER') },
-  accent: css('--accent'), warn: css('--warn'), dim: css('--text-dim'), muted: css('--text-muted'),
-  bright: css('--text-bright'),
+  accent: css('--accent'), dim: css('--text-dim'), muted: css('--text-muted'), bright: css('--text-bright'),
+  ground: css('--bg-0'),                          // the field's background
 };
 const FONT_MONO = css('--font-mono');
 
@@ -640,6 +662,19 @@ function setText(id, value) { $(id).textContent = value; }
 const fixed = (v, digits) => v != null ? Number(v).toFixed(digits) : '—';
 // Parts of a row, a space apart: invisible in a flex row, but read aloud and copied as words
 const spaced = parts => parts.flatMap((part, i) => i ? [' ', part] : [part]);
+// An edge state as the canvas draws it, for the legend and the filters
+function edgeMark(state) {
+  const NS = 'http://www.w3.org/2000/svg', style = EDGE_STYLE[state];
+  const svg = document.createElementNS(NS, 'svg'), stroke = document.createElementNS(NS, 'line');
+  svg.setAttribute('class', 'edge-mark');
+  svg.setAttribute('width', '18'); svg.setAttribute('height', '8'); svg.setAttribute('viewBox', '0 0 18 8');
+  for (const [k, v] of Object.entries({ x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 })) {
+    stroke.setAttribute(k, v);
+  }
+  if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
+  svg.append(stroke);
+  return svg;
+}
 
 
 // ═══ The field on the canvas ════════════════════════════════════════════════
@@ -768,10 +803,12 @@ function traceShape(shape, x, y, size) {
     ctx.arc(x, y, size, 0, Math.PI * 2);
   }
 }
-function line(a, b, color, alpha, width) {
+function line(a, b, color, alpha, width, dash) {
   ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  ctx.setLineDash(dash || []);
   ctx.strokeStyle = color; ctx.globalAlpha = alpha; ctx.lineWidth = width;
   ctx.stroke();
+  ctx.setLineDash([]);
 }
 function ring(x, y, r, color, alpha, width, dash) {
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -803,26 +840,26 @@ function render(now) {
   for (const e of edges) {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
     if (!a || !b || !FILTERS.edgeState[e.state] || !isShown(a) || !isShown(b)) continue;
-    const width = e.state === 'BOTH' ? 2 : 1;
+    const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
     if (b.c.layer === APPARENT && e.state !== 'BOTH') line(a, b, COLOR.layer.APPARENT, 0.12, width + 2);
-    line(a, b, COLOR.state[e.state] || COLOR.dim, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6), width);
+    line(a, b, COLOR.state[e.state] || COLOR.dim, Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6), width, dash);
   }
 
   for (const [name, n] of nodes) {
     if (!isShown(n)) continue;
     const color = COLOR.layer[LAYERS[n.c.layer]] || '#888';
     const shape = shapeOf(name, n.c.layer), size = sizeOf(name, n);
-    if (n.c.layer === APPARENT) ring(n.x, n.y, size + 2, color, 0.4, 1.5);      // a crystal's halo
-    ctx.globalAlpha = 1;
     ctx.beginPath();
     traceShape(shape, n.x, n.y, size);
-    ctx.fillStyle = color;
-    ctx.fill();
-    if (shape !== 'circle') {
-      ctx.strokeStyle = 'rgba(238,241,246,0.6)'; ctx.lineWidth = 1;
-      ctx.stroke();
+    if (shape === 'hexagon') {                          // a crystal, drawn open: the active strata stand out
+      ctx.globalAlpha = 1; ctx.fillStyle = COLOR.ground; ctx.fill();       // over the edges behind it
+      ctx.globalAlpha = 0.35; ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = 0.95; ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.stroke();
+    } else {
+      ctx.globalAlpha = 1; ctx.fillStyle = color; ctx.fill();
+      if (shape !== 'circle') { ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.6; ctx.lineWidth = 1; ctx.stroke(); }
     }
     if (n.c.conflict) {                                 // ⊗: a conflict, a structure of its own
       const k = size + 2, d = k * Math.SQRT1_2;
@@ -836,7 +873,7 @@ function render(now) {
   }
 
   // Cussive collapse, following the construct as it moves, the same size at any zoom:
-  // one ring where it rose to UNIT_1, two amber rings where it crystallized
+  // one ring where it rose to UNIT_1, two where it crystallized, each in its layer's colour
   const px = 1 / viewK;
   for (const p of pulses) {
     const t = (now - p.start) / PULSE_MS;
@@ -971,7 +1008,7 @@ function showTooltip(name, c, mx, my) {
   setText('tt-umbragiac', fixed(c.umbragiac_score, 3));       // contradiction stress (UCO)
   setText('tt-banked', fixed(c.banked, 2));                   // exchange banked toward crystallization
   setText('tt-vc', fixed(c.vc, 3));
-  setText('tt-mode', c.mode || '—');
+  setText('tt-mode', modeText(c.mode));
   setText('tt-chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—');      // ±1, never mistaken for '—'
   setText('tt-crystal', c.crystal || '—');
   setText('tt-lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—');
@@ -1061,12 +1098,18 @@ function renderBreakdown(id, rows) {
     const pct = 100 * r.count / total;
     const row = el('div', 'breakdown-row');
     row.style.setProperty('--pct', pct.toFixed(2) + '%');
-    row.style.setProperty('--bar-color', r.color);
-    const swatch = el('span', 'swatch');
-    swatch.style.background = r.color;
+    // A layer's row in its colour; a mode's with its sign; the others neutral
+    let marker = null;
+    if (r.color) {
+      row.style.setProperty('--bar-color', r.color);
+      marker = el('span', 'swatch');
+      marker.style.background = r.color;
+    } else if (r.sign) {
+      marker = el('span', 'sign', r.sign);
+    }
     const label = el('span', 'label', r.label);
     if (r.title) label.title = r.title;
-    row.append(...spaced([swatch, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')]));
+    row.append(...spaced([marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')].filter(Boolean)));
     return row;
   }));
 }
@@ -1078,18 +1121,17 @@ function renderLagrangian(constructs) {
   const keys = Object.keys(counts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   renderBreakdown('lagrangian-list', keys.map(k => ({
     label: LAGRANGE[k] ? `${k} ${LAGRANGE[k][0]}` : k, title: LAGRANGE[k] ? LAGRANGE[k][1] : '',
-    count: counts[k], color: k === 'untagged' ? COLOR.dim : COLOR.accent,
+    count: counts[k],
   })));
 }
 
 // The filters: one switch per layer and per edge state, built once; a snapshot only
 // updates their counts, so focus and hover stay where they are
 const filterCounts = { layer: {}, state: {} };
-function filterSwitch(label, color, isOn, toggle) {
-  const row = el('button', 'filter-row'), count = el('span', 'count', '—'), swatch = el('span', 'swatch');
+function filterSwitch(label, marker, isOn, toggle) {
+  const row = el('button', 'filter-row'), count = el('span', 'count', '—');
   row.type = 'button';
-  swatch.style.background = color;
-  row.append(...spaced([el('span', 'checkbox', '✓'), swatch, el('span', 'label', label), count]));
+  row.append(...spaced([el('span', 'checkbox', '✓'), marker, el('span', 'label', label), count]));
   row.setAttribute('aria-pressed', String(isOn()));
   row.onclick = () => {
     toggle();
@@ -1101,14 +1143,17 @@ function filterSwitch(label, color, isOn, toggle) {
 }
 function buildFilters() {
   $('filter-layer').replaceChildren(...LAYERS.map((name, i) => {
-    const [row, count] = filterSwitch(name, COLOR.layer[name],
+    const swatch = el('span', 'swatch');
+    swatch.style.background = COLOR.layer[name];
+    const [row, count] = filterSwitch(name, swatch,
       () => FILTERS.layer[i], () => { FILTERS.layer[i] = !FILTERS.layer[i]; });
     filterCounts.layer[name] = count;
     return row;
   }));
   $('filter-edge').replaceChildren(...STATES.map(s => {
-    const [row, count] = filterSwitch(s, COLOR.state[s],
+    const [row, count] = filterSwitch(s, edgeMark(s),
       () => FILTERS.edgeState[s], () => { FILTERS.edgeState[s] = !FILTERS.edgeState[s]; });
+    row.title = STATE_MEANING[s];
     filterCounts.state[s] = count;
     return row;
   }));
@@ -1143,11 +1188,16 @@ function drawTelemetry() {
   tctx.setLineDash([2, 3]);
   tctx.beginPath(); tctx.moveTo(pad, yAt(0.5)); tctx.lineTo(W - pad, yAt(0.5)); tctx.stroke();
   tctx.setLineDash([]); tctx.globalAlpha = 1;
-  plot(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.warn, 1.3);
-  plot(telemetry.map(t => t.contraction || 0), COLOR.accent, 1.4);
+  // The breath as a neutral area under the line of exchange, which uses crystals: in their colour
+  const contraction = telemetry.map(t => t.contraction || 0);
+  tctx.beginPath(); tctx.moveTo(xAt(0), yAt(0));
+  contraction.forEach((v, i) => tctx.lineTo(xAt(i), yAt(v)));
+  tctx.lineTo(xAt(contraction.length - 1), yAt(0)); tctx.closePath();
+  tctx.fillStyle = COLOR.dim; tctx.globalAlpha = 0.28; tctx.fill(); tctx.globalAlpha = 1;
+  plot(telemetry.map(t => (t.exchange_executions || 0) / Math.max(1, t.executions_successful || 0)), COLOR.layer.APPARENT, 1.3);
   tctx.font = '9px ' + FONT_MONO; tctx.textBaseline = 'top'; tctx.textAlign = 'right';
-  tctx.fillStyle = COLOR.warn; tctx.fillText('● exchange', W - 5, 3);
-  tctx.fillStyle = COLOR.accent; tctx.fillText('● contraction  ', W - 5 - tctx.measureText('● exchange').width, 3);
+  tctx.fillStyle = COLOR.layer.APPARENT; tctx.fillText('— exchange', W - 5, 3);
+  tctx.fillStyle = COLOR.muted; tctx.fillText('▮ contraction  ', W - 5 - tctx.measureText('— exchange').width, 3);
 }
 
 // Until the field is drawn, the field's panel says why: never cycled, paused (its
@@ -1325,7 +1375,7 @@ function applySnapshot(snap) {
   if ('model_watch' in snap) renderModel(snap.model_watch);
   renderCounters(snap);
   renderBreathing(snap);
-  renderBreakdown('modes-list', Object.entries(snap.modes).map(([k, v]) => ({ label: k, count: v, color: COLOR.mode[k] || '#888' })));
+  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: snap.modes[m] || 0, sign: MODE_SIGN[m], title: MODE_MEANING[m] })));
   renderBreakdown('layers-list', Object.entries(snap.layers).map(([k, v]) => ({ label: k, count: v, color: COLOR.layer[k] || '#888' })));
   renderLagrangian(snap.field.constructs);
   updateFilterCounts(snap);
@@ -1527,6 +1577,12 @@ window.addEventListener('keydown', e => {
 window.addEventListener('resize', () => { resizeCanvas(); chartStale = true; requestDraw(); });
 
 buildFilters();
+$('edge-legend').replaceChildren(...STATES.map(s => {
+  const item = el('div', 'item');
+  item.title = `an edge in ${s}: ${STATE_MEANING[s]}`;
+  item.append(edgeMark(s), el('span', null, s));
+  return item;
+}));
 logList.replaceChildren($('log-placeholder').content.cloneNode(true));
 resizeCanvas();
 renderEmptyState();
