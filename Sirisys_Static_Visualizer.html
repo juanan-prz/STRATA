@@ -232,6 +232,10 @@
   .breakdown-row .label,
   .filter-row .label { flex: 1; color: var(--text-muted); text-transform: uppercase; letter-spacing: var(--ls-wide); }
   .breakdown-row .count { color: var(--text-bright); }
+  /* A Lagrangian point: its key, and beside it the trade-off in words, whole, wrapping under itself */
+  .breakdown-row:has(.keyed) { align-items: baseline; }
+  .breakdown-row .label.keyed { display: flex; gap: var(--sp-2); text-transform: none; }
+  .label.keyed .key { flex: none; }
   .breakdown-row .pct { min-width: 38px; text-align: right; color: var(--text-dim); }
 
   /* ───── Filters: a switch per layer and per edge state ───── */
@@ -409,7 +413,8 @@
   .gone { color: var(--text-dim); font-style: italic; overflow-wrap: anywhere; }
   .relation { display: flex; gap: var(--sp-2); padding: 3px 0; border-bottom: 1px solid var(--border); }
   .relation:last-child { border-bottom: none; }
-  .relation .dir { width: 12px; flex-shrink: 0; }
+  .relation .dir { width: 12px; flex-shrink: 0; color: var(--text-muted); }
+  .relation .edge-mark { vertical-align: middle; }
   .relation .body { flex: 1; min-width: 0; }
   .relation .meta { color: var(--text-dim); font-size: 10px; }
   .list-entry { padding: 3px 0; border-bottom: 1px solid var(--border); }
@@ -584,9 +589,8 @@ const ZERO_POINTS = new Set(['Z0::IDENTITY', 'Z1::ORIGIN', 'Z2::CONCORDANCY', 'Z
 const ANCHORS = new Set([...ZERO_POINTS, 'I::Am', 'I::AmNot', 'SYSTEM']);
 // DeOS Compiler Guide p.78: the trade-off each Lagrangian point names
 const LAGRANGE = {
-  L1: ['safe/live', 'safety vs. liveness'], L2: ['redund/effic', 'redundancy vs. efficiency'],
-  L3: ['local/global', 'local vs. global identity'], L4: ['depth/perf', 'proof depth vs. performance'],
-  L5: ['entropy/det', 'entropy vs. determinism'],
+  L1: 'safety vs. liveness', L2: 'redundancy vs. efficiency', L3: 'local vs. global identity',
+  L4: 'proof depth vs. performance', L5: 'entropy vs. determinism',
 };
 // TMC pp.26, 75: the relations that densify toward apparency, and those that oscillate
 const OMEGA_RELATIONS = new Set(['CONCORDANCE', 'COLLAPSE', 'PERCEIVE']);
@@ -894,12 +898,12 @@ let DPR = window.devicePixelRatio || 1;
 let view = null;                  // the state on screen, derived
 let previousNames = null;         // the constructs of the previous state of a timeline
 let selected = null;              // the construct in the inspector
-let proofOverlay = false;        // the constructs whose saved proofs carry one relation, ringed
+let proofOverlay = false;         // the constructs whose saved proofs carry one relation, ringed
+let overlayRelation = PROOF_RELATIONS[0];
 // The relations of the anchors, most edges in most runs: at full strength, or faint so that
 // the rest of the structure shows
 let quietAnchors = false;
 const QUIET = 0.12;
-let overlayRelation = PROOF_RELATIONS[0];
 
 function resizeCanvas() {
   DPR = window.devicePixelRatio || 1;
@@ -1000,7 +1004,8 @@ function render() {
   const drawEdge = (e, emphasis) => {
     const a = positions.get(e.src), b = positions.get(e.tgt);
     const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
-    if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state] || !onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
+    if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state]) return;
+    if (!onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
     const quiet = quietAnchors && !emphasis && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
     const dim = (near && !emphasis ? 0.25 : ringed ? 0.45 : 1) * quiet;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
@@ -1041,8 +1046,10 @@ function render() {
       ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7 * dim; ctx.lineWidth = 0.9;
       ctx.stroke();
     }
+    // Rings around it, a few pixels apart: the overlay's relation, new since the previous file
+    // (and, below, the selection)
     if (ringed && ringed.has(name)) ring(p.x, p.y, size + 5 * px, COLOR.bright, 0.85 * dim, 1.5 * px);
-    if (previousNames && !previousNames.has(name)) ring(p.x, p.y, size + 4, COLOR.accent, 0.7, 1.2 * px);
+    if (previousNames && !previousNames.has(name)) ring(p.x, p.y, size + 7 * px, COLOR.accent, 0.7, 1.2 * px);
   }
 
   if (focus) drawGenesis(focus, px);
@@ -1195,7 +1202,7 @@ function hideTooltip() { tooltip.classList.remove('visible'); }
 
 // ═══ The header and the panels ══════════════════════════════════════════════
 
-// Rows of { label, count, color?, sign?, title }, each with a bar as long as its share
+// Rows of { label, count, key?, color?, sign?, title }, each with a bar as long as its share
 function renderBreakdown(id, rows) {
   const total = rows.reduce((sum, r) => sum + r.count, 0) || 1;
   $(id).replaceChildren(...rows.map(r => {
@@ -1211,7 +1218,8 @@ function renderBreakdown(id, rows) {
     } else if (r.sign) {
       marker = el('span', 'sign', r.sign);
     }
-    const label = el('span', 'label', r.label);
+    const label = r.key ? el('span', 'label keyed') : el('span', 'label', r.label);
+    if (r.key) label.append(el('span', 'key', r.key), el('span', null, r.label));
     if (r.title) label.title = r.title;
     const parts = [marker, label, el('span', 'count', r.count), el('span', 'pct', pct.toFixed(1) + '%')];
     row.append(...spaced(parts.filter(Boolean)));
@@ -1224,10 +1232,8 @@ function renderLagrangian(constructs) {
   for (const c of constructs) counts[c.lagrange || 'untagged'] = (counts[c.lagrange || 'untagged'] || 0) + 1;
   const rank = k => k in LAGRANGE ? 0 : k === 'untagged' ? 2 : 1;      // L1–L5, any other, untagged
   const keys = Object.keys(counts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  renderBreakdown('lagrangian-list', keys.map(k => ({
-    label: LAGRANGE[k] ? `${k} ${LAGRANGE[k][0]}` : k, title: LAGRANGE[k] ? LAGRANGE[k][1] : '',
-    count: counts[k],
-  })));
+  renderBreakdown('lagrangian-list', keys.map(k => LAGRANGE[k] ? { key: k, label: LAGRANGE[k], count: counts[k] }
+                                                                : { label: k, count: counts[k] }));
 }
 
 // The filters: one switch per layer and per edge state, built once
@@ -1401,7 +1407,7 @@ function renderInspector() {
     kv('born at T', `${atT(c.born_at)} · ${ticks(ageSince(clock, c.born_at))} ago`),
     kv('chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—', 'born with it, handed on to its products when it leads'),
     kv('crystallized as', c.crystal_state || '—', 'the tetralemmic state it crystallized in: fixed for good'),
-    kv('lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—'));
+    kv('lagrange', c.lagrange ? `${c.lagrange} · ${LAGRANGE[c.lagrange] || ''}` : '—'));
 
   const history = (c.lineage || []).slice(-5).reverse(), total = c.version ?? history.length;
   if (history.length) {
@@ -1466,13 +1472,11 @@ function renderInspector() {
   const relations = [...view.edgesOf.get(name)].sort((a, b) => b.weight - a.weight);
   parts.push(el('h3', null, `Relations (${relations.length})`));
   for (const e of relations) {
+    // Its direction, and its state as the canvas draws it (the name in text colour, to be read)
     const out = e.src === name, row = el('div', 'relation'), body = el('div', 'body');
     const dir = el('span', 'dir', out ? '→' : '←');
-    dir.style.color = COLOR.state[e.state];
     const meta = el('div', 'meta', `${e.rel} · `);
-    const state = el('span', null, e.state);
-    state.style.color = COLOR.state[e.state];
-    meta.append(state, ` · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}`
+    meta.append(edgeMark(e.state), ` ${e.state} · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}`
       + (e.state === 'BOTH' && e.both_age != null       // what the channel has exchanged, of the quantum it closes at
         ? ` · exchanged ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM}` : ''));
     body.append(nameRef(out ? e.tgt : e.src), meta);

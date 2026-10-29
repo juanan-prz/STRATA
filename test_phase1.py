@@ -242,8 +242,10 @@ async def go():
                 await asyncio.sleep(item)
             raise fastapi.WebSocketDisconnect()
     await asyncio.wait_for(routes[('WS', '/ws')](Socket()), 10)
+    history = routes[('GET', '/api/history')]().content
     async with uvicorn.APP.lifespan(uvicorn.APP): pass
-    print(json.dumps({{'replies': replies, 'sent': [m.get('type') for m in sent],
+    print(json.dumps({{'replies': replies, 'sent': [m.get('type') for m in sent], 'history': history,
+                      'snapshot_cycles': [m['cycle'] for m in sent if m.get('type') == 'cycle'],
                       'acks': [m.get('stepping') for m in sent if m.get('type') == 'ack'],
                       'told': [m['running'] if m.get('type') == 'status' else m['status']['running']
                                for m in sent if m.get('type') in ('status', 'ack')]}}))
@@ -261,6 +263,12 @@ check("WebSocket: status first, malformed messages ignored, a step acknowledged 
       sent[:1] == ["status"] and web.get("acks", [])[:1] == [True] and "cycle" in sent[sent.index("ack"):],
       f"{len(sent)} messages, {sent.count('cycle')} snapshot(s)" if web else output[-90:])
 told = web.get("told", [])
+history, seen = web.get("history") or {}, web.get("snapshot_cycles", [])
+check("GET /api/history: the instance's metabolism, through the last cycle it ran",
+      history.get("records") and history["through_cycle"] >= max(seen, default=0) >= 0
+      and history["records"][-1]["cycles"][1] == history["through_cycle"]
+      and sum(r["born"] for r in history["records"]) > 0, f"{len(history.get('records', []))} breath(s), "
+      f"through cycle {history.get('through_cycle')}" if web else output[-90:])
 check("WebSocket: when the engine pauses itself (a step while playing), the client is told",
       web.get("acks") == [True, None, True] and True in told and told[-1] is False,
       f"running as told: {told}" if web else output[-90:])
@@ -470,13 +478,32 @@ shared = set(live_tokens) & set(inspector_tokens)
 differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
 # Written once in each file, alike: the strata, how an edge state and a mode are drawn and written
 SHARED = ("RINGS", "EDGE_STYLE", "EXCHANGE_QUANTUM", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
-          "ARROW_ZOOM", "QUIET")
+          "LAGRANGE", "ARROW_ZOOM", "QUIET")
 unlike = [name for name in SHARED if not declared(views["live"], name) or declared(views["live"], name) != declared(inspector, name)]
 if declared(views["live"], "HISTORY_KEPT") != str(server.HISTORY_KEPT):     # the live view merges as the server does
     unlike.append("HISTORY_KEPT (live and server)")
+
+
+def function(html, name):
+    """The whole of a visualizer's top-level `function <name>(…) {…}`."""
+    found = re.search(rf"^function {name}\(", html, re.M)
+    if not found:
+        return ""
+    depth, at = 0, html.index("{", found.end())
+    for at in range(at, len(html)):
+        depth += {"{": 1, "}": -1}.get(html[at], 0)
+        if depth == 0:
+            break
+    return html[found.start():at + 1]
+
+
+DRAWN_ALIKE = ("shapeOf", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
+               "renderBreakdown", "renderLagrangian", "buildFilters")
+unlike += [f"{name}()" for name in DRAWN_ALIKE if not function(views["live"], name)
+           or function(views["live"], name) != function(inspector, name)]
 check("the two views agree with each other and the live view with its server: the strata rings, how each edge "
-      "state and mode is drawn and written, every colour token both define, the history kept",
-      not unlike and len(shared) > 20 and not differ,
-      ", ".join(unlike + differ) or f"{len(SHARED)} declarations and {len(shared)} colour tokens alike")
+      "state and mode is drawn and written, the functions they draw with, every colour token both define, "
+      "the history kept", not unlike and len(shared) > 20 and not differ, ", ".join(unlike + differ)
+      or f"{len(SHARED)} declarations, {len(DRAWN_ALIKE)} functions and {len(shared)} colour tokens alike")
 
 check.finish()

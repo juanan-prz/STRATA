@@ -150,7 +150,7 @@ class ExperimentEngine:
     Each instance lives in its own run folder with its own ledger; a reset
     starts a new one and leaves the previous one on disk. Two locks, always
     taken in this order: _cycle_lock for a whole cycle (and for a reset or the
-    shutdown), _queue_lock for the snapshot queue and its listeners."""
+    shutdown), _queue_lock for the snapshot queue, its listeners and the history."""
 
     def __init__(self, stream: int | None, delay_ms: int, runs_dir: Path, profile: str = "standard"):
         self.stream, self.cycle_delay_ms, self.runs_dir, self.profile = stream, delay_ms, runs_dir, profile
@@ -169,18 +169,19 @@ class ExperimentEngine:
         tag = ("live" if self.stream is None else f"stream{self.stream}") + \
               ("" if self.profile == "standard" else f"_{self.profile}")
         base = f"{time.strftime('%Y%m%d-%H%M%S')}_{tag}"
-        self.run_dir, n = self.runs_dir / base, 1
-        while self.run_dir.exists():
+        run_dir, n = self.runs_dir / base, 1
+        while run_dir.exists():
             n += 1
-            self.run_dir = self.runs_dir / f"{base}_{n}"
-        self.run_dir.mkdir(parents=True)
+            run_dir = self.runs_dir / f"{base}_{n}"
+        run_dir.mkdir(parents=True)
+        with self._queue_lock:                  # a viewer asking for the history gets one instance's, whole
+            self.run_dir, self._history = run_dir, []       # the metabolism, breath by breath (METABOLISM)
         self.ledger = S.set_ledger(S.ProofLedger(self.run_dir / "ledger.jsonl"))
         with quiet():
             self.ss = S.new_session()
         self.cycle, self.last_T = 0, tuple(self.ss.clock.T)
         self._terminations_seen = self.ss.field.terminations_total
         self._apparents_seen = self.ss.field.apparents_total
-        self._history = []                      # the metabolism, breath by breath (METABOLISM)
         self.life, self.criteria = None, None   # the criteria, and their last reading (THE CRITERIA)
         try:
             from sirisys_measures import LifeCriteria
@@ -341,11 +342,11 @@ class ExperimentEngine:
         """The instance's metabolism so far, breath by breath, oldest first; through_cycle
         is the last cycle it includes (-1 before the first)."""
         with self._queue_lock:
+            run = self.run_dir.name
             records = [{**h, "breaths": list(h["breaths"]), "cycles": list(h["cycles"]),
                         "concluded": dict(h["concluded"]), "population": dict(h["population"])}
                        for h in self._history]
-        return {"run": self.run_dir.name, "through_cycle": records[-1]["cycles"][1] if records else -1,
-                "records": records}
+        return {"run": run, "through_cycle": records[-1]["cycles"][1] if records else -1, "records": records}
 
     def _read_criteria(self) -> dict:
         """The criteria as run_report.py reports them: the result, each criterion, what each
@@ -388,7 +389,6 @@ class ExperimentEngine:
                 self._new_instance()
                 with self._queue_lock:
                     self._queue.clear()
-                    self._history = []
             return {"ok": True, "reset": True, "stream": self.stream, "previous_run": previous}
         if action == "speed":
             try:
