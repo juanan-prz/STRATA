@@ -898,7 +898,7 @@ const questions = new Set();      // the Sombunal questions of this instance: ea
 function kindOf(name, c) {
   const kind = [];
   if (ZERO_POINTS.has(name)) kind.push('zero point');
-  else if (ANCHORS.has(name)) kind.push('anchor');
+  else if (ANCHORS.has(name)) kind.push(name === 'SYSTEM' ? 'anchor · perception channel' : 'anchor');
   if (c.conflict) kind.push('conflict');                      // typed by its proof chain
   if (questions.has(name)) kind.push('Sombunal question');
   if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
@@ -924,7 +924,7 @@ function showTooltip(name, c, mx, my) {
   setText('tt-banked', fixed(c.banked, 2));                   // exchange banked toward crystallization
   setText('tt-vc', fixed(c.vc, 3));
   setText('tt-mode', c.mode || '—');
-  setText('tt-chirality', c.chirality === 1 ? '+' : c.chirality === -1 ? '−' : '—');
+  setText('tt-chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—');      // ±1, never mistaken for '—'
   setText('tt-crystal', c.crystal || '—');
   setText('tt-lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—');
   setText('tt-proofs', c.proof_chain);

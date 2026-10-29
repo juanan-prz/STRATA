@@ -301,6 +301,7 @@
     border: 1px solid var(--border-hi); border-radius: var(--r-sm);
   }
   .search::placeholder { color: var(--text-dim); }
+  .search[aria-invalid="true"] { border-color: var(--warn); }
   .legend {
     position: absolute; bottom: var(--sp-3); right: var(--sp-3); z-index: 10;
     max-width: calc(100% - 2 * var(--sp-3));
@@ -315,7 +316,7 @@
   .legend.proofs { top: 58px; bottom: auto; flex-direction: column; align-items: flex-start; gap: 4px; }
   .legend[hidden] { display: none; }
   .legend .line { width: 16px; height: 0; border-top: 2px solid; }
-  @media (max-width: 1100px) { .legend { display: none; } }
+  @media (max-width: 1100px) { .legend:not(.proofs) { display: none; } }
 
   .empty-state {                                /* until a state is loaded */
     position: absolute; inset: 0; z-index: 5;
@@ -384,6 +385,7 @@
     line-height: 1.9;
   }
   .genesis .op { padding-left: var(--sp-3); font-weight: 700; }
+  .genesis .side { margin-right: var(--sp-2); color: var(--text-dim); }
   .genesis .op.concordance { color: var(--accent); }
   .genesis .op.conflict { color: var(--warn); }
   .link {                                       /* a construct named in the inspector: a click selects it */
@@ -572,8 +574,9 @@ const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INT
 const ERA_CAPACITY = 10000;       // InternalClock.ERA_CAPACITY: offsets in one era
 const DECAY = 0.08;               // InternalClock.DECAY: relational decay per tick
 const VC_UNSTABLE = 0.25;         // Sombunal.global_instability: below it, no ontological gravity
-// Strata: the distance from the centre of each stratum, following the ladder of being
-// inwards to outwards (Understanding TMC pp.49–50) — the Zero Points at the centre, as origin
+// Strata: the distance from the centre of each stratum, after the ladder of being, inwards
+// to outwards (Understanding TMC pp.49–50: an interpretation, not TMC's own text); the
+// Zero Points at the centre, as origin and anchor (a design choice)
 const RINGS = { zero: 0, anchor: 60, NULL_00: 110, UMBRA_0: 170, UNIT_1: 240, APPARENT: 330 };
 const LAYOUT_STEPS = 300;         // force-layout steps for a new state
 const CONTINUE_STEPS = 120;       // for the next state of a timeline, which keeps the positions it can
@@ -685,10 +688,32 @@ function invariantViolations(field) {
 }
 
 // ConcordancyField.contraction: 0 at full expansion, 1 at full contraction
-const contraction = field => (1 - Math.cos(field.breath_phase || 0)) / 2;
+const contraction = field => field.breath_phase == null ? null : (1 - Math.cos(field.breath_phase)) / 2;
 
 
 // ═══ One saved state, read once ═════════════════════════════════════════════
+
+// A state written before v13.3 lacks fields the framework now keeps (it would not load such
+// a file). Each is filled with the nearest stand-in, and the fields estimated are returned,
+// so that what depends on them is said to be an estimate.
+function completeState(state) {
+  const estimated = new Set(), field = state.field;
+  const fill = (obj, key, value) => { if (!(key in obj)) { obj[key] = value; estimated.add(key); } };
+  for (const c of field.constructs) {
+    const chain = c.proof_chain || [];
+    fill(c, 'proofs_total', chain.length);
+    fill(c, 'erode_total', chain.filter(p => p.relation === 'ERODE').length);
+    fill(c, 'conflict', chain.some(p => p.relation === 'CONFLICT' && p.tensate_role === 'TENSOUT'));
+    fill(c, 'crystal_state', null);
+    fill(c, 'recursion_exchanged', 0);
+    fill(c, 'chirality', null);
+    fill(c, 'lineage', []);
+  }
+  fill(field, 'apparents_total', (field.apparent_log || []).length);
+  fill(field, 'terminations_total', (field.termination_log || []).length);
+  for (const key of ['reincarnations', 'breaths', 'tolerance', 'breath_phase']) fill(field, key, null);
+  return [...estimated];
+}
 
 // A view holds the state and what is derived from it, so drawing and inspecting never
 // recompute. How a construct entered, while its first relation lasts: a Sombunal question
@@ -823,6 +848,8 @@ function resizeCanvas() {
 }
 
 const isShown = c => FILTERS.layer[c.layer];
+// On show: its layer is, or it is the selection, which the filters never hide
+const onShow = (name, c) => isShown(c) || name === selected;
 function shapeOf(name, layer) {
   if (ZERO_POINTS.has(name)) return 'star';
   if (ANCHORS.has(name)) return 'diamond';
@@ -896,21 +923,12 @@ function render() {
   const focus = selected && view.constructs.has(selected) ? selected : null;
   const near = focus ? new Set([focus, ...view.edgesOf.get(focus).flatMap(e => [e.src, e.tgt])]) : null;
 
-  if (layout === 'strata') {                        // the rings that hold someone
-    const held = new Set(Array.from(view.constructs, ([name, c]) => stratumOf(name, c)));
-    ctx.font = `${9 * px}px ${FONT_MONO}`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    for (const [stratum, r] of Object.entries(RINGS)) {
-      if (!r || !held.has(stratum)) continue;
-      ring(0, 0, r, COLOR.layer[stratum] || COLOR.muted, 0.22, px, [4 * px, 4 * px]);
-      ctx.globalAlpha = 0.6; ctx.fillStyle = COLOR.muted;
-      ctx.fillText(stratum === 'anchor' ? 'anchors' : stratum, -r * Math.SQRT1_2 - 4 * px, -r * Math.SQRT1_2);
-    }
-  }
+  if (layout === 'strata') drawStrata(px);
 
   const drawEdge = (e, emphasis) => {
     const a = positions.get(e.src), b = positions.get(e.tgt);
     const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
-    if (!a || !b || !ca || !cb || !FILTERS.edgeState[e.state] || !isShown(ca) || !isShown(cb)) return;
+    if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state] || !onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
     const width = e.state === 'BOTH' ? 2 : 1, dim = near && !emphasis ? 0.25 : 1;
     // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
@@ -924,7 +942,7 @@ function render() {
 
   for (const [name, c] of view.constructs) {
     const p = positions.get(name);
-    if (!p || !isShown(c)) continue;
+    if (!p || !onShow(name, c)) continue;
     const color = COLOR.layer[LAYERS[c.layer]] || '#888';
     const shape = shapeOf(name, c.layer), size = sizeOf(name, c), dim = near && !near.has(name) ? 0.3 : 1;
     if (c.layer === APPARENT) ring(p.x, p.y, size + 2, color, 0.4 * dim, 1.5);      // a crystal's halo
@@ -956,11 +974,23 @@ function render() {
   if (focus) drawGenesis(focus, px);
   if (focus) {
     const p = positions.get(focus), c = view.constructs.get(focus);
-    if (p && isShown(c)) ring(p.x, p.y, sizeOf(focus, c) + 9 * px, COLOR.bright, 0.9, 1.5 * px);
+    if (p) ring(p.x, p.y, sizeOf(focus, c) + 9 * px, COLOR.bright, 0.9, 1.5 * px);
   }
   if (viewK >= LABEL_ZOOM || near) drawLabels(px, viewK >= LABEL_ZOOM ? null : near);
   ctx.globalAlpha = 1;
   ctx.restore();
+}
+
+// In strata, the rings that hold someone, each named at its upper left
+function drawStrata(px) {
+  const held = new Set(Array.from(view.constructs, ([name, c]) => stratumOf(name, c)));
+  ctx.font = `${9 * px}px ${FONT_MONO}`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  for (const [stratum, r] of Object.entries(RINGS)) {
+    if (!r || !held.has(stratum)) continue;
+    ring(0, 0, r, COLOR.layer[stratum] || COLOR.muted, 0.22, px, [4 * px, 4 * px]);
+    ctx.globalAlpha = 0.6; ctx.fillStyle = COLOR.muted;
+    ctx.fillText(stratum === 'anchor' ? 'anchors' : stratum, -r * Math.SQRT1_2 - 4 * px, -r * Math.SQRT1_2);
+  }
 }
 
 // The [::] that made the selected construct, when the file keeps it (the last 50
@@ -990,7 +1020,7 @@ function drawLabels(px, only) {
   ctx.fillStyle = COLOR.muted; ctx.globalAlpha = 0.85;
   for (const [name, c] of view.constructs) {
     const p = positions.get(name);
-    if (!p || !isShown(c) || (only && !only.has(name))) continue;
+    if (!p || !onShow(name, c) || (only && !only.has(name))) continue;
     ctx.fillText(name.length > 26 ? name.slice(0, 24) + '…' : name, p.x, p.y + sizeOf(name, c) + 3 * px);
   }
 }
@@ -1029,7 +1059,7 @@ function constructAt(clientX, clientY) {
   let found = null, nearest = Infinity;
   for (const [name, c] of view.constructs) {
     const p = positions.get(name);
-    if (!p || !isShown(c)) continue;
+    if (!p || !onShow(name, c)) continue;
     const d = Math.hypot(wx - p.x, wy - p.y);
     if (d <= Math.max(sizeOf(name, c), HOVER_PX / viewK) && d < nearest) { found = name; nearest = d; }
   }
@@ -1150,43 +1180,48 @@ function buildFilters() {
   }));
 }
 
-function renderPanels() {
-  const { state } = view, field = state.field, cs = field.constructs;
-  const layers = Object.fromEntries(LAYERS.map(l => [l, 0]));
-  const states = Object.fromEntries(STATES.map(s => [s, 0]));
-  const modes = Object.fromEntries(MODES.map(m => [m, 0]));
-  for (const c of cs) { layers[LAYERS[c.layer]]++; modes[view.mode.get(c.name)]++; }
-  for (const e of view.edges) if (e.state in states) states[e.state]++;
-  let diamonds = 0, stars = 0, hexagons = 0;
+// Counts the header and the panels share: by layer, edge state, mode and shape
+function tally() {
+  const cs = view.state.field.constructs, t = {
+    layers: Object.fromEntries(LAYERS.map(l => [l, 0])), states: Object.fromEntries(STATES.map(s => [s, 0])),
+    modes: Object.fromEntries(MODES.map(m => [m, 0])), diamonds: 0, stars: 0, hexagons: 0,
+  };
   for (const c of cs) {
-    if (ZERO_POINTS.has(c.name)) stars++;
-    else if (ANCHORS.has(c.name)) diamonds++;
-    else if (c.layer === APPARENT) hexagons++;
+    t.layers[LAYERS[c.layer]]++;
+    t.modes[view.mode.get(c.name)]++;
+    if (ZERO_POINTS.has(c.name)) t.stars++;
+    else if (ANCHORS.has(c.name)) t.diamonds++;
+    else if (c.layer === APPARENT) t.hexagons++;
   }
+  for (const e of view.edges) if (e.state in t.states) t.states[e.state]++;
+  return t;
+}
 
-  // Header
-  const T = atT([state.clock.era, state.clock.offset]);
+function renderHeader(t) {
+  const { state } = view, ledger = state.ledger || {};
   setText('header-cycles', state.cycle ?? '—');
-  setText('header-T', T);
-  $('header-n').replaceChildren(cs.length + ' ', el('span', 'n-breakdown', `(${diamonds}◆·${stars}✦·${hexagons}⬢)`));
-  const ledger = state.ledger || {};
+  setText('header-T', atT([state.clock.era, state.clock.offset]));
+  $('header-n').replaceChildren(state.field.constructs.length + ' ',
+    el('span', 'n-breakdown', `(${t.diamonds}◆·${t.stars}✦·${t.hexagons}⬢)`));
   $('header-ledger').replaceChildren((ledger.count ?? '—') + ' ',
     el('span', 'n-breakdown', ledger.head ? ledger.head.slice(0, 12) + '…' : ''));
   const where = [view.file, runOf(state) && 'run ' + runOf(state)].filter(Boolean).join(' · ');
   setText('header-file', where);
   $('header-file').title = where + (ledger.path ? '\nledger: ' + ledger.path : '');
+}
 
-  // Counters
+function renderCounters(t) {
+  const { state } = view, field = state.field, cs = field.constructs;
   setText('s-cycles', state.cycle ?? '—');
-  setText('s-T', T);
+  setText('s-T', atT([state.clock.era, state.clock.offset]));
   setText('s-constructs', cs.length);
   setText('s-edges', view.edges.length);
   // the apparent log also counts the Zero Points, crystals from birth: both figures
   const zeroPoints = cs.filter(c => ZERO_POINTS.has(c.name) && c.layer === APPARENT).length;
   setText('s-apparents', `${field.apparents_total} (${Math.max(0, field.apparents_total - zeroPoints)} emergent)`);
-  setText('s-concluded', field.terminations_total ?? '—');
+  setText('s-concluded', field.terminations_total);
   setText('s-conflicts', cs.filter(c => c.conflict).length);
-  setText('s-both', states.BOTH);
+  setText('s-both', t.states.BOTH);
   setText('s-reinc', field.reincarnations ?? '—');
   const energies = Array.from(view.energy.values()).sort((a, b) => b - a);
   setText('s-energy3', energies.slice(0, 3).reduce((sum, e) => sum + e, 0).toFixed(2));
@@ -1197,18 +1232,19 @@ function renderPanels() {
   $('s-invariant').className = 'stat-val ' + (holds ? '' : 'warn');
   $('s-invariant').title = holds ? '' : view.violations.join('\n');
 
-  // Breathing
   const breath = contraction(field);
   setText('b-breath', field.breaths ?? '—');
-  setText('b-contraction', breath.toFixed(2));
-  $('b-bar').style.width = breath * 100 + '%';
+  setText('b-contraction', fixed(breath, 2));
+  $('b-bar').style.width = (breath || 0) * 100 + '%';
   setText('b-tolerance', fixed(field.tolerance, 2));
+}
 
-  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: modes[m], color: COLOR.mode[m], title: MODE_MEANING[m] })));
-  renderBreakdown('layers-list', LAYERS.map(l => ({ label: l, count: layers[l], color: COLOR.layer[l] })));
-  renderLagrangian(cs);
-  for (const l of LAYERS) filterCounts.layer[l].textContent = layers[l];
-  for (const s of STATES) filterCounts.state[s].textContent = states[s];
+function renderBreakdowns(t) {
+  renderBreakdown('modes-list', MODES.map(m => ({ label: m, count: t.modes[m], color: COLOR.mode[m], title: MODE_MEANING[m] })));
+  renderBreakdown('layers-list', LAYERS.map(l => ({ label: l, count: t.layers[l], color: COLOR.layer[l] })));
+  renderLagrangian(view.state.field.constructs);
+  for (const l of LAYERS) filterCounts.layer[l].textContent = t.layers[l];
+  for (const s of STATES) filterCounts.state[s].textContent = t.states[s];
   $('names').replaceChildren(...Array.from(view.constructs.keys()).sort().map(name => {
     const option = el('option'); option.value = name; return option;
   }));
@@ -1216,6 +1252,14 @@ function renderPanels() {
 
 
 // ═══ The construct: what the inspector shows ════════════════════════════════
+
+// A transformation as the framework records it (SOMBUNAL::shift@c41, CUSSIVE_PROMOTION, ...), in words
+function transformation(tx) {
+  const [what, at] = String(tx).split('@');
+  const words = { 'SOMBUNAL::shift': 'Sombunal shift', CUSSIVE_PROMOTION: 'cussive promotion',
+                  APPARENT_LOCK: 'crystallized', REINCARNATION: 'reincarnated' }[what] || what.toLowerCase();
+  return at ? `${words} · ${at}` : words;
+}
 
 function kv(key, value, title) {
   const row = el('div', 'kv');
@@ -1267,12 +1311,21 @@ function renderInspector() {
   parts.push(el('h3', null, 'Identity'),
     kv('layer', LAYERS[c.layer]),
     kv('witness', c.witness, 'its genesis witness: it never changes'),
-    kv('identity', c.identity_hash || '—', 'the identity hash: the Sombunal shifts it after each [::], the witness stays'),
-    kv('version · shifts', `${c.version ?? 0} · ${(c.lineage || []).length}`, 'identity version, and the shifts kept in its lineage'),
+    kv('identity', c.identity_hash || '—', 'its identity hash: every transformation changes it, the witness stays'),
+    kv('transformations', c.version ?? 0, 'every transformation in its life: Sombunal shifts, cussive promotions, '
+                                          + 'the lock of a crystal, a reincarnation'),
     kv('born at T', `${atT(c.born_at)} · ${ticks(ageSince(clock, c.born_at))} ago`),
-    kv('chirality', c.chirality === 1 ? '+' : c.chirality === -1 ? '−' : '—', 'born with it, handed on to its products when it leads'),
+    kv('chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—', 'born with it, handed on to its products when it leads'),
     kv('crystallized as', c.crystal_state || '—', 'the tetralemmic state it crystallized in: fixed for good'),
     kv('lagrange', c.lagrange ? `${c.lagrange} · ${(LAGRANGE[c.lagrange] || [])[1] || ''}` : '—'));
+
+  const history = (c.lineage || []).slice(-5).reverse(), total = c.version ?? history.length;
+  if (history.length) {
+    parts.push(el('h3', null, 'History'), el('p', 'note', history.length < total
+      ? `the last ${history.length} of ${total} transformations, newest first (the ledger keeps them all):`
+      : 'its transformations, newest first:'));
+    for (const t of history) parts.push(kv(transformation(t.tx), `T${atT(t.T)} · v${t.version}`));
+  }
 
   const bar = el('div', 'vc-bar'), fill = el('div');
   fill.style.width = vc * 100 + '%';
@@ -1280,7 +1333,9 @@ function renderInspector() {
   parts.push(el('h3', null, 'Measures'),
     kv('energy', fixed(view.energy.get(name), 3), 'what [::] selection weighs: incident weight × tension, plus banked and umbragiac'),
     kv('umbragiac', fixed(c.umbragiac_score, 3), 'contradiction stress, accumulated by the UCO'),
-    kv('banked', fixed(c.recursion_exchanged, 2), 'recursion exchanged through BOTH channels, banked as tension toward crystallization'),
+    kv('banked', fixed(c.recursion_exchanged, 2), 'tension banked toward crystallization: what its BOTH channels exchanged '
+                                                  + 'when they closed, what dissolved channels backed up (the halo), what '
+                                                  + 'crystals passed on in exchange'),
     kv('Vc', vc.toFixed(4), 'anchoring weight: Vc = (τ · σth · αm)^(1/3) (Understanding DeOS p.65)'),
     bar,
     kv('τ · σth · αm', `${tau.toFixed(2)} · ${sigma.toFixed(2)} · ${alpha.toFixed(2)}`,
@@ -1310,11 +1365,11 @@ function renderInspector() {
   const op = view.ops.get(name);
   if (op) {
     // x :: y → z: the older operand on the left of the Tensin leads (TMC Law 6, p.35)
-    const conflict = op.state === 'CONFLICT', g = el('div', 'genesis'), operand = n => {
-      const line = el('div'); line.append(nameRef(n)); return line;
+    const conflict = op.state === 'CONFLICT', g = el('div', 'genesis'), operand = (n, side) => {
+      const line = el('div'); line.append(el('span', 'side', side), nameRef(n)); return line;
     };
-    g.append(operand(op.x), el('div', 'op ' + (conflict ? 'conflict' : 'concordance'), conflict ? '⊗  conflict' : '::'),
-             operand(op.y), el('div', 'note', ['→ at cycle ' + op.cycle, op.depth != null && 'depth ' + op.depth,
+    g.append(operand(op.x, 'L'), el('div', 'op ' + (conflict ? 'conflict' : 'concordance'), conflict ? '⊗  conflict' : '::'),
+             operand(op.y, 'R'), el('div', 'note', ['→ at cycle ' + op.cycle, op.depth != null && 'depth ' + op.depth,
                                               op.weight != null && 'weight ' + fixed(op.weight, 3)].filter(Boolean).join(' · ')));
     parts.push(g);
   } else {
@@ -1360,7 +1415,7 @@ function overviewParts() {
       const m = t.meta || {}, entry = el('div', 'list-entry');
       entry.append(nameRef(m.name || t.id, false),
         el('div', 'meta', `${m.final_layer || '?'} · ${m.final_mode || '?'} · Vc ${fixed(m.final_Vc, 3)} · `
-                          + `${ticks(m.lifetime)} · ${m.cause || ''} · T${atT(t.time)}`));
+                          + `${ticks(m.lifetime)} · ${(m.cause || '').replace(/_/g, ' ')} · T${atT(t.time)}`));
       parts.push(entry);
     }
   }
@@ -1378,21 +1433,24 @@ async function openFiles(files) {
   const read = await Promise.all(Array.from(files).map(async file => {
     try {
       const state = JSON.parse(await file.text());
-      return state && state.field && Array.isArray(state.field.constructs) && state.clock
-        ? { state, file: file.name } : { error: file.name };
+      if (!(state && state.field && Array.isArray(state.field.constructs) && state.clock)) return { error: file.name };
+      return { state, file: file.name, estimated: completeState(state) };
     } catch (err) {
       return { error: file.name };
     }
   }));
   const loaded = read.filter(r => r.state).sort((a, b) => (a.state.cycle ?? 0) - (b.state.cycle ?? 0));
   const rejected = read.filter(r => r.error).map(r => r.error);
+  const older = loaded.filter(r => r.estimated.length);
   const runs = new Set(loaded.map(r => runOf(r.state)).filter(Boolean));
   const note = $('files-note');
-  note.className = 'note' + (rejected.length || runs.size > 1 ? ' warn' : '');
+  note.className = 'note' + (rejected.length || runs.size > 1 || older.length ? ' warn' : '');
   note.textContent = [
     loaded.length ? `${loaded.length} file${loaded.length === 1 ? '' : 's'}` + (runs.size === 1 ? ` of run ${[...runs][0]}` : '') : '',
     runs.size > 1 ? `from ${runs.size} different runs: a timeline compares one instance with itself` : '',
     rejected.length ? `not a SIRISYS state: ${rejected.join(', ')}` : '',
+    ...older.map(r => `${r.file} was written before v13.3: ${r.estimated.join(', ')} estimated, `
+                      + 'and with them Vc and energy'),
   ].filter(Boolean).join(' · ') || 'or drop them anywhere on the page';
   if (!loaded.length) return;
   stopPlaying();
@@ -1414,7 +1472,10 @@ function show(index) {
   view = deriveView(state, file);
   relax(view, positions.size === 0 ? LAYOUT_STEPS : CONTINUE_STEPS);
   if (selected && !view.constructs.has(selected)) selected = null;
-  renderPanels();
+  const t = tally();
+  renderHeader(t);
+  renderCounters(t);
+  renderBreakdowns(t);
   renderInspector();
   $('tl-slider').value = index;
   setText('tl-position', `${index + 1} / ${timeline.length} · ${file}`);
@@ -1453,8 +1514,14 @@ $('btn-open').onclick = $('btn-open-empty').onclick = () => fileInput.click();
 fileInput.onchange = () => { openFiles(fileInput.files); fileInput.value = ''; };
 // Files dropped anywhere on the page
 let dragDepth = 0;
-window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
-window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+const carriesFiles = e => Array.from(e.dataTransfer?.types || []).includes('Files');
+window.addEventListener('dragenter', e => {
+  if (!carriesFiles(e)) return;
+  e.preventDefault(); dragDepth++; document.body.classList.add('dragging');
+});
+window.addEventListener('dragleave', e => {
+  if (carriesFiles(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); }
+});
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => {
   e.preventDefault();
@@ -1492,25 +1559,31 @@ $('btn-next').onclick = () => step(1);
 $('btn-play').onclick = togglePlaying;
 $('tl-slider').oninput = () => { stopPlaying(); show(Number($('tl-slider').value)); };
 
-// Find: an exact name, or the first that contains what was typed
+// Find: a name picked from the list or typed in full selects at once; Enter finds the first
+// name that contains what was typed, and says so when none does
 const search = $('search');
 function find() {
-  if (!view) return;
   const text = search.value.trim();
-  if (!text) return;
-  const names = Array.from(view.constructs.keys());
-  const found = view.constructs.has(text) ? text : names.find(n => n.toLowerCase().includes(text.toLowerCase()));
+  if (!view || !text) return;
+  const found = view.constructs.has(text) ? text
+    : Array.from(view.constructs.keys()).find(n => n.toLowerCase().includes(text.toLowerCase()));
+  search.setAttribute('aria-invalid', String(!found));
+  search.title = found ? '' : 'no construct has this in its name';
   if (found) select(found, true);
 }
-search.addEventListener('change', find);
+search.addEventListener('input', () => {
+  search.removeAttribute('aria-invalid'); search.title = '';
+  if (view && view.constructs.has(search.value)) select(search.value, true);
+});
 search.addEventListener('keydown', e => { if (e.key === 'Enter') find(); });
 
 // F fits, V changes the layout, P shows the proofs, O opens, ← → move in the timeline,
-// Esc clears the selection; a focused control keeps its own keys
+// Esc clears the selection. The search box keeps its letters and the slider its arrows;
+// a focused button uses only Space and Enter, which are not shortcuts here.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') { if (e.target === search) search.blur(); select(null); return; }
-  if (e.target instanceof Element && e.target.closest('button, input, summary')) return;
+  if (e.target instanceof Element && e.target.closest('input, textarea, select')) return;
   const act = {
     f: fitView, v: () => setLayout(layout === 'relations' ? 'strata' : 'relations'),
     p: () => setProofOverlay(!proofOverlay), o: () => fileInput.click(),
