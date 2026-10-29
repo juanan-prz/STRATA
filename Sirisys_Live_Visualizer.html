@@ -43,7 +43,8 @@
     --sombunal: #9b87f5;
     --sombunal-soft: rgba(155, 135, 245, 0.10);
     --sombunal-text: #c9bfff;
-    --concluded: #7a8aa8;                       /* a conclusion is not an error: no alarm colour */
+    --concluded: #5a74a8;                       /* a conclusion is not an error: no alarm colour; a
+                                                   steel blue darker than the born and the narration */
 
     /* Ontological layers: one warm hue from shadow to light, in the order of the layers
        (lightness rises with the layer); no other colour on the page is of this hue */
@@ -55,8 +56,10 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker and FALSE dashed. The accent is never data */
-    --col-TRUE: #4475f6;
+       neutral. On the canvas BOTH is also thicker, FALSE dashed and NEITHER fainter, so that a
+       thin TRUE line stays blue beside it: thin lines are told apart by lightness more than by
+       hue. The accent is never data */
+    --col-TRUE: #4f80ff;
     --col-FALSE: #cb86db;
     --col-BOTH: #ea5202;
     --col-NEITHER: #5d646f;
@@ -627,7 +630,7 @@
     <div class="break"></div>
     <div id="edge-legend" class="items"></div>
     <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1"/></svg>
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
       <span>crystal support</span>
     </div>
   </div>
@@ -696,8 +699,9 @@ const MODE_MEANING = {
   NEUTRAL: 'balanced, or no proofs yet',
 };
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed,
+// NEITHER fainter (alpha multiplies the edge's own opacity)
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
 const EXCHANGE_QUANTUM = 12;
 
@@ -757,6 +761,7 @@ function edgeMark(state) {
   const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
   for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
+  if (style.alpha) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
   if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
     stroke.setAttribute('stroke-opacity', '0.4');
@@ -927,7 +932,9 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
 // arrowhead at its target (src → tgt). A BOTH channel is faint, with what it has exchanged
 // brighter from its middle outwards: whole when it closes at the quantum.
 function drawRelation(a, b, e, alpha, extra, arrowGap) {
-  const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, color = COLOR.state[e.state] || COLOR.dim;
+  const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
+  const color = COLOR.state[e.state] || COLOR.dim;
+  alpha *= fade;
   if (e.state === 'BOTH' && e.both_age != null) {
     const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
@@ -966,10 +973,11 @@ function render(now) {
     const a = nodes.get(e.src), b = nodes.get(e.tgt);
     if (!a || !b || !FILTERS.edgeState[e.state] || !isShown(a) || !isShown(b)) continue;
     const dim = quietAnchors && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
-    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
+    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo, faint
+    // enough that the edge's own colour shows through it.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
     if (b.c.layer === APPARENT && e.state !== 'BOTH') {
-      line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+      line(a, b, COLOR.layer.APPARENT, 0.08 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
     }
     const alpha = Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
     drawRelation(a, b, e, alpha, 0, arrows ? sizeOf(e.tgt, b) + 2 : null);

@@ -155,7 +155,7 @@ The live view and the inspector draw the field alike, and the legend keys all of
 - **Layouts.** *relations*: placed by their relations. *strata*: the Zero Points at the centre, then the anchors, NULL_00, UMBRA_0, UNIT_1 and APPARENT outwards, so that a construct that rises a layer moves out.
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
 - **Shapes.** A construct is a dot in the colour of its layer; an anchor (I::Am, I::AmNot, SYSTEM), a diamond; a crystal the field formed, an open hexagon, so that the active strata stand out; a Zero Point, a star; a conflict, a ringed dot. One ring is drawn where a construct rises to UNIT_1, two where it crystallizes.
-- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and thicker, NEITHER grey. An edge into a crystal, BOTH aside, is drawn as crystal support: it ages on breaths, not on cycles.
+- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and thicker, NEITHER grey and fainter, so that a thin blue line stands out beside it. An edge into a crystal, BOTH aside, is drawn with a faint halo, as crystal support: it ages on breaths, not on cycles.
 - **A BOTH channel** is drawn faint, with what it has exchanged (weight × age) brighter from its middle outwards: whole when it closes at the exchange quantum.
 - **Direction.** From zoom ×2 each edge shows its direction.
 - **Existence modes** are written with their signs, [Ω] and [Ꮠ].
@@ -216,7 +216,7 @@ python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
 | ← → | Previous / next state of the timeline |
 | F | Fit the view |
 | V | Change the layout: relations ↔ strata |
-| P | Ring the constructs whose saved proofs carry the relation chosen in its list |
+| P | Ring the constructs whose saved proofs carry the relation chosen in its list (a dashed ring; the selection's is solid) |
 | A | Quiet anchors |
 | Esc | Clear the selection |
 

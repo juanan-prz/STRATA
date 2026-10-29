@@ -55,8 +55,10 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker and FALSE dashed. The accent is never data */
-    --col-TRUE: #4475f6;
+       neutral. On the canvas BOTH is also thicker, FALSE dashed and NEITHER fainter, so that a
+       thin TRUE line stays blue beside it: thin lines are told apart by lightness more than by
+       hue. The accent is never data */
+    --col-TRUE: #4f80ff;
     --col-FALSE: #cb86db;
     --col-BOTH: #ea5202;
     --col-NEITHER: #5d646f;
@@ -504,7 +506,7 @@
       <button class="btn" id="btn-strata" aria-pressed="false" title="Placed by stratum: Zero Points at the centre, then the anchors, then UMBRA_0, UNIT_1 and APPARENT outwards (V)">strata</button>
     </div>
     <div class="ctrl-group floating">
-      <button class="btn" id="btn-proofs" aria-pressed="false" title="Rings the constructs whose saved proofs carry the relation chosen in its list (P)">proofs</button>
+      <button class="btn" id="btn-proofs" aria-pressed="false" title="Rings (dashed) the constructs whose saved proofs carry the relation chosen in its list (P)">proofs</button>
       <button class="btn" id="btn-anchors" aria-pressed="false" title="The relations of the anchors, often most of the edges: faint, so that the rest of the structure shows (A)">quiet anchors</button>
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
@@ -553,7 +555,7 @@
     <div class="break"></div>
     <div id="edge-legend" class="items"></div>
     <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.25"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1"/></svg>
+      <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
       <span>crystal support</span>
     </div>
   </div>
@@ -608,8 +610,9 @@ const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
-// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed
-const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1 } };
+// How the canvas draws each edge state, besides its colour: BOTH thicker, FALSE dashed,
+// NEITHER fainter (alpha multiplies the edge's own opacity)
+const EDGE_STYLE = { BOTH: { width: 2 }, TRUE: { width: 1 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
 const EXCHANGE_QUANTUM = 12;
 
@@ -662,6 +665,7 @@ function edgeMark(state) {
   const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
   for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
+  if (style.alpha) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
   if (state === 'BOTH') {                           // faint, with what it exchanged brighter in the middle
     stroke.setAttribute('stroke-opacity', '0.4');
@@ -975,7 +979,9 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
 // arrowhead at its target (src → tgt). A BOTH channel is faint, with what it has exchanged
 // brighter from its middle outwards: whole when it closes at the quantum.
 function drawRelation(a, b, e, alpha, extra, arrowGap) {
-  const { width, dash } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER, color = COLOR.state[e.state] || COLOR.dim;
+  const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
+  const color = COLOR.state[e.state] || COLOR.dim;
+  alpha *= fade;
   if (e.state === 'BOTH' && e.both_age != null) {
     const share = Math.min(1, (e.weight || 0) * e.both_age / EXCHANGE_QUANTUM) / 2;
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, hx = (b.x - a.x) * share, hy = (b.y - a.y) * share;
@@ -1010,10 +1016,11 @@ function render() {
     if (!onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
     const quiet = quietAnchors && !emphasis && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
     const dim = (near && !emphasis ? 0.25 : ringed ? 0.45 : 1) * quiet;
-    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo.
+    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo, faint
+    // enough that the edge's own colour shows through it.
     // A BOTH edge faces its fixed floor instead, into a crystal or not.
     if (cb.layer === APPARENT && e.state !== 'BOTH') {
-      line(a, b, COLOR.layer.APPARENT, 0.12 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
+      line(a, b, COLOR.layer.APPARENT, 0.08 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
     }
     const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
     drawRelation(a, b, e, alpha, emphasis ? 0.5 : 0, emphasis || viewK >= ARROW_ZOOM ? sizeOf(e.tgt, cb) + 2 : null);
@@ -1048,9 +1055,9 @@ function render() {
       ctx.strokeStyle = COLOR.bright; ctx.globalAlpha = 0.7 * dim; ctx.lineWidth = 0.9;
       ctx.stroke();
     }
-    // Rings around it, a few pixels apart: the overlay's relation, new since the previous file
-    // (and, below, the selection)
-    if (ringed && ringed.has(name)) ring(p.x, p.y, size + 5 * px, COLOR.bright, 0.85 * dim, 1.5 * px);
+    // Rings around it, a few pixels apart: the overlay's relation (dashed), new since the previous
+    // file (in the accent) and, below, the selection (solid)
+    if (ringed && ringed.has(name)) ring(p.x, p.y, size + 5 * px, COLOR.bright, 0.85 * dim, 1.5 * px, [3 * px, 2 * px]);
     if (previousNames && !previousNames.has(name)) ring(p.x, p.y, size + 7 * px, COLOR.accent, 0.7, 1.2 * px);
   }
 

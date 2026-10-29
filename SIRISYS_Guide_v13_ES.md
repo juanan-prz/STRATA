@@ -155,7 +155,7 @@ La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge t
 - **Disposiciones.** *relations*: por sus relaciones. *strata*: los Zero Points en el centro, luego las anclas, NULL_00, UMBRA_0, UNIT_1 y APPARENT hacia fuera, de modo que un constructo que sube de capa se desplaza hacia fuera.
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
 - **Formas.** Un constructo es un punto del color de su capa; un ancla (I::Am, I::AmNot, SYSTEM), un rombo; un cristal que formó el campo, un hexágono abierto, para que destaquen los estratos activos; un Zero Point, una estrella; un conflicto, un punto con anillo. Se dibuja un anillo donde un constructo sube a UNIT_1 y dos donde cristaliza.
-- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y más gruesa, NEITHER gris. Una arista hacia un cristal, salvo BOTH, se dibuja como soporte del cristal: envejece por respiraciones, no por ciclos.
+- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y más gruesa, NEITHER gris y más tenue, para que una línea azul fina destaque a su lado. Una arista hacia un cristal, salvo BOTH, se dibuja con un halo tenue, como soporte del cristal: envejece por respiraciones, no por ciclos.
 - **Un canal BOTH** se dibuja tenue, con lo que ha intercambiado (peso × edad) más brillante desde su centro hacia fuera: entero cuando se cierra al alcanzar el cuanto de intercambio.
 - **Dirección.** Desde el zoom ×2, cada arista muestra su dirección.
 - **Los modos de existencia** se escriben con su signo, [Ω] y [Ꮠ].
@@ -216,7 +216,7 @@ python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
 | ← → | Estado anterior / siguiente de la línea de tiempo |
 | F | Encuadra la vista |
 | V | Cambia la disposición: relations ↔ strata |
-| P | Rodea los constructos cuyas pruebas guardadas llevan la relación elegida en su lista |
+| P | Rodea los constructos cuyas pruebas guardadas llevan la relación elegida en su lista (con un anillo discontinuo; el de la selección es continuo) |
 | A | Atenúa las anclas (quiet anchors) |
 | Esc | Quita la selección |
 
