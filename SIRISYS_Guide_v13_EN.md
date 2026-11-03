@@ -53,7 +53,7 @@ Python 3.10 or higher on macOS, Linux, or Windows with WSL.
 pip3 install -r requirements.txt
 ```
 
-This installs `numpy` and `psutil` (the field and its real percepts), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `pip3 install --break-system-packages -r requirements.txt`, or a virtual environment.
+This installs `numpy` and `psutil` (the field and its real percepts; without `psutil`, `live_c2.py` and `run_report.py --percepts live` refuse to start), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `pip3 install --break-system-packages -r requirements.txt`, or a virtual environment.
 
 ### What a model does
 
@@ -73,7 +73,7 @@ With the default backend and no key, the field runs without a model and says so 
 - **Ollama**, local: nothing leaves the machine while `OLLAMA_HOST` points to this computer. Install it from ollama.com and pull a general-purpose model, for example `ollama pull llama3.1`. Reasoning models that "think" before answering can spend the short reply budget thinking and return empty names; the model watch then stops the run.
 - **Anthropic API**: the requests leave the machine. Set the key in the terminal session, `export ANTHROPIC_API_KEY="sk-ant-..."`; it lasts while that window stays open. Never store it in a file in this folder.
 
-Keep the same backend, model and profile across runs you intend to compare.
+Keep the same backend, model, profile and machine across runs you intend to compare.
 
 ### The model watch
 
@@ -230,7 +230,7 @@ python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
 python3 run_report.py --cycles 20 --seeds 1 --backend ollama --profile minimal     # smoke test
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # the experiment
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
-python3 run_report.py --backend none                                               # the control alone
+python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3     # the control alone
 ```
 
 | Option | Effect |
@@ -239,7 +239,7 @@ python3 run_report.py --backend none                                            
 | `--seeds N` | Synthetic streams 0 … N−1 (default 3) |
 | `--backend`, `--model` | The model (§2) |
 | `--profile minimal` | No narration and no time-of-day percept |
-| `--percepts live` | The machine's real percepts instead of the synthetic streams |
+| `--percepts live` | The machine's real percepts instead of the synthetic streams; without `psutil` the run does not start (exit code 2) |
 | `--skip-questions-arm` | Leave out the arm in which the model only asks the questions |
 | `--skip-degraded` | Leave out the control |
 | `--determinism` | See below; writes `sirisys_determinism.json` instead |
@@ -264,7 +264,7 @@ Without a model only the control runs, with a warning; when `--backend ollama` o
 
 **What the report holds.**
 
-- `config`: framework file, version and the first 16 characters of its SHA-256, the integrity checks, the constants the measurements depend on, cycles, streams, backend, model and its probe, profile, percepts, platform and Python version.
+- `config`: framework file, version and the first 16 characters of its SHA-256, the integrity checks, the constants the measurements depend on, cycles, streams, backend, model and its probe, profile, percepts, platform and Python version, and `machine`: system, processor, memory, Python and the `psutil` version, so that results from different machines are never mixed up.
 - `acceptance_criteria`: the criteria in words.
 - `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals and a sample of the names born, the pool telemetry, the model's health and any errors.
 - `aborted`, `determinism` (with `--determinism`) and `console`, everything the run printed.
@@ -290,7 +290,7 @@ python3 live_c2.py 10000 none minimal > live_none.json      # real percepts, no 
 python3 live_c2.py 3000 ollama minimal > live_ollama.json   # real percepts, the local model
 ```
 
-`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions that entered the field. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. Real percepts read the machine: leave it idle during a run whose results you intend to compare.
+`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions that entered the field. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the framework would read fixed values without saying so, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
 
 **Topology.** `run_report.py` and `live_c2.py` write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field. Zero Points are left out, and each sample carries its cycle, breath, contraction and tolerance.
 

@@ -5,6 +5,7 @@ with the framework.
 No API key, no Ollama and no FastAPI needed: a local fake model, and a stub in
 place of the web framework.
 Usage: python3 test_phase1.py"""
+import hashlib
 import inspect
 import json
 import os
@@ -16,7 +17,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from sirisys_measures import ModelHealth
+from sirisys_measures import ModelHealth, real_percepts_available
 from sirisys_testkit import HERE, Checks, FakeModel, environment, fresh_framework, quiet, raises, read_jsonl, scratch
 
 with quiet():
@@ -326,19 +327,47 @@ check("experiment mode pauses once when the model watch trips, says why in its s
       and watched.drain()[-1]["model_watch"]["tripped"], f"paused at cycle {paused_at}: {said[:50]}")
 
 check.section("5 · The experiment tools: run_report.py and live_c2.py")
+check("psutil is installed: the field can perceive this machine (without it, real percepts are fixed values)",
+      real_percepts_available())
+TOOL_FILES = ("run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
+              S.__sirisys_file__)
 tools = scratch()                                   # copies: nothing here touches the user's reports
-for f in ("run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
-          S.__sirisys_file__):
+for f in TOOL_FILES:
     shutil.copy(HERE / f, tools / f)
 model.reset("error", after=30)
 p = run(["live_c2.py", "60", "ollama", "minimal"], tools, OLLAMA_HOST=model.url)
 out = json.loads(p.stdout) if p.stdout.strip() else {}
 check("live_c2 stops (exit 3) when the model starts failing mid-run, and says so",
       p.returncode == 3 and out.get("aborted") and "STOPPED" in p.stderr, str(out.get("aborted"))[:80])
+sha = hashlib.sha256((HERE / S.__sirisys_file__).read_text(encoding="utf-8").encode()).hexdigest()[:16]
+ran_on = out.get("machine") or {}
+check("live_c2 records the framework's sha256[:16], the machine it ran on and when",
+      out.get("framework_sha256_16") == sha and ran_on.get("python") and ran_on.get("psutil")
+      and ran_on.get("cpu_count") and out.get("timestamp"),
+      f"{out.get('framework_sha256_16')} · {ran_on.get('system')} {ran_on.get('arch')} · psutil {ran_on.get('psutil')}")
 p = run(["run_report.py", "--backend", "ollama", "--cycles", "5", "--seeds", "1"], tools, 120,
         OLLAMA_HOST="http://127.0.0.1:9")
 check("run_report --backend ollama stops before running when the model is not there",
       p.returncode == 3 and "Nothing was run" in p.stdout and not (tools / "sirisys_report.json").exists())
+
+bare = scratch()                                    # the same tools on a machine without psutil
+for f in TOOL_FILES:
+    shutil.copy(HERE / f, bare / f)
+(bare / "psutil.py").write_text('raise ImportError("psutil hidden for this test")\n', encoding="utf-8")
+p = run(["live_c2.py", "5"], bare, 120)
+out_bare = json.loads(p.stdout) if p.stdout.strip() else {}
+check("without psutil live_c2 does not start (exit 2) and says why, instead of perceiving fixed values",
+      p.returncode == 2 and "psutil" in str(out_bare.get("aborted")) and "STOP" in p.stderr and "psutil" in p.stderr,
+      str(out_bare.get("aborted"))[:80])
+p = run(["run_report.py", "--percepts", "live", "--backend", "none", "--cycles", "5", "--seeds", "1"], bare, 120)
+refused = p.returncode == 2 and "psutil" in p.stdout and not (bare / "sirisys_report.json").exists()
+p = run(["run_report.py", "--backend", "none", "--cycles", "5", "--seeds", "1"], bare, 120)
+written = bare / "sirisys_report.json"
+recorded = json.loads(written.read_text())["config"].get("machine", {}) if p.returncode == 0 and written.exists() else {}
+check("run_report with live percepts does not start without psutil either; synthetic runs need none, "
+      "and the report records the machine",
+      refused and recorded.get("python") and recorded.get("psutil") is None and "machine" in p.stdout,
+      f"live refused: {refused}; synthetic ran and recorded {recorded.get('system')} {recorded.get('arch')}")
 
 determinism = {}
 for mode in ("alike", "counter"):          # answers alike to the same request and seed, or carrying state

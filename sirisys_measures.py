@@ -15,9 +15,73 @@ ModelHealth
     probe() proves the model completes before a run starts; attach() watches
     every call during the run and trips when calls keep failing or coming back
     empty.
+
+machine_record(), real_percepts_available()
+    Which machine a run ran on, recorded in every report so that results from
+    different machines are never mixed up; and whether the machine can be
+    perceived at all. Real percepts read it through psutil, and without psutil
+    the framework falls back, silently, to fixed readings: a run meant to
+    perceive the machine would perceive a constant world.
 """
+import os
+import platform
+import subprocess
+import sys
 import time
 from collections import Counter, defaultdict, deque
+from pathlib import Path
+
+
+def real_percepts_available():
+    """True when psutil can be imported, that is, when the field can read the
+    machine instead of the framework's fixed fallback readings."""
+    try:
+        import psutil  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _processor():
+    """The processor's name, best effort: sysctl on macOS, /proc/cpuinfo on Linux."""
+    try:
+        if sys.platform == "darwin":
+            return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                                  text=True, timeout=2).stdout.strip()
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.lower().startswith("model name"):
+                return line.split(":", 1)[1].strip()
+    except Exception:                                            # a record, never a gate
+        pass
+    return platform.processor()
+
+
+def machine_record():
+    """System, processor, memory, Python and psutil of the machine a run ran on.
+    A record, never a gate: what cannot be read is left as None."""
+    rec = {"platform": platform.platform(), "system": platform.system(), "arch": platform.machine(),
+           "processor": _processor() or None, "cpu_count": os.cpu_count(),
+           "memory_gb": None, "python": sys.version.split()[0], "psutil": None}
+    try:
+        import psutil
+        rec["psutil"] = psutil.__version__
+        rec["memory_gb"] = round(psutil.virtual_memory().total / 2 ** 30, 1)
+    except ImportError:
+        pass
+    return rec
+
+
+def describe_machine(rec):
+    """One line for the terminal."""
+    parts = [rec["system"], rec["arch"], rec["processor"],
+             f"{rec['memory_gb']} GB" if rec["memory_gb"] else None,
+             f"Python {rec['python']}", f"psutil {rec['psutil']}" if rec["psutil"] else "no psutil"]
+    return " · ".join(p for p in parts if p)
+
+
+NO_PSUTIL = ("psutil is not installed, so the field cannot perceive this machine: the framework would "
+             "read fixed values instead, without saying so. Install it (python3 -m pip install psutil) "
+             "and run again")
 
 
 class LifeCriteria:

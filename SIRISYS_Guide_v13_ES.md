@@ -53,7 +53,7 @@ Python 3.10 o superior en macOS, Linux o Windows con WSL.
 pip3 install -r requirements.txt
 ```
 
-Instala `numpy` y `psutil` (el campo y sus perceptos reales), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `pip3 install --break-system-packages -r requirements.txt`, o un entorno virtual.
+Instala `numpy` y `psutil` (el campo y sus perceptos reales; sin `psutil`, `live_c2.py` y `run_report.py --percepts live` no arrancan), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `pip3 install --break-system-packages -r requirements.txt`, o un entorno virtual.
 
 ### Qué hace un modelo
 
@@ -73,7 +73,7 @@ Con el backend por defecto y sin clave, el campo funciona sin modelo y lo dice a
 - **Ollama**, local: nada sale de la máquina mientras `OLLAMA_HOST` apunte a este ordenador. Instálalo desde ollama.com y descarga un modelo de uso general, por ejemplo `ollama pull llama3.1`. Los modelos de razonamiento, que «piensan» antes de responder, pueden gastar en pensar el breve margen de respuesta y devolver nombres vacíos; la vigilancia del modelo detiene entonces la ejecución.
 - **API de Anthropic**: las peticiones salen de la máquina. Fija la clave en la sesión de la terminal, `export ANTHROPIC_API_KEY="sk-ant-..."`; dura mientras esa ventana siga abierta. No la guardes nunca en un archivo de esta carpeta.
 
-Usa el mismo backend, modelo y perfil en las ejecuciones que vayas a comparar.
+Usa el mismo backend, modelo, perfil y máquina en las ejecuciones que vayas a comparar.
 
 ### La vigilancia del modelo
 
@@ -230,7 +230,7 @@ python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
 python3 run_report.py --cycles 20 --seeds 1 --backend ollama --profile minimal     # prueba rápida
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # el experimento
 python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
-python3 run_report.py --backend none                                               # solo el control
+python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3     # solo el control
 ```
 
 | Opción | Efecto |
@@ -239,7 +239,7 @@ python3 run_report.py --backend none                                            
 | `--seeds N` | Flujos sintéticos 0 … N−1 (3 por defecto) |
 | `--backend`, `--model` | El modelo (§2) |
 | `--profile minimal` | Sin narración ni percepto de la hora del día |
-| `--percepts live` | Los perceptos reales de la máquina en lugar de los flujos sintéticos |
+| `--percepts live` | Los perceptos reales de la máquina en lugar de los flujos sintéticos; sin `psutil` la ejecución no arranca (código de salida 2) |
 | `--skip-questions-arm` | Omite el brazo en que el modelo solo hace las preguntas |
 | `--skip-degraded` | Omite el control |
 | `--determinism` | Ver más abajo; escribe `sirisys_determinism.json` en su lugar |
@@ -264,7 +264,7 @@ Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o 
 
 **Qué contiene el informe.**
 
-- `config`: archivo del framework, versión y los 16 primeros caracteres de su SHA-256, las comprobaciones de integridad, las constantes de las que dependen las mediciones, ciclos, flujos, backend, modelo y su prueba inicial, perfil, perceptos, plataforma y versión de Python.
+- `config`: archivo del framework, versión y los 16 primeros caracteres de su SHA-256, las comprobaciones de integridad, las constantes de las que dependen las mediciones, ciclos, flujos, backend, modelo y su prueba inicial, perfil, perceptos, plataforma y versión de Python, y `machine`: sistema, procesador, memoria, Python y la versión de `psutil`, para que nunca se mezclen resultados de máquinas distintas.
 - `acceptance_criteria`: los criterios en palabras.
 - `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales y una muestra de los nombres nacidos, la telemetría de las reservas, la salud del modelo y los errores, si los hay.
 - `aborted`, `determinism` (con `--determinism`) y `console`, todo lo que imprimió la ejecución.
@@ -290,7 +290,7 @@ python3 live_c2.py 10000 none minimal > live_none.json      # perceptos reales, 
 python3 live_c2.py 3000 ollama minimal > live_ollama.json   # perceptos reales, con el modelo local
 ```
 
-`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que entraron en el campo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Los perceptos reales leen la máquina: no la uses durante una ejecución cuyos resultados vayas a comparar.
+`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que entraron en el campo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él, el framework leería valores fijos sin decirlo, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
 
 **Topología.** `run_report.py` y `live_c2.py` escriben un `topology_trace`: dos veces por respiración, en expansión y en contracción, la forma del campo. Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su contracción y su tolerancia.
 
