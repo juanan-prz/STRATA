@@ -10,12 +10,12 @@ and loads the highest version it finds. The strict naming convention is kept:
 it is exactly what makes the newest version identifiable.
 
     v13_10 beats v13_9 (compared as numbers, not text); names that do not
-    match exactly (e.g. Sirisys_Framework_v13_3_backup.py) are ignored
+    match exactly (e.g. Sirisys_Framework_v13_4_backup.py) are ignored
 
 To pin an exact file (to reproduce an experiment, or to keep a long-lived
 instance on the framework it was born with), set the environment variable:
 
-    export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
+    export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_4.py"
 
 Usage, from any program in the same folder:
 

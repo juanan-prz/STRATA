@@ -107,6 +107,11 @@ def parse_stream(value):
     return None if str(value).lower() == "live" else int(value)
 
 
+def live_refused(stream):
+    """Why live percepts cannot be used (the machine cannot be perceived), or None."""
+    return S.NO_PERCEPTION if stream is None and not S.real_percepts_available() else None
+
+
 def _stream_arg(value):
     try:
         return parse_stream(value)
@@ -382,6 +387,8 @@ class ExperimentEngine:
             except ValueError:
                 return {"ok": False,
                         "error": f"stream must be 'live' or an integer, not {options['stream']!r}"}
+            if live_refused(stream):
+                return {"ok": False, "error": live_refused(stream)}
             self.running, self.stream = False, stream
             with self._cycle_lock:
                 self.save()                                     # the old instance stays on disk
@@ -565,6 +572,8 @@ def serve_experiment(args) -> None:
         raise SystemExit(f"\n  MISSING: {', '.join(missing) or 'websocket support'} — "
                          f"pip3 install -r requirements.txt\n")
     import uvicorn
+    if live_refused(args.stream):
+        raise SystemExit(f"\n  {live_refused(args.stream)} (--stream N).\n")
 
     engine = ExperimentEngine(args.stream, args.delay_ms, HERE / "sirisys_runs", args.profile)
     engine.running = args.play

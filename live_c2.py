@@ -10,8 +10,7 @@ Writes one JSON document to standard output (redirect it to a file):
 - the Sombunal questions that entered the field, per 1000 cycles;
 - with a model: the probe and the health of every call;
 - the framework file and its sha256[:16], the machine it ran on and when.
-Without psutil it does not start (exit code 2): the framework would read fixed
-values instead of this machine, without saying so.
+Without psutil it does not start (exit code 2): the machine cannot be perceived.
 With a model the run stops (exit code 3) if the model does not answer before
 it starts, or if its calls keep failing or coming back empty; the JSON is still
 written, marked "aborted". Messages for the person running it go to the
@@ -23,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 with contextlib.redirect_stdout(io.StringIO()):
     from sirisys_loader import load_framework
     import field_topology  # read-only topology (pure Python, no networkx)
-    from sirisys_measures import LifeCriteria, ModelHealth, NO_PSUTIL, machine_record, real_percepts_available
+    from sirisys_measures import LifeCriteria, ModelHealth, machine_record
     S = load_framework(Path(__file__).resolve().parent)
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
 BACKEND = sys.argv[2] if len(sys.argv) > 2 else "none"
@@ -41,10 +40,10 @@ out = {"cycles": N, "backend": BACKEND, "profile": PROFILE, "percepts": "live (p
        "framework": S.__sirisys_file__,
        "framework_sha256_16": hashlib.sha256(framework.read_text(encoding="utf-8").encode()).hexdigest()[:16],
        "machine": machine_record(), "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
-if not real_percepts_available():
+if not S.real_percepts_available():
     out["aborted"] = "no psutil: the machine cannot be perceived"
     print(json.dumps(out, indent=1))
-    say(f"\n  STOP: {NO_PSUTIL}.\n  Nothing was run.\n")
+    say(f"\n  STOP: {S.NO_PERCEPTION}.\n  Nothing was run.\n")
     sys.exit(2)
 health = ModelHealth()
 if BACKEND != "none":

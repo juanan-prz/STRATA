@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from sirisys_measures import ModelHealth, real_percepts_available
+from sirisys_measures import ModelHealth
 from sirisys_testkit import HERE, Checks, FakeModel, environment, fresh_framework, quiet, raises, read_jsonl, scratch
 
 with quiet():
@@ -178,6 +178,41 @@ check("anthropic temperature clamped to [0, 1] (was 1.10)",
       claude._client.messages.request["temperature"] == 1.0)
 check("unknown backend refused", raises(lambda: S.LLMIntermediary(backend="openai"), ValueError))
 
+
+def ledger_of_life(llm, cycles=60, stream=0):
+    """The ledger head after a short life on a synthetic stream."""
+    with quiet():
+        ledger = S.set_ledger(S.ProofLedger(None))
+        ss = S.new_session(llm)
+        for c in range(cycles):
+            S.run_cycle(ss, c, percepts=S.synthetic_percepts(c, stream, False), narrate=False, include_hour=False)
+    return ledger.head
+
+
+with FakeModel("empty") as silent:
+    with quiet():
+        mute = S.LLMIntermediary(backend="ollama", host=silent.url)
+        control = S.LLMIntermediary(backend="none")
+    muted, alone = ledger_of_life(mute), ledger_of_life(control)
+    asked = len(silent.requests)
+check("a model that only answers empty leaves the field exactly where the control is: "
+      "its constructs get the control's names", asked > 0 and muted == alone,
+      f"{asked} empty answers; same ledger: {muted == alone}")
+
+saved_psutil = sys.modules.get("psutil")
+sys.modules["psutil"] = None                        # import psutil now fails, as on a machine without it
+try:
+    blind = not S.real_percepts_available() and raises(S.perceive_real, S.NoPerception)
+    refused = server.live_refused(None)
+finally:
+    if saved_psutil is None:
+        sys.modules.pop("psutil", None)
+    else:
+        sys.modules["psutil"] = saved_psutil
+check("without psutil the framework says the machine cannot be perceived, instead of fixed readings, "
+      "and experiment mode refuses live percepts", blind and refused and "psutil" in refused
+      and server.live_refused(0) is None and server.live_refused(None) is None)
+
 check.section("3 · Profiles, framework check, web layer")
 with quiet():
     minimal = server.ExperimentEngine(stream=1, delay_ms=0, runs_dir=scratch(), profile="minimal")
@@ -328,7 +363,7 @@ check("experiment mode pauses once when the model watch trips, says why in its s
 
 check.section("5 · The experiment tools: run_report.py and live_c2.py")
 check("psutil is installed: the field can perceive this machine (without it, real percepts are fixed values)",
-      real_percepts_available())
+      S.real_percepts_available())
 TOOL_FILES = ("run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
               S.__sirisys_file__)
 tools = scratch()                                   # copies: nothing here touches the user's reports
@@ -364,6 +399,10 @@ refused = p.returncode == 2 and "psutil" in p.stdout and not (bare / "sirisys_re
 p = run(["run_report.py", "--backend", "none", "--cycles", "5", "--seeds", "1"], bare, 120)
 written = bare / "sirisys_report.json"
 recorded = json.loads(written.read_text())["config"].get("machine", {}) if p.returncode == 0 and written.exists() else {}
+p2 = run(["run_report.py", "--backend", "none", "--cycles", "5", "--first-seed", "3", "--seeds", "2"], bare, 120)
+batch = json.loads(written.read_text())["config"].get("streams") if p2.returncode == 0 else None
+check("run_report --first-seed runs a confirmation batch on streams the experiment did not use",
+      batch == [3, 4], f"streams {batch}")
 check("run_report with live percepts does not start without psutil either; synthetic runs need none, "
       "and the report records the machine",
       refused and recorded.get("python") and recorded.get("psutil") is None and "machine" in p.stdout,

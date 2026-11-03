@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.3 — Technical guide
+# STRATA · SIRISYS v13.4 — Technical guide
 
 [Español](SIRISYS_Guide_v13_ES.md)
 
@@ -25,7 +25,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 
 | File | Purpose |
 |---|---|
-| `Sirisys_Framework_v13_3.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
+| `Sirisys_Framework_v13_4.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
@@ -53,11 +53,11 @@ Python 3.10 or higher on macOS, Linux, or Windows with WSL.
 pip3 install -r requirements.txt
 ```
 
-This installs `numpy` and `psutil` (the field and its real percepts; without `psutil`, `live_c2.py` and `run_report.py --percepts live` refuse to start), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `pip3 install --break-system-packages -r requirements.txt`, or a virtual environment.
+This installs `numpy` and `psutil` (the field and its real percepts: without `psutil` the machine cannot be perceived, so the framework says so instead of reading fixed values, and experiment mode with live percepts, `live_c2.py` and `run_report.py --percepts live` refuse to start), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `pip3 install --break-system-packages -r requirements.txt`, or a virtual environment.
 
 ### What a model does
 
-A model is optional: without one everything runs and constructs get synthetic names. With one, an intermediary names emergents, labels conflicts, narrates the field and asks the Sombunal questions. It reaches the field through two channels: the names it gives (they become construct keys, and so enter every orientation) and the questions (they enter the field as constructs). Every request carries a seed derived from the ledger head.
+A model is optional: without one everything runs and constructs get synthetic names. With one, an intermediary names emergents, labels conflicts, narrates the field and asks the Sombunal questions. It reaches the field through two channels: the names it gives (they become construct keys, and so enter every orientation) and the questions (they enter the field as constructs). Every request carries a seed derived from the ledger head and the request itself, and sends the model the last 12 messages of the conversation; the intermediary keeps only the last 20. When the model answers empty or fails, the construct gets the name the control would give it, so an empty answer leaves the field where the control would be.
 
 ### Choosing it
 
@@ -102,7 +102,7 @@ Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and
 | Option | Effect |
 |---|---|
 | `--play` | Start cycling immediately |
-| `--stream N` | Synthetic percept stream N instead of the machine's (`live`, the default) |
+| `--stream N` | Synthetic percept stream N instead of the machine's (`live`, the default; it needs `psutil`) |
 | `--profile minimal` | No narration and no time-of-day percept: the field perceives only the machine it runs on (`standard` by default) |
 | `--delay-ms N` | Pause between cycles, in milliseconds (default 80; the live view changes it too) |
 | `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
@@ -204,8 +204,8 @@ Its left panel folds section by section, as in the live view.
 In experiment mode an instance writes one `state.json`, when it ends. For a timeline, copy the state as it grows; for example, with the console demonstration, which resumes the same instance on every run:
 
 ```bash
-python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Keys.**
@@ -236,7 +236,8 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 | Option | Effect |
 |---|---|
 | `--cycles N` | Cycles per run (default 1000, the least the criteria need) |
-| `--seeds N` | Synthetic streams 0 … N−1 (default 3) |
+| `--seeds N` | How many synthetic streams (default 3) |
+| `--first-seed N` | The first stream (default 0): `--first-seed 3 --seeds 5` runs streams 3 to 7, a confirmation batch on streams an experiment did not use |
 | `--backend`, `--model` | The model (§2) |
 | `--profile minimal` | No narration and no time-of-day percept |
 | `--percepts live` | The machine's real percepts instead of the synthetic streams; without `psutil` the run does not start (exit code 2) |
@@ -352,13 +353,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 It answers `ok` and the number of proofs or, for a damaged record, the position of the first proof that does not belong and why.
 
-**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_3_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
+**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_4_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_4.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_3.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
+**The framework on its own.** `python3 Sirisys_Framework_v13_4.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
 
 **Files created while running.**
 

@@ -16,12 +16,9 @@ ModelHealth
     every call during the run and trips when calls keep failing or coming back
     empty.
 
-machine_record(), real_percepts_available()
+machine_record()
     Which machine a run ran on, recorded in every report so that results from
-    different machines are never mixed up; and whether the machine can be
-    perceived at all. Real percepts read it through psutil, and without psutil
-    the framework falls back, silently, to fixed readings: a run meant to
-    perceive the machine would perceive a constant world.
+    different machines are never mixed up.
 """
 import os
 import platform
@@ -30,16 +27,6 @@ import sys
 import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
-
-
-def real_percepts_available():
-    """True when psutil can be imported, that is, when the field can read the
-    machine instead of the framework's fixed fallback readings."""
-    try:
-        import psutil  # noqa: F401
-    except ImportError:
-        return False
-    return True
 
 
 def _processor():
@@ -78,10 +65,6 @@ def describe_machine(rec):
              f"Python {rec['python']}", f"psutil {rec['psutil']}" if rec["psutil"] else "no psutil"]
     return " · ".join(p for p in parts if p)
 
-
-NO_PSUTIL = ("psutil is not installed, so the field cannot perceive this machine: the framework would "
-             "read fixed values instead, without saying so. Install it (python3 -m pip install psutil) "
-             "and run again")
 
 
 class LifeCriteria:

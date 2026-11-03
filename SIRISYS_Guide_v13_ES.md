@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.3 — Guía técnica
+# STRATA · SIRISYS v13.4 — Guía técnica
 
 [English](SIRISYS_Guide_v13_EN.md)
 
@@ -25,7 +25,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 
 | Archivo | Para qué |
 |---|---|
-| `Sirisys_Framework_v13_3.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
+| `Sirisys_Framework_v13_4.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
@@ -53,11 +53,11 @@ Python 3.10 o superior en macOS, Linux o Windows con WSL.
 pip3 install -r requirements.txt
 ```
 
-Instala `numpy` y `psutil` (el campo y sus perceptos reales; sin `psutil`, `live_c2.py` y `run_report.py --percepts live` no arrancan), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `pip3 install --break-system-packages -r requirements.txt`, o un entorno virtual.
+Instala `numpy` y `psutil` (el campo y sus perceptos reales: sin `psutil` la máquina no se puede percibir, así que el framework lo dice en lugar de leer valores fijos, y no arrancan el modo experimento con perceptos reales, `live_c2.py` ni `run_report.py --percepts live`), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `pip3 install --break-system-packages -r requirements.txt`, o un entorno virtual.
 
 ### Qué hace un modelo
 
-El modelo es opcional: sin él todo funciona y los constructos reciben nombres sintéticos. Con él, un intermediario nombra los emergentes, etiqueta los conflictos, narra el campo y hace las preguntas al Sombunal. Entra en el campo por dos vías: los nombres que pone (se convierten en las claves de los constructos y, por tanto, entran en cada orientación) y las preguntas (entran en el campo como constructos). Cada petición lleva una semilla derivada de la cabeza del ledger.
+El modelo es opcional: sin él todo funciona y los constructos reciben nombres sintéticos. Con él, un intermediario nombra los emergentes, etiqueta los conflictos, narra el campo y hace las preguntas al Sombunal. Entra en el campo por dos vías: los nombres que pone (se convierten en las claves de los constructos y, por tanto, entran en cada orientación) y las preguntas (entran en el campo como constructos). Cada petición lleva una semilla derivada de la cabeza del ledger y de la propia petición, y envía al modelo los 12 últimos mensajes de la conversación; el intermediario guarda solo los 20 últimos. Si el modelo responde vacío o falla, el constructo recibe el nombre que le daría el control, así que una respuesta vacía deja el campo donde estaría el control.
 
 ### Cómo elegirlo
 
@@ -102,7 +102,7 @@ Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servid
 | Opción | Efecto |
 |---|---|
 | `--play` | Empieza a ciclar al arrancar |
-| `--stream N` | Flujo sintético de perceptos N en lugar de los de la máquina (`live`, por defecto) |
+| `--stream N` | Flujo sintético de perceptos N en lugar de los de la máquina (`live`, por defecto; necesita `psutil`) |
 | `--profile minimal` | Sin narración ni percepto de la hora del día: el campo solo percibe la máquina en la que corre (`standard` por defecto) |
 | `--delay-ms N` | Pausa entre ciclos, en milisegundos (80 por defecto; también se cambia desde la vista en vivo) |
 | `--host` | Dirección en la que escucha (por defecto `127.0.0.1`: solo esta máquina) |
@@ -204,8 +204,8 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 En el modo experimento, una instancia escribe un solo `state.json`, al terminar. Para una línea de tiempo, copia el estado según crece; por ejemplo, con la demostración en consola, que reanuda la misma instancia en cada ejecución:
 
 ```bash
-python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_3.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Teclas.**
@@ -236,7 +236,8 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 | Opción | Efecto |
 |---|---|
 | `--cycles N` | Ciclos por ejecución (1000 por defecto, lo mínimo que piden los criterios) |
-| `--seeds N` | Flujos sintéticos 0 … N−1 (3 por defecto) |
+| `--seeds N` | Cuántos flujos sintéticos (3 por defecto) |
+| `--first-seed N` | El primer flujo (0 por defecto): `--first-seed 3 --seeds 5` recorre los flujos 3 a 7, una tanda de confirmación con flujos que un experimento no usó |
 | `--backend`, `--model` | El modelo (§2) |
 | `--profile minimal` | Sin narración ni percepto de la hora del día |
 | `--percepts live` | Los perceptos reales de la máquina en lugar de los flujos sintéticos; sin `psutil` la ejecución no arranca (código de salida 2) |
@@ -352,13 +353,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 Responde `ok` y el número de pruebas o, si el registro está dañado, la posición de la primera prueba que no encaja y por qué.
 
-**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_3_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
+**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_4_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_3.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_4.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_3.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_4.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda.
 
 **Archivos que se crean al ejecutar.**
 

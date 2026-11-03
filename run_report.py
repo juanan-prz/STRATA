@@ -6,6 +6,8 @@ USAGE
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # the experiment
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
   python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3     # the control alone
+  python3 run_report.py --backend ollama --profile minimal --cycles 1000 --first-seed 3 --seeds 5
+                                                    # a confirmation batch on five new streams
 
   Keep the same backend, model, profile and machine for every run you intend to compare,
   and send the file the run writes: sirisys_report.json (or, with --determinism,
@@ -65,8 +67,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
     import field_topology                                   # read-only topology and depth
-    from sirisys_measures import LifeCriteria, ModelHealth, NO_PSUTIL, describe_machine, machine_record, \
-        real_percepts_available
+    from sirisys_measures import LifeCriteria, ModelHealth, describe_machine, machine_record
     from sirisys_loader import load_framework
 except ImportError as ex:
     sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
@@ -169,18 +170,17 @@ class ArmIntermediary(S.LLMIntermediary):
         if self.active:                             # otherwise it stays unavailable
             super()._init()
 
-    # The control's names, as the framework's ConcordancyOperator writes them when no model
-    # is available (_materialize_emergent, _materialize_conflict). If the framework changes
-    # them, the "none" check in test_phase1.py fails.
+    # The control's names: the framework's own, the names it gives without a model's
+    # answer (the "none" check in test_phase1.py verifies the result bit for bit).
     def propose_emergent(self, x, y, x_state, y_state):
         if self.channels == "all":
             return super().propose_emergent(x, y, x_state, y_state)
-        return f"[{x[:18]}]::[{y[:18]}]@c{self.cycle}"
+        return S.control_emergent_name(x, y, self.cycle)
 
     def interpret_conflict(self, x, y):
         if self.channels == "all":
             return super().interpret_conflict(x, y)
-        return f"CONFLICT::{x[:14]}⊗{y[:14]}"
+        return S.control_conflict_label(x, y)
 
     def question_sombunal(self, instability):
         return "" if self.channels == "none" else super().question_sombunal(instability)
@@ -400,7 +400,10 @@ def parse_args(argv=None):
     ap.add_argument("--cycles", type=int, default=1000,
                     help="cycles per run (the criteria need at least 1000; default 1000)")
     ap.add_argument("--seeds", type=int, default=3,
-                    help="synthetic percept streams 0, 1, ... (default 3)")
+                    help="how many synthetic percept streams (default 3)")
+    ap.add_argument("--first-seed", type=int, default=0,
+                    help="the first stream (default 0): --first-seed 3 --seeds 5 runs streams 3 to 7, "
+                         "a confirmation batch on streams the experiment did not use")
     ap.add_argument("--backend", choices=S.LLMIntermediary.BACKENDS, default=None,
                     help="model backend (default: SIRISYS_LLM_BACKEND, else anthropic)")
     ap.add_argument("--model", default=None,
@@ -429,7 +432,7 @@ def plan(args, model_on):
     arms = (["llm"] if model_on else []) \
         + (["llm_questions"] if model_on and not args.skip_questions_arm else []) \
         + ([] if args.skip_degraded else ["degraded"])
-    return arms, list(range(args.seeds))
+    return arms, list(range(args.first_seed, args.first_seed + args.seeds))
 
 
 def print_header(args, checks, digest, intermediary, log, machine):
@@ -564,8 +567,8 @@ def main(argv=None):
     arms, streams = plan(args, intermediary.available)
     machine = machine_record()
     print_header(args, checks, digest, intermediary, log, machine)
-    if args.percepts == "live" and not real_percepts_available():
-        log(f"\n  STOP: {NO_PSUTIL}.\n  Nothing was run.")
+    if args.percepts == "live" and not S.real_percepts_available():
+        log(f"\n  STOP: {S.NO_PERCEPTION}.\n  Nothing was run.")
         sys.exit(2)
     probe = check_model(args, intermediary, streams, log)
 

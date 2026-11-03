@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.4 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -14,7 +14,7 @@
 #
 # WHAT THE FIELD IS
 #   Constructs connected by edges carrying a tetralemmic state (TRUE, FALSE,
-#   BOTH, NEITHER). The concordancy operator [::] (TMC p.16: "[ALU] call
+#   BOTH, NEITHER). The concordancy operator [::] (TMC p.16: "[ALU(…)] call
 #   function [CONCORDANCY]") combines two constructs into a third and records
 #   the event as a lemniscate of proofs (TMC p.26: "[Ꮠ] = [2Ꮙ]"). A construct
 #   rises NULL_00 → UMBRA_0 → UNIT_1 → APPARENT when enough tension reaches it
@@ -23,8 +23,8 @@
 # ONE CYCLE (run_cycle — the only definition; run(), the server and
 # run_report.py all call it):
 #   perceive → tetralemma scan → breathe → intensify conflicts → [::] →
-#   cussive collapse → UCO erosion → prune → (narration) → Sombunal question
-#   → tick
+#   cussive collapse → UCO erosion (sparing the support of the crystals just
+#   formed) → prune → (narration) → Sombunal question → tick
 #
 # KEY PRINCIPLES AND THEIR ANCHORS
 #   No PRNG. Every choice is orient(key): a hash of the ledger head (the whole
@@ -70,7 +70,8 @@
 #
 # The experiment mode (live visualizer) lives in Sirisys_Server.py.
 #
-# Requires: numpy. Optional: psutil (real perception), anthropic (API model);
+# Requires: numpy. Optional: psutil (real perception; without it perceive_real
+# raises NoPerception rather than invent readings), anthropic (API model);
 # a local model through Ollama needs no Python package.
 # =============================================================================
 
@@ -112,6 +113,8 @@ TERMINATION_WINDOW       = 200    # termination_log
 TERMINATED_INDEX_WINDOW  = 1000   # names remembered for reincarnation
 LINEAGE_WINDOW           = 50     # identity lineage of each construct
 APPARENT_LOG_WINDOW      = 200    # recent crystallization names (apparents_total counts all)
+LLM_CONTEXT              = 12     # messages the model is sent with each request
+LLM_HISTORY_WINDOW       = 20     # messages the intermediary keeps (and a snapshot saves)
 MODE_WINDOW              = 5      # recent proofs the existence mode reads (and a snapshot keeps)
 
 # ── crystallization and existence ────────────────────────────────────────────
@@ -146,7 +149,8 @@ class Layer(Enum):
 
 
 # =============================================================================
-# TETRALEMMIC STATES — Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
+# TETRALEMMIC STATES — Understanding_TMC p.33, "Tetralemmic Logic as Ontological Driver":
+# "This logic doesn't just evaluate statements, it drives existence itself"
 # (TMC pp.16-17: the tetralemma as universal base logic)
 # =============================================================================
 
@@ -566,8 +570,8 @@ def orient(key: str) -> float:
 # =============================================================================
 # INTERNAL CLOCK
 #
-# Understanding_TMC (p.68): "Time is emergent and discrete — it occurs only when recursive tension
-# is converted into orientation via a cussive event."
+# Understanding_TMC (p.68), condensed: "Time, in this framework, is emergent and discrete. It
+# occurs only when…" recursive tension is converted into orientation via a cussive event.
 # DeOS: (era, offset) — formally ordered, monotonic.
 # =============================================================================
 
@@ -610,7 +614,7 @@ class InternalClock:
 # =============================================================================
 # CONSTRUCT
 #
-# DeOS Compiler Guide, p.7: "A construct is a formally defined entity within
+# DeOS Compiler Guide, p.8: "A construct is a formally defined entity within
 # the DeOS grammar. Constructs exist as syntactic, structural, and executable
 # forms. They are concrete elements that can be parsed, compiled, transformed,
 # and executed independent of interpretation."
@@ -622,9 +626,9 @@ class InternalClock:
 # T  — temporal origin: born_at (era, offset) from InternalClock
 #
 # "Identity is not meaning, intention, or interpretation; it is
-# continuity under transformation."
+# continuity under transformation." (DeOS Compiler Guide, p.8)
 #
-# DeOS Compiler Guide, p.197 — Ontological Classes:
+# DeOS Compiler Guide, pp.197–198 — Ontological Classes:
 # Layer NULL_00  → Temporal identity   (pre-ontological, approaching [00])
 # Layer UMBRA_0  → Symbolic identity   (orientation exists, not collapsed)
 # Layer UNIT_1   → Computational identity (active, proof continuity driven)
@@ -797,7 +801,8 @@ class ConcordancyEdge:
 
 
 # =============================================================================
-# ZERO POINTS — DeOS: "immutable anchors — the invariant constants of the system"
+# ZERO POINTS — "immutable anchors" (DeOS Compiler Guide pp.77, 80); "They are
+# not arbitrary constants but foundational seeds" (p.75)
 #
 # Five primordial coordinates that ground all derivations. Never modified by
 # any operation — not by Sombunal, not by UCO, not by concordancy or collapse.
@@ -870,7 +875,7 @@ class ConcordancyField:
             c = Construct(name, layer, self.clock.T)
             prior = self.terminated_names.get(name)
             if prior is not None:
-                # "Nothing is silently replaced" (Compiler Guide p.202).
+                # "Nothing is silently replaced" (Compiler Guide p.203).
                 # The concluded identity stays concluded; this one begins with
                 # that conclusion written into its own history.
                 self.reincarnations += 1
@@ -1010,7 +1015,7 @@ class ConcordancyField:
         """
         Dissolve weak edges and orphan constructs.
 
-        Understanding_DeOS — Deletion as Entropy Protocol (p.117-118):
+        Understanding_DeOS — Deletion as Entropy Protocol (p.118):
         "Deletion is not error but intentional design. By erasing constructs,
         DeOS forces redundancy and witnessing to stabilize them."
         Rule: "A construct that cannot survive deletion does not exist."
@@ -1040,7 +1045,7 @@ class ConcordancyField:
         one immortal; the corpus grants immunity to the Apparent alone
         (Understanding_TMC pp.80-81).
 
-        `min_references` implements DeOS p.84 / p.117: persistence is earned
+        `min_references` implements Understanding_DeOS pp.84, 118: persistence is earned
         by redundancy of witnessing, not by relation type. Default 1: a single
         witnessing reference suffices.
 
@@ -1064,7 +1069,7 @@ class ConcordancyField:
         for e in self.edges:
             ref_count[e.src] += 1
             ref_count[e.tgt] += 1
-        # DeOS p.84: what multiple witnesses hold, persists.
+        # Understanding_DeOS p.84: what multiple witnesses hold, persists.
         orphans = [n for n in list(self.constructs)
                    if ref_count[n] < min_references and n not in ANCHORS]
         for n in orphans:
@@ -1150,7 +1155,7 @@ class ConcordancyField:
                "The collective gaze is a cryptographic anchor." (Understanding_DeOS)
                → proofs received (lifetime: proofs_total). Saturates at 10 proofs.
 
-        COLLAPSE RULE (Understanding_DeOS p.65):
+        COLLAPSE RULE (Understanding_DeOS p.66):
             If any dimension = 0, Vc = 0 — no ontological gravity.
 
         Zero Points are primordially anchored — always return 1.0.
@@ -1176,7 +1181,7 @@ class ConcordancyField:
         # In practice only τ (newborn) and αm (no proofs) reach 0.
         # σth ≥ 0.1 by construction: a construct present in the field always
         # pays a minimum persistence cost. σth = 0 ("dissipates",
-        # Understanding_DeOS p.65) is realised by prune(), which removes the
+        # Understanding_DeOS p.66) is realised by prune(), which removes the
         # construct — not by Vc. The clause is kept for formal completeness.
         if tau == 0.0 or sigma_th == 0.0 or alpha_m == 0.0:
             return 0.0
@@ -1369,7 +1374,7 @@ class Sombunal:
           (a) Relational  — involved in BOTH edges (sustained contradiction)
           (b) Historical  — has a transformation history (Sombunal identity drift)
           (c) Ontological — anchoring weight Vc = f(τ, σth, αm) < 0.25
-              Per Understanding_DeOS p.65: constructs with any anchoring
+              Per Understanding_DeOS p.66: constructs with any anchoring
               dimension at zero have no ontological gravity and are
               structurally fragile — their identity cannot hold.
           (d) Modal       — existence mode = LEMNISCATE
@@ -1508,7 +1513,7 @@ class LLMIntermediary:
             return json.loads(r.read().decode("utf-8"))
 
     def _complete(self, temperature: float) -> str:
-        messages = self.history[-12:]
+        messages = self.history[-LLM_CONTEXT:]
         if self.backend == "anthropic":
             r = self._client.messages.create(
                 model=self.model, max_tokens=self.max_tokens,
@@ -1537,6 +1542,10 @@ class LLMIntermediary:
             if self.history and self.history[-1]["role"] == "user":
                 self.history.pop()
             return ""
+        finally:
+            # The model only ever sees the last LLM_CONTEXT messages; older ones
+            # would only grow memory (about 8,000 messages per 1000 cycles).
+            del self.history[:-LLM_HISTORY_WINDOW]
 
     @staticmethod
     def _clip(text: str) -> str:
@@ -1600,7 +1609,7 @@ class LLMIntermediary:
 # =============================================================================
 # CONCORDANCY OPERATOR — the [::] executor
 #
-# Understanding_TMC (p.59): "[x] :: [y] → [z]"  /  TMC (p.16): "[ALU] call function [CONCORDANCY]"
+# Understanding_TMC (p.59): "[x] :: [y] → [z]"  /  TMC (p.16): "[ALU(…)] call function [CONCORDANCY]"
 #
 # Incompatible pairs (NEITHER × NEITHER) produce a CONFLICT construct — not silence —
 # up to the Stop Chasm cap per cycle; beyond it they yield an ordinary NEITHER
@@ -1611,6 +1620,19 @@ class LLMIntermediary:
 #                                          or CRYSTALLIZE (if tension holds)
 #                                          or DECAY       (if pruned under UCO)
 # =============================================================================
+
+def control_emergent_name(x_name: str, y_name: str, cycle: int) -> str:
+    """The name an emergent of [x] :: [y] gets without a model's answer: with no
+    model, and also when the model answers empty or fails. An empty answer then
+    names the construct exactly as the control does, instead of with a name of
+    its own that the control would never produce. Level 3."""
+    return f"[{x_name[:18]}]::[{y_name[:18]}]@c{cycle}"
+
+
+def control_conflict_label(x_name: str, y_name: str) -> str:
+    """The label of the conflict [x] ⊗ [y] without a model's answer (as above)."""
+    return f"CONFLICT::{x_name[:14]}⊗{y_name[:14]}"
+
 
 class ConcordancyOperator:
     # Full tetralemmic compatibility matrix — 16/16 pairs. None = reversion.
@@ -1867,11 +1889,12 @@ class ConcordancyOperator:
         ))
 
         # Name the conflict
+        cf_label = ""
         if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
             cf_label = self.llm.interpret_conflict(x_name, y_name)
             llm_budget["used"] += 1
-        else:
-            cf_label = f"CONFLICT::{x_name[:14]}⊗{y_name[:14]}"
+        if not cf_label:
+            cf_label = control_conflict_label(x_name, y_name)
         cf_name = f"[{cf_label[:100]}]@c{cycle}"
         if cf_name in field.constructs:
             cf_name = f"{cf_name[:108]}t{field.clock.T[1]}"
@@ -1946,13 +1969,12 @@ class ConcordancyOperator:
                               result_state: TetraState, cycle: int, llm_budget: dict) -> str:
         """CONCORDANCY PATH — the emergent construct of [x] :: [y]."""
         x_name, y_name = x.name, y.name
+        z_name = ""
         if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
             z_name = self.llm.propose_emergent(x_name, y_name, x_state.value, y_state.value)
             llm_budget["used"] += 1
-        else:
-            z_name = f"[{x_name[:18]}]::[{y_name[:18]}]@c{cycle}"
         if not z_name:
-            z_name = f"concordancy::{x_name[:12]}↔{y_name[:12]}@c{cycle}"
+            z_name = control_emergent_name(x_name, y_name, cycle)
         if z_name in field.constructs:
             z_name = f"{z_name[:110]}@c{cycle}t{field.clock.T[1]}"
 
@@ -2095,7 +2117,8 @@ class ConcordancyOperator:
 # =============================================================================
 # TETRALEMMA ENGINE
 #
-# Understanding_TMC (p.33): "tetralemmic logic drives existence itself"
+# Understanding_TMC p.33, "Tetralemmic Logic as Ontological Driver":
+# "This logic doesn't just evaluate statements, it drives existence itself"
 # Reads the relational field and updates ontological states each cycle.
 # Two strong divergent edges from the same source → BOTH (sustained tension).
 # Weak edges dissolve toward NEITHER (pre-ontological suspension).
@@ -2185,8 +2208,9 @@ class TetralemmaEngine:
 # =============================================================================
 # CUSSIVE COLLAPSE ENGINE
 #
-# Understanding_TMC (p.65): "Cussive collapse — ontological finalization into Apparency"
-# Understanding_TMC (p.66): "Apparents are the record of recursion failing gracefully into structure"
+# Understanding_TMC (p.66): "Cussive collapse — ontological finalization into Apparency"
+# Understanding_TMC (p.66): "Apparents are not merely stabilized forms, they are the record of
+# recursion failing gracefully into structure"
 #
 # When accumulated tension on a construct exceeds the threshold, it crystallizes
 # one layer upward. Reaching APPARENT is irreversible. The engine enforces
@@ -2308,7 +2332,7 @@ class CussiveCollapseEngine:
 #   UCO     → umbragiac   (contradiction → erosion, no synthesis)
 #   Cussive → stabilizing (tension → Apparent)
 #
-# Understanding_DeOS — Error, Adversarial Conditions and Anchor Stability (p.64):
+# Understanding_DeOS — Error, Adversarial Conditions and Anchor Stability (pp.64–65):
 # "DeOS treats interpretive environments as hostile by default. Error,
 # misalignment, and competing assertions are not exceptional states, but
 # baseline operating conditions."
@@ -2337,8 +2361,15 @@ class UCO:
         """Umbragiac events in the recent log (the last EVENT_LOG_CAP)."""
         return len(self._event_log)
 
-    def apply(self, field: ConcordancyField, cycle: int) -> int:
-        """One erosion pass; returns how many constructs entered the umbragiac zone."""
+    def apply(self, field: ConcordancyField, cycle: int, newborn: frozenset = frozenset()) -> int:
+        """One erosion pass; returns how many constructs entered the umbragiac zone.
+
+        `newborn`: the crystals formed in this same cycle. Their support (the
+        edges into them) is not eroded in the cycle of their birth: collapse
+        admitted each of them because prune would hold that support (TMC p.22:
+        "all [Apparents] must be [Existents]"), and an erosion between the two
+        would undo the admission, so that the crystal concluded at birth. From
+        the next cycle on, their support erodes like any other. Level 3."""
         n            = len(field.edges)
         both_density = sum(1 for e in field.edges if e.state == TetraState.BOTH) / max(n, 1)
         threshold    = self.BASE_THRESHOLD + 0.4 * both_density
@@ -2374,6 +2405,8 @@ class UCO:
 
             affected = 0
             for e in node_edges:
+                if e.tgt in newborn:
+                    continue
                 e.weight = max(self.MIN_WEIGHT, e.weight - decay_mag)
                 if (e.state == TetraState.BOTH and
                         orient(f"uco::{e.src}::{e.tgt}::{field.clock.T}") < p_collapse):
@@ -2418,7 +2451,8 @@ class UCO:
 # =============================================================================
 # SELF — [I::Am] :: [I::AmNot]
 #
-# TMC (pp.14, 16): "[I am that I am]: :[I am not that I am not]" (Exodus 3:14)
+# TMC (pp.14, 16): "[I am that I am]: :[I am not that I am not]" (Exodus 3:14, a reference
+# Understanding_TMC p.35 makes; TMC does not cite it)
 # → notation [I::Am] :: [I::AmNot] from Understanding_TMC (p.35)
 # Identity IS the recursion between them — not a state, a process.
 # Neither resolves into the other. Neither collapses. The tension is the point.
@@ -2478,23 +2512,42 @@ def initialize_self(field: ConcordancyField, clock: InternalClock):
 # synthetic_percepts() is the reproducible stream experiments use instead.
 # =============================================================================
 
+NO_PERCEPTION = ("psutil is not installed, so the field cannot perceive this machine. Install it "
+                 "(python3 -m pip install psutil), or use a synthetic percept stream")
+
+
+class NoPerception(RuntimeError):
+    """The machine cannot be perceived: psutil, which reads it, is not installed."""
+
+
+def real_percepts_available() -> bool:
+    """True when psutil can be imported, that is, when the machine can be perceived."""
+    try:
+        import psutil  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def perceive_real(include_hour: bool = True) -> List[dict]:
     """The machine's own substrate (CPU, memory) and, unless include_hour is
     False, the time of day: the one influence that comes from outside the
-    machine (the solar clock)."""
+    machine (the solar clock). Without psutil it raises NoPerception: fixed
+    readings in its place would be a constant world that looks like the
+    machine's."""
     try:
         import psutil
-        cpu   = psutil.cpu_percent(interval=0.05)
-        mem   = psutil.virtual_memory().percent
-        cpu_s = ("saturated" if cpu > 80 else "resonant" if cpu > 50
-                 else "synchronizing" if cpu > 20 else "latent")
-        mem_s = ("fragmented" if mem > 85 else "oscillating" if mem > 60
-                 else "nominal" if mem > 40 else "coherent")
-        cpu_w = float(np.clip(0.4 + cpu / 200, 0.4, 0.9))
-        mem_w = float(np.clip(0.4 + mem / 200, 0.4, 0.9))
-        alert = cpu > 85 and mem > 85
     except ImportError:
-        cpu_s, mem_s, cpu_w, mem_w, alert = "latent", "nominal", 0.55, 0.60, False
+        raise NoPerception(NO_PERCEPTION) from None
+    cpu   = psutil.cpu_percent(interval=0.05)
+    mem   = psutil.virtual_memory().percent
+    cpu_s = ("saturated" if cpu > 80 else "resonant" if cpu > 50
+             else "synchronizing" if cpu > 20 else "latent")
+    mem_s = ("fragmented" if mem > 85 else "oscillating" if mem > 60
+             else "nominal" if mem > 40 else "coherent")
+    cpu_w = float(np.clip(0.4 + cpu / 200, 0.4, 0.9))
+    mem_w = float(np.clip(0.4 + mem / 200, 0.4, 0.9))
+    alert = cpu > 85 and mem > 85
 
     events = [
         {"src": "SYSTEM", "rel": "PERCEIVES", "tgt": f"cpu::{cpu_s}", "weight": cpu_w, "state": TetraState.TRUE},
@@ -2674,7 +2727,8 @@ def run_cycle(ss: Session, cycle: int, percepts: List[dict] = None,
     extra_ops   = int(round(BREATH_MAX_EXTRA_OPS * (1 - field.contraction)))
     emergent    = ss.concordancy.scan_and_apply(field, cycle, budget, max_ops=3 + extra_ops)
     promoted    = ss.cussive.collapse(field, clock)
-    ss.uco.apply(field, cycle)
+    newborn     = frozenset(n for n in promoted if field.constructs[n].layer == Layer.APPARENT)
+    ss.uco.apply(field, cycle, newborn)
     instability = ss.sombunal.global_instability(field)
     field.prune(min_weight=0.04)
 
@@ -2755,7 +2809,7 @@ def save_state(path: Path, field: ConcordancyField,
     state = {
         "clock":       clock.to_dict(),
         "field":       field.to_dict(),
-        "llm_history": llm.history[-20:],
+        "llm_history": llm.history[-LLM_HISTORY_WINDOW:],
         "cycle":       cycle,
         "ops_log":     (concordancy._ops_log[-50:] if concordancy else []),
         # Pool telemetry of the last POOL_TELEMETRY_CAP cycles, for post-hoc
@@ -2875,7 +2929,7 @@ def run(steps: int = 8):
     """The console demonstration: `steps` cycles of the instance kept in
     STATE_FILE and LEDGER_FILE, begun at genesis or resumed."""
     print(f"\n{'═' * 72}")
-    print("  SIRISYS FRAMEWORK v13.3 — Recursive Ontological Field")
+    print("  SIRISYS FRAMEWORK v13.4 — Recursive Ontological Field")
     print("  An independent interpretation of the framework of M. Daniel Walsh")
     print("  [I::Am] :: [I::AmNot]  |  Lagrangian Points + Proof-Carrying Constructs")
     print(f"{'═' * 72}")
@@ -2963,7 +3017,7 @@ def run(steps: int = 8):
 
     # ── final state report ───────────────────────────────────────────────
     print(f"\n{'═' * 72}")
-    print("  SIRISYS FRAMEWORK v13.3 — FINAL STATE")
+    print("  SIRISYS FRAMEWORK v13.4 — FINAL STATE")
     print(f"  T={clock.T} | Cycles completed: {cycle_start + steps}")
     print()
     print(f"  Constructs  : {len(field.constructs)}")
@@ -2984,7 +3038,7 @@ def run(steps: int = 8):
     print(f"  Proof objects          : {_LEDGER.count} (ledger · irreversible memory)")
     print()
     print(f"  {'─' * 68}")
-    print("  WALLS STATUS — v13.3")
+    print("  WALLS STATUS — v13.4")
     print(f"  {'─' * 68}")
     print()
     print("  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")
@@ -3009,7 +3063,8 @@ def run(steps: int = 8):
     print(f"    Conclusions (lifetime): {field.terminations_total} — all sealed in the ledger")
     print()
     print("  WALL E — RELATIONS vs EVENTS [ARCHITECTURAL]")
-    print("    Understanding_TMC: 'Material reality is emergent result of relational fields.'")
+    print("    Understanding_TMC p.14: 'Material reality is framed not as a base layer, but as an")
+    print("    emergent result of a symphotic mediation.'")
     print("    This implementation: events generate, field modulates.")
     print("    Open: should the field participate in genesis itself?")
     print()
