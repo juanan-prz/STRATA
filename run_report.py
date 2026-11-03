@@ -5,9 +5,9 @@ USAGE
   python3 run_report.py --cycles 20 --seeds 1 --backend ollama --profile minimal     # smoke test
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # the experiment
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
-  python3 run_report.py --backend none                                               # the control alone
+  python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3     # the control alone
 
-  Keep the same backend, model and profile for every run you intend to compare,
+  Keep the same backend, model, profile and machine for every run you intend to compare,
   and send the file the run writes: sirisys_report.json (or, with --determinism,
   sirisys_determinism.json).
 
@@ -65,7 +65,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
     import field_topology                                   # read-only topology and depth
-    from sirisys_measures import LifeCriteria, ModelHealth
+    from sirisys_measures import LifeCriteria, ModelHealth, NO_PSUTIL, describe_machine, machine_record, \
+        real_percepts_available
     from sirisys_loader import load_framework
 except ImportError as ex:
     sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
@@ -431,7 +432,7 @@ def plan(args, model_on):
     return arms, list(range(args.seeds))
 
 
-def print_header(args, checks, digest, intermediary, log):
+def print_header(args, checks, digest, intermediary, log, machine):
     """The framework that runs and its checks; exits (code 1) when a check fails."""
     log("=" * 70)
     log("SIRISYS — instrumented report run")
@@ -443,6 +444,7 @@ def print_header(args, checks, digest, intermediary, log):
         sys.exit(1)
     log(f"  framework file     : {S.__sirisys_file__}  (v{S.__sirisys_version__})")
     log(f"  file sha256[:16]   : {digest}")
+    log(f"  machine            : {describe_machine(machine)}")
     log(f"  model active       : {intermediary.available}")
     log(f"  model id           : {intermediary.backend} · {intermediary.model or '(none)'}")
     if args.determinism:
@@ -560,7 +562,11 @@ def main(argv=None):
     with quiet():
         intermediary = S.LLMIntermediary(model=args.model, backend=args.backend)
     arms, streams = plan(args, intermediary.available)
-    print_header(args, checks, digest, intermediary, log)
+    machine = machine_record()
+    print_header(args, checks, digest, intermediary, log, machine)
+    if args.percepts == "live" and not real_percepts_available():
+        log(f"\n  STOP: {NO_PSUTIL}.\n  Nothing was run.")
+        sys.exit(2)
     probe = check_model(args, intermediary, streams, log)
 
     report = {
@@ -585,6 +591,7 @@ def main(argv=None):
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "platform": platform.platform(),
             "python": sys.version.split()[0],
+            "machine": machine,
         },
         "acceptance_criteria": ACCEPTANCE,
     }
