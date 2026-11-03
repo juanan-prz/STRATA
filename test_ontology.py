@@ -101,10 +101,6 @@ def life(stream, cycles, llm):
     return broken, S.get_ledger().head, f.apparents_total
 
 
-def first_breath_only(cycles):
-    return all(c < S.BREATH_PERIOD for c in cycles)
-
-
 check.section(f"1 · Field invariants (3 streams × {N} cycles, no model)")
 broken, formed = {name: [] for name in INVARIANTS}, 0
 for stream in (0, 1, 2):
@@ -125,9 +121,8 @@ check("conflict recursion never passes MAX_CF_DEPTH (Adsurdic threshold, TMC p.4
 check("the anchors never conclude", not broken["anchor_concluded"])
 check("the tolerance stays between its floor and 1", not broken["tolerance_out"])
 births = broken["crystal_concluded_at_birth"]
-check("no crystal concludes in the cycle it forms after the first breath (TMC p.22)",
-      first_breath_only(births),
-      f"{len(births)} during the first breath (known; next framework version)" if births else "none")
+check("no crystal concludes in the cycle it forms: all Apparents must be Existents (TMC p.22)",
+      not births, f"at cycles {births[:5]}" if births else f"{formed} crystals, none")
 
 check.section(f"2 · A model in the loop (fake, deterministic; {N // 2} cycles)")
 runs = []
@@ -146,12 +141,9 @@ check("the seeds follow the history, not a generator", len(set(seeds1)) == len(s
 check("two identical runs with the model seal the same ledger", head1 == head2, head1[:16])
 check("a request carries the system prompt and at most the last 12 messages", largest <= 13,
       f"largest request: {largest} messages")
-kept = len(llm.history)
-print(f"  [KNOWN] the intermediary keeps its whole conversation in memory: {kept} entries after "
-      f"{N // 2} cycles, about {round(kept * 1000 / max(1, N // 2))} per 1000. Harmless in an experiment; "
-      f"to be bounded in the next framework version, before any life of months.")
-check("the invariants hold with the model in the loop",
-      not any(b1[name] for name in INVARIANTS if name != "crystal_concluded_at_birth")
-      and first_breath_only(b1["crystal_concluded_at_birth"]))
+check("the intermediary keeps only its last LLM_HISTORY_WINDOW messages, whatever the length of the life",
+      len(llm.history) <= S.LLM_HISTORY_WINDOW and llm.call_count > S.LLM_HISTORY_WINDOW,
+      f"{len(llm.history)} kept after {llm.call_count} calls")
+check("the invariants hold with the model in the loop", not any(b1[name] for name in INVARIANTS))
 
 check.finish()
