@@ -30,7 +30,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
 | `Sirisys_Static_Visualizer.html` | The inspector of a saved instance; opens directly in the browser |
-| `run_report.py` | Instrumented runs in three arms; writes `sirisys_report.json` |
+| `run_report.py` | Instrumented runs in four arms; writes `sirisys_report.json` |
 | `sirisys_measures.py` | The self-adjustment criteria and the model-health watch, shared by the server and every measurement |
 | `field_topology.py` | Read-only topology and depth of the field |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Measurements: the criteria on three streams, a long life, the machine's real percepts |
@@ -242,13 +242,15 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 | `--profile minimal` | No narration and no time-of-day percept |
 | `--percepts live` | The machine's real percepts instead of the synthetic streams; without `psutil` the run does not start (exit code 2) |
 | `--skip-questions-arm` | Leave out the arm in which the model only asks the questions |
+| `--skip-null-arm` | Leave out the semantic null |
 | `--skip-degraded` | Leave out the control |
 | `--determinism` | See below; writes `sirisys_determinism.json` instead |
 
-**The three arms**, on the same streams:
+**The four arms**, on the same streams:
 
 - `llm`: the model, through both channels;
 - `llm_questions`: the model asking only the Sombunal questions, while the names stay the control's own, so that the two channels can be told apart;
+- `llm_null`: the semantic null. On each stream it gives the field the answers the `llm` arm received, in the same order and of the same lengths, but meaningless (text derived from a hash), through both channels and at the same cadence, without calling any model. A model's effect that the null shares comes from naming differently, not from meaning;
 - `degraded`: the control, without a model.
 
 Without a model only the control runs, with a warning; when `--backend ollama` or `anthropic` is asked for and the model is not available, nothing runs (exit code 3). Withholding the questions as well gives the control bit for bit, which `test_phase1.py` checks.
@@ -267,7 +269,7 @@ Without a model only the control runs, with a warning; when `--backend ollama` o
 
 - `config`: framework file, version and the first 16 characters of its SHA-256, the integrity checks, the constants the measurements depend on, cycles, streams, backend, model and its probe, profile, percepts, platform and Python version, and `machine`: system, processor, memory, Python and the `psutil` version, so that results from different machines are never mixed up.
 - `acceptance_criteria`: the criteria in words.
-- `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals and a sample of the names born, the pool telemetry, the model's health and any errors.
+- `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals and a sample of the names born, the pool telemetry, the model's health, the shape of every answer the field received (kind and length, which the semantic null replays) and any errors. The criteria include `flicker_share_after_genesis`, flicker among the crystals born after the first 100 cycles: exploratory, not part of the verdict.
 - `aborted`, `determinism` (with `--determinism`) and `console`, everything the run printed.
 
 **Exit codes.** 0 the report is written; 1 the framework lacks a mechanism the report measures; 3 a model was asked for and is missing or does not answer, or it stopped answering during the run (the report is then marked `aborted`).
@@ -282,16 +284,19 @@ Run them from the project folder. None uses a model unless asked.
 |---|---|---|
 | `measure_phase3.py [cycles] [framework file]` | The criteria on synthetic streams 0, 1 and 2 (default 5,000 cycles each) | `phase3_measurements.json`, and PASS or FAIL per stream on screen |
 | `soak.py [cycles] [stream]` | One long life on synthetic percepts (default 50,000 cycles, stream 0): memory, cost, non-repetition, durable crystallization | JSON on standard output |
-| `live_c2.py [cycles] [none\|ollama\|anthropic] [standard\|minimal]` | The machine's real percepts over a long life (default 3,000 cycles, no model, standard profile) | JSON on standard output; messages for the person running it on the terminal |
+| `live_c2.py [cycles] [none\|ollama\|anthropic] [standard\|minimal] [--replay FILE]` | The machine's real percepts over a long life (default 3,000 cycles, no model, standard profile); with `--replay`, the percepts a previous run recorded | JSON on standard output; messages for the person running it on the terminal |
 
 ```bash
 python3 measure_phase3.py                                   # about a minute
 python3 soak.py 50000 > soak_result.json                    # about 3 minutes
 python3 live_c2.py 10000 none minimal > live_none.json      # real percepts, no model (about 10 minutes)
 python3 live_c2.py 3000 ollama minimal > live_ollama.json   # real percepts, the local model
+python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.json   # the same percepts, no model
 ```
 
-`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions that entered the field. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the framework would read fixed values without saying so, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
+`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions that entered the field. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the machine cannot be perceived, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
+
+**Replay.** `--replay FILE` feeds the field, cycle by cycle, the percepts another `live_c2.py` run recorded, at full precision, instead of reading the machine; it needs no `psutil`. Without a model, a replayed life seals the same ledger as the life it replays (`ledger_head`, which every run records). With it, a life with the model gets a paired control: the same real percepts, without the model.
 
 **Topology.** `run_report.py` and `live_c2.py` write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field. Zero Points are left out, and each sample carries its cycle, breath, contraction and tolerance.
 

@@ -1,6 +1,13 @@
 """Real percepts (this machine), measured over a long life.
 Usage: python3 live_c2.py [cycles] [backend: none|ollama|anthropic] [profile: standard|minimal]
+       python3 live_c2.py [cycles] [backend] [profile] --replay FILE
 Defaults: 3000 cycles, no model, standard profile.
+
+--replay FILE feeds the field, cycle by cycle, the percepts a previous live_c2.py
+run recorded (its percept_sequence) instead of reading this machine: the same
+real percepts, with or without a model. Replaying a run without a model, with
+no model, seals the same ledger (ledger_head). With it, a run with the model
+gets a paired control: its own percepts replayed without the model.
 
 Writes one JSON document to standard output (redirect it to a file):
 - the Phase 3 criteria (sirisys_measures.LifeCriteria) and their verdict;
@@ -24,9 +31,14 @@ with contextlib.redirect_stdout(io.StringIO()):
     import field_topology  # read-only topology (pure Python, no networkx)
     from sirisys_measures import LifeCriteria, ModelHealth, machine_record
     S = load_framework(Path(__file__).resolve().parent)
-N = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
-BACKEND = sys.argv[2] if len(sys.argv) > 2 else "none"
-PROFILE = sys.argv[3] if len(sys.argv) > 3 else "standard"
+ARGS = sys.argv[1:]
+REPLAY = None
+if "--replay" in ARGS:
+    i = ARGS.index("--replay")
+    REPLAY, ARGS = Path(ARGS[i + 1]), ARGS[:i] + ARGS[i + 2:]
+N = int(ARGS[0]) if len(ARGS) > 0 else 3000
+BACKEND = ARGS[1] if len(ARGS) > 1 else "none"
+PROFILE = ARGS[2] if len(ARGS) > 2 else "standard"
 NARRATE, HOUR = (False, False) if PROFILE == "minimal" else (True, True)
 S.set_ledger(S.ProofLedger(None))
 
@@ -35,12 +47,32 @@ def say(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+def parse_percepts(line):
+    """One cycle of a recorded percept_sequence back into the percepts the field received."""
+    events = []
+    for item in line.split(";") if line else []:
+        rel, tgt, weight, state = item.split(" ")
+        events.append({"src": "SYSTEM", "rel": rel, "tgt": tgt, "weight": float(weight),
+                       "state": S.TetraState[state]})
+    return events
+
+
 framework = Path(__file__).resolve().parent / S.__sirisys_file__
-out = {"cycles": N, "backend": BACKEND, "profile": PROFILE, "percepts": "live (psutil)",
+recorded = None
+if REPLAY:
+    source = json.loads(REPLAY.read_text(encoding="utf-8"))
+    recorded = [parse_percepts(line) for line in source["percept_sequence"]]
+    N = min(N, len(recorded))
+out = {"cycles": N, "backend": BACKEND, "profile": PROFILE,
+       "percepts": f"replay of {REPLAY.name}" if REPLAY else "live (psutil)",
        "framework": S.__sirisys_file__,
        "framework_sha256_16": hashlib.sha256(framework.read_text(encoding="utf-8").encode()).hexdigest()[:16],
        "machine": machine_record(), "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")}
-if not S.real_percepts_available():
+if REPLAY:
+    out["replayed_from"] = {"file": REPLAY.name, "framework_sha256_16": source.get("framework_sha256_16"),
+                            "backend": source.get("backend"), "machine": source.get("machine"),
+                            "ledger_head": source.get("ledger_head")}
+elif not S.real_percepts_available():
     out["aborted"] = "no psutil: the machine cannot be perceived"
     print(json.dumps(out, indent=1))
     say(f"\n  STOP: {S.NO_PERCEPTION}.\n  Nothing was run.\n")
@@ -74,14 +106,14 @@ with contextlib.redirect_stdout(_Null()):
         health.attach(ss.llm)
     for c in range(N):
         t_cycle, t_model = time.perf_counter(), health.model_seconds
-        r = S.run_cycle(ss, c, narrate=NARRATE, include_hour=HOUR)
+        r = S.run_cycle(ss, c, percepts=recorded[c] if recorded else None, narrate=NARRATE, include_hour=HOUR)
         life.after_cycle(ss, c, (time.perf_counter() - t_cycle) - (health.model_seconds - t_model))
         f = ss.field
         if c % 1000 == 0:
             per_1000.append(Counter()); questions.append(0)
         for e in r["percepts"]:
             per_1000[-1][e["tgt"]] += 1
-        sequence.append(";".join(f"{e['rel']} {e['tgt']} {round(float(e['weight']), 4)} {e['state'].name}"
+        sequence.append(";".join(f"{e['rel']} {e['tgt']} {float(e['weight'])!r} {e['state'].name}"
                                  for e in r["percepts"]))
         questions[-1] += bool(r["question"])
         # Read-only: genealogy every cycle, topology once per half-breath
@@ -105,6 +137,7 @@ out.update({
     "constructs_first_last_1000": [round(sum(cs[:1000]) / max(1, len(cs[:1000])), 1),
                                    round(sum(cs[-1000:]) / max(1, len(cs[-1000:])), 1)],
     "tolerance": round(ss.field.tolerance, 2),
+    "ledger_head": S.get_ledger().head,
     "model": ss.llm.model, "model_active": ss.llm.available, "llm_calls": ss.llm.call_count,
     "model_health": health.report() if BACKEND != "none" else None,
     "sombunal_questions_per_1000": questions,
