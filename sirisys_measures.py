@@ -70,11 +70,14 @@ def describe_machine(rec):
 class LifeCriteria:
     """Feed after_cycle() once per cycle; read result() and verdict() at the end."""
 
+    GENESIS_CYCLES = 100     # the genesis, for the exploratory flicker measure only
+
     def __init__(self, S):
         self.S = S
         self.ap, self.cs, self.ts, self.e3, self.tol = [], [], [], [], []
         self.born, self.durable, self.flicker, self.seen = {}, [], 0, 0
         self.apparents_total = 0
+        self.late_born, self.late_flicker = 0, 0      # crystals born after the genesis (exploratory)
 
     def after_cycle(self, ss, cycle, field_seconds):
         """field_seconds: time of the cycle itself, without the model's calls."""
@@ -85,11 +88,14 @@ class LifeCriteria:
         self.tol.append(f.tolerance)
         for n in f.apparents_since(self.seen):
             self.born[n] = cycle
+            self.late_born += cycle >= self.GENESIS_CYCLES
         self.seen = f.apparents_total
         for n, b in list(self.born.items()):
             alive = n in f.constructs and f.constructs[n].layer == S.Layer.APPARENT
             if not alive:
-                self.flicker += (cycle - b) < S.BREATH_PERIOD
+                gone_early = (cycle - b) < S.BREATH_PERIOD
+                self.flicker += gone_early
+                self.late_flicker += gone_early and b >= self.GENESIS_CYCLES
                 del self.born[n]
             elif cycle - b >= S.BREATH_PERIOD:
                 self.durable.append(b)
@@ -115,6 +121,8 @@ class LifeCriteria:
             "cycles": N,
             "durable_per_1000": [durable[a // 1000] for a in range(0, N - S.BREATH_PERIOD, 1000)],
             "flicker_share": round(self.flicker / max(1, self.apparents_total), 3),
+            # exploratory, not a criterion: flicker among the crystals born after the genesis
+            "flicker_share_after_genesis": round(self.late_flicker / max(1, self.late_born), 3),
             "zero_windows": w.count(0), "windows": len(w),
             "new_per_200": (min(w), round(sum(w) / len(w), 1), max(w)) if w else None,
             "constructs_final": cs[-1] if cs else 0,

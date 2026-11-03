@@ -14,12 +14,18 @@ USAGE
   sirisys_determinism.json).
 
 WHAT THE REPORT COMPARES
-  Three arms on the same percept streams. The model reaches the field through
+  Four arms on the same percept streams. The model reaches the field through
   two channels: the names it gives constructs (names are keys, and enter every
   orientation) and the Sombunal questions (they enter the field as constructs).
     llm            the model, through both channels;
     llm_questions  the model asking only the Sombunal questions; the names are
                    the control's own, so this arm separates the two channels;
+    llm_null       the semantic null: on each stream, the model's answers as the
+                   llm arm received them, in the same order and of the same
+                   lengths, but meaningless (text derived from a hash). It reaches
+                   the field through both channels at the same cadence, without
+                   meaning, so it tells an effect of meaning from an effect of
+                   merely naming differently;
     degraded       the control, without a model.
   Each run is judged by the self-adjustment criteria (sirisys_measures.
   LifeCriteria, the code measure_phase3.py uses): durable crystals in every
@@ -67,7 +73,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
     import field_topology                                   # read-only topology and depth
-    from sirisys_measures import LifeCriteria, ModelHealth, describe_machine, machine_record
+    from sirisys_measures import LifeCriteria, ModelHealth, _kind, describe_machine, machine_record
     from sirisys_loader import load_framework
 except ImportError as ex:
     sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
@@ -86,6 +92,7 @@ PROFILES = {"standard": {"narrate": True, "include_hour": True},
 # name: (title, model active, channels through which the model reaches the field)
 ARMS = {"llm": ("LLM active", True, "all"),
         "llm_questions": ("LLM, Sombunal questions only", True, "questions"),
+        "llm_null": ("semantic null: the model's answer shape without meaning", True, "null"),
         "degraded": ("degraded control", False, "all")}
 ACCEPTANCE = ("Phase 3, per run: durable crystals (life >= one breath) in every 1000-cycle "
               "window, flicker <= 5 %, constructs trend <= 1.2, cost of the cycle itself flat "
@@ -160,6 +167,7 @@ class ArmIntermediary(S.LLMIntermediary):
 
     def __init__(self, active, channels="all", model=None, backend=None):
         self.active, self.channels = active, channels
+        self.shape = []                             # (kind, length) of every answer, in order
         self.cycle = 0                              # set by run_arm: the control's names carry it
         self.health = ModelHealth()
         super().__init__(model=model, backend=backend)
@@ -173,17 +181,63 @@ class ArmIntermediary(S.LLMIntermediary):
     # The control's names: the framework's own, the names it gives without a model's
     # answer (the "none" check in test_phase1.py verifies the result bit for bit).
     def propose_emergent(self, x, y, x_state, y_state):
-        if self.channels == "all":
+        if self.channels in ("all", "null"):
             return super().propose_emergent(x, y, x_state, y_state)
         return S.control_emergent_name(x, y, self.cycle)
 
     def interpret_conflict(self, x, y):
-        if self.channels == "all":
+        if self.channels in ("all", "null"):
             return super().interpret_conflict(x, y)
         return S.control_conflict_label(x, y)
 
     def question_sombunal(self, instability):
         return "" if self.channels == "none" else super().question_sombunal(instability)
+
+    def _call(self, prompt, temperature=0.85):
+        """Every answer the field receives, and its shape: (kind, length), 0 when empty."""
+        text = super()._call(prompt, temperature)
+        self.shape.append((_kind(prompt), len(text.strip())))
+        return text
+
+
+class NullIntermediary(ArmIntermediary):
+    """The semantic null. It answers every request the field makes with meaningless
+    text of the length the model's answer of the same kind had, in the same order,
+    on the same stream (the llm arm's recorded shape); an empty answer stays empty.
+    Nothing leaves the machine and no PRNG is used: the text is derived from a hash
+    of the stream, the kind and the answer's index."""
+
+    def __init__(self, shape, seed):
+        self.by_kind = defaultdict(list)
+        for kind, length in shape:
+            self.by_kind[kind].append(length)
+        self.used, self.seed = defaultdict(int), seed
+        super().__init__(True, "null")
+
+    def _init(self):
+        self.backend, self.model, self._available = "null", "semantic-null", True
+
+    @property
+    def is_local(self):
+        return True
+
+    def _complete(self, temperature):
+        kind = _kind(self.history[-1]["content"])
+        lengths = self.by_kind.get(kind) or [0]
+        i = self.used[kind]
+        self.used[kind] += 1
+        return meaningless(lengths[i % len(lengths)], f"null::{self.seed}::{kind}::{i}")
+
+
+def meaningless(length, key):
+    """Letters and spaces derived from a hash: the length of an answer without its meaning."""
+    out, block = [], 0
+    while len("".join(out)) < length:
+        out.append(hashlib.sha256(f"{key}::{block}".encode()).hexdigest())
+        block += 1
+    letters = "".join(chr(ord("a") + int(c, 16) % 16) for c in "".join(out))
+    text = " ".join(letters[i:i + 6] for i in range(0, len(letters), 6))[:length]
+    return text[:-1] + letters[0] if text.endswith(" ") else text
 
 
 def cycle_metrics(ss):
@@ -224,7 +278,7 @@ def cycle_metrics(ss):
 
 
 def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="standard",
-            percepts="synthetic", channels="all"):
+            percepts="synthetic", channels="all", shape=None):
     """One life of `cycles` cycles; returns its record.
 
     `seed` selects the synthetic percept stream (the framework has no PRNG);
@@ -233,7 +287,8 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     (test_phase2_guarantee.py)."""
     S.set_ledger(S.ProofLedger(None))               # each run: its own in-memory ledger
     with quiet():
-        llm = ArmIntermediary(llm_active, channels, model=model, backend=backend)
+        llm = (NullIntermediary(shape or [], seed) if channels == "null"
+               else ArmIntermediary(llm_active, channels, model=model, backend=backend))
         ss = S.new_session(llm=llm)
     field, prof = ss.field, PROFILES[profile]
     life, genealogy = LifeCriteria(S), field_topology.Genealogy()
@@ -282,7 +337,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             log(f"    cycle {cycle:4}  constructs {m['constructs']:4}  "
                 f"apparents {m['apparents']:4}  conflicts {m['conflicts']:3}  "
                 f"BOTH {m['both_frac']:.3f}  calls {llm.health.calls}")
-        if llm.health.tripped:
+        if llm.health.tripped and channels != "null":      # the null's empty answers are the model's own
             aborted = f"cycle {cycle}: {llm.health.reason}"
             log(f"    MODEL HEALTH — {aborted}")
             break
@@ -301,6 +356,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         "errors": errors,
         "seconds": round(time.perf_counter() - t0, 1),
         "llm": {"available": llm.available, "model": llm.model, "health": llm.health.report()},
+        "answer_shape": llm.shape,
         "percept_catalog": {"distinct_targets": len(perceived),
                             "counts": dict(perceived.most_common(SAMPLE_TAIL))},
         "lifespans": {"n": len(lifespans),
@@ -415,6 +471,8 @@ def parse_args(argv=None):
                     help="synthetic: one reproducible stream per seed; live: this machine")
     ap.add_argument("--skip-questions-arm", action="store_true",
                     help="skip the arm in which the model only asks the Sombunal questions")
+    ap.add_argument("--skip-null-arm", action="store_true",
+                    help="skip the semantic null (the model's answer shape without meaning)")
     ap.add_argument("--skip-degraded", action="store_true", help="skip the control arm")
     ap.add_argument("--determinism", action="store_true",
                     help="run the model arm on stream 0 twice and report whether both runs "
@@ -431,6 +489,7 @@ def plan(args, model_on):
         return ["llm"], [0, 0]
     arms = (["llm"] if model_on else []) \
         + (["llm_questions"] if model_on and not args.skip_questions_arm else []) \
+        + (["llm_null"] if model_on and not args.skip_null_arm else []) \
         + ([] if args.skip_degraded else ["degraded"])
     return arms, list(range(args.first_seed, args.first_seed + args.seeds))
 
@@ -508,7 +567,7 @@ def check_model(args, intermediary, streams, log):
 def run_plan(args, arms, streams, log):
     """Every arm on every stream; stops at the first run whose model stopped answering.
     Returns the arms and the reason for stopping, if any."""
-    out = {}
+    out, shapes = {}, {}
     for name in arms:
         title, active, channels = ARMS[name]
         log(f"\n  --- arm: {title}{', stream 0 twice' if args.determinism else ''} ---")
@@ -516,7 +575,9 @@ def run_plan(args, arms, streams, log):
         for seed in streams:
             runs.append(run_arm(seed, args.cycles, active, log, model=args.model,
                                 backend=args.backend, profile=args.profile,
-                                percepts=args.percepts, channels=channels))
+                                percepts=args.percepts, channels=channels, shape=shapes.get(seed)))
+            if name == "llm":
+                shapes[seed] = runs[-1]["answer_shape"]
             if runs[-1]["aborted"]:
                 out[name] = {"runs": runs, "summary": summarize(runs)}
                 return out, f"arm {name}, seed {seed}, {runs[-1]['aborted']}"

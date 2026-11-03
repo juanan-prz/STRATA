@@ -30,7 +30,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
 | `Sirisys_Static_Visualizer.html` | El inspector de una instancia guardada; se abre directamente en el navegador |
-| `run_report.py` | Ejecuciones instrumentadas en tres brazos; escribe `sirisys_report.json` |
+| `run_report.py` | Ejecuciones instrumentadas en cuatro brazos; escribe `sirisys_report.json` |
 | `sirisys_measures.py` | Los criterios de autoajuste y la vigilancia del modelo, compartidos por el servidor y todas las mediciones |
 | `field_topology.py` | Topología y profundidad del campo, de solo lectura |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Mediciones: los criterios en tres flujos, una vida larga y los perceptos reales de la máquina |
@@ -242,13 +242,15 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 | `--profile minimal` | Sin narración ni percepto de la hora del día |
 | `--percepts live` | Los perceptos reales de la máquina en lugar de los flujos sintéticos; sin `psutil` la ejecución no arranca (código de salida 2) |
 | `--skip-questions-arm` | Omite el brazo en que el modelo solo hace las preguntas |
+| `--skip-null-arm` | Omite el nulo semántico |
 | `--skip-degraded` | Omite el control |
 | `--determinism` | Ver más abajo; escribe `sirisys_determinism.json` en su lugar |
 
-**Los tres brazos**, sobre los mismos flujos:
+**Los cuatro brazos**, sobre los mismos flujos:
 
 - `llm`: el modelo, por las dos vías;
 - `llm_questions`: el modelo solo hace las preguntas al Sombunal y los nombres son los del control, de modo que las dos vías se distinguen;
+- `llm_null`: el nulo semántico. En cada flujo da al campo las respuestas que recibió el brazo `llm`, en el mismo orden y con las mismas longitudes, pero sin sentido (texto derivado de un hash), por las dos vías y con la misma cadencia, sin llamar a ningún modelo. Un efecto del modelo que el nulo también produce viene de nombrar distinto, no del sentido;
 - `degraded`: el control, sin modelo.
 
 Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o `anthropic` y el modelo no está disponible, no corre nada (código de salida 3). Si además se retiran las preguntas, el brazo coincide bit a bit con el control; lo comprueba `test_phase1.py`.
@@ -267,7 +269,7 @@ Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o 
 
 - `config`: archivo del framework, versión y los 16 primeros caracteres de su SHA-256, las comprobaciones de integridad, las constantes de las que dependen las mediciones, ciclos, flujos, backend, modelo y su prueba inicial, perfil, perceptos, plataforma y versión de Python, y `machine`: sistema, procesador, memoria, Python y la versión de `psutil`, para que nunca se mezclen resultados de máquinas distintas.
 - `acceptance_criteria`: los criterios en palabras.
-- `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales y una muestra de los nombres nacidos, la telemetría de las reservas, la salud del modelo y los errores, si los hay.
+- `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales y una muestra de los nombres nacidos, la telemetría de las reservas, la salud del modelo, la forma de cada respuesta que recibió el campo (tipo y longitud, que el nulo semántico repite) y los errores, si los hay. Los criterios incluyen `flicker_share_after_genesis`, el parpadeo entre los cristales nacidos tras los primeros 100 ciclos: exploratorio, no entra en el veredicto.
 - `aborted`, `determinism` (con `--determinism`) y `console`, todo lo que imprimió la ejecución.
 
 **Códigos de salida.** 0: el informe está escrito; 1: al framework le falta un mecanismo que el informe mide; 3: se pidió un modelo y falta o no responde, o dejó de responder durante la ejecución (el informe queda entonces marcado como `aborted`).
@@ -282,16 +284,19 @@ Ejecútalas desde la carpeta del proyecto. Ninguna usa modelo salvo que se pida.
 |---|---|---|
 | `measure_phase3.py [ciclos] [archivo del framework]` | Los criterios en los flujos sintéticos 0, 1 y 2 (5.000 ciclos cada uno por defecto) | `phase3_measurements.json`, y PASS o FAIL por flujo en pantalla |
 | `soak.py [ciclos] [flujo]` | Una vida larga con perceptos sintéticos (50.000 ciclos y flujo 0 por defecto): memoria, coste, no repetición, cristalización duradera | JSON por la salida estándar |
-| `live_c2.py [ciclos] [none\|ollama\|anthropic] [standard\|minimal]` | Los perceptos reales de la máquina durante una vida larga (3.000 ciclos, sin modelo y perfil standard por defecto) | JSON por la salida estándar; los mensajes para quien la ejecuta, en la terminal |
+| `live_c2.py [ciclos] [none\|ollama\|anthropic] [standard\|minimal] [--replay ARCHIVO]` | Los perceptos reales de la máquina durante una vida larga (3.000 ciclos, sin modelo y perfil standard por defecto); con `--replay`, los perceptos que grabó una ejecución anterior | JSON por la salida estándar; los mensajes para quien la ejecuta, en la terminal |
 
 ```bash
 python3 measure_phase3.py                                   # alrededor de un minuto
 python3 soak.py 50000 > soak_result.json                    # unos 3 minutos
 python3 live_c2.py 10000 none minimal > live_none.json      # perceptos reales, sin modelo (unos 10 minutos)
 python3 live_c2.py 3000 ollama minimal > live_ollama.json   # perceptos reales, con el modelo local
+python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.json   # los mismos perceptos, sin modelo
 ```
 
-`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que entraron en el campo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él, el framework leería valores fijos sin decirlo, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
+`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que entraron en el campo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él la máquina no se puede percibir, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
+
+**Repetición.** `--replay ARCHIVO` da al campo, ciclo a ciclo, los perceptos que grabó otra ejecución de `live_c2.py`, con toda su precisión, en lugar de leer la máquina; no necesita `psutil`. Sin modelo, una vida repetida sella el mismo ledger que la vida que repite (`ledger_head`, que toda ejecución registra). Con modelo, una vida con el modelo obtiene un control por pares: los mismos perceptos reales, sin el modelo.
 
 **Topología.** `run_report.py` y `live_c2.py` escriben un `topology_trace`: dos veces por respiración, en expansión y en contracción, la forma del campo. Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su contracción y su tolerancia.
 

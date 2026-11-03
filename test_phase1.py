@@ -39,6 +39,12 @@ def no_log(line):
     pass
 
 
+def criteria_names():
+    """The criteria the verdict judges (the exploratory measures are not among them)."""
+    from sirisys_measures import LifeCriteria
+    return list(LifeCriteria.RULE)
+
+
 def perceived_the_hour(run_dir):
     """A PERCEIVE proof names its percept in its id: perceive::<target>."""
     return any(r["relation"] == "PERCEIVE" and r["id"].startswith("perceive::time::")
@@ -385,6 +391,17 @@ p = run(["run_report.py", "--backend", "ollama", "--cycles", "5", "--seeds", "1"
 check("run_report --backend ollama stops before running when the model is not there",
       p.returncode == 3 and "Nothing was run" in p.stdout and not (tools / "sirisys_report.json").exists())
 
+p = run(["live_c2.py", "40", "none", "minimal"], tools, 120)
+(tools / "recorded.json").write_text(p.stdout, encoding="utf-8")
+first = json.loads(p.stdout) if p.returncode == 0 else {}
+p = run(["live_c2.py", "40", "none", "minimal", "--replay", "recorded.json"], tools, 120)
+again = json.loads(p.stdout) if p.returncode == 0 else {}
+check("live_c2 --replay feeds a recorded life's percepts back: without a model it seals the same ledger",
+      first.get("ledger_head") and again.get("ledger_head") == first.get("ledger_head")
+      and again.get("percept_sequence") == first.get("percept_sequence")
+      and again.get("replayed_from", {}).get("ledger_head") == first.get("ledger_head"),
+      f"{str(first.get('ledger_head'))[:16]} both times")
+
 bare = scratch()                                    # the same tools on a machine without psutil
 for f in TOOL_FILES:
     shutil.copy(HERE / f, bare / f)
@@ -429,6 +446,13 @@ with quiet():
     first, again = (run_report.run_arm(0, 30, False, no_log, profile="minimal") for _ in range(2))
     other = run_report.run_arm(1, 30, False, no_log, profile="minimal")
 distinct = first["percept_catalog"]["distinct_targets"]
+with quiet():
+    lived = run_report.run_arm(2, 300, False, no_log, profile="minimal")
+c = lived["criteria"]
+check("the exploratory flicker after the genesis counts only crystals born after it, beside the criterion",
+      "flicker_share_after_genesis" in c and 0 <= c["flicker_share_after_genesis"] <= 1
+      and "flicker_share_after_genesis" not in str(criteria_names()),
+      f"flicker {c['flicker_share']}, after the genesis {c['flicker_share_after_genesis']}")
 check("run_report feeds the synthetic stream when asked, reproducibly",
       distinct > 2 and first["trace"] == again["trace"] and first["trace"] != other["trace"],
       f"{distinct} distinct percepts; seed 0 twice identical: {first['trace'] == again['trace']}; "
@@ -460,7 +484,21 @@ with quiet(), environment(OLLAMA_HOST=model.url):
     arms = {channels: run_report.run_arm(0, 60, True, no_log, backend="ollama", profile="minimal",
                                          channels=channels)
             for channels in ("none", "questions", "all")}
+# The semantic null: the full arm's answer shape, replayed without meaning and without the model
+requests_before = len(model.requests)
+with quiet():
+    null = run_report.run_arm(0, 60, True, no_log, profile="minimal", channels="null",
+                              shape=arms["all"]["answer_shape"])
 model.close()
+full_shape, null_shape = arms["all"]["answer_shape"], null["answer_shape"]
+lengths = lambda shape, kind: [n for k, n in shape if k == kind]
+replayed = all(lengths(null_shape, k)[:len(lengths(full_shape, k))]
+               == lengths(full_shape, k)[:len(lengths(null_shape, k))]
+               for k in {k for k, _ in null_shape})             # past the recorded answers it starts over
+check("the semantic null answers with the full arm's lengths, kind by kind and in order, meaningless and "
+      "without calling the model", null_shape and replayed and len(model.requests) == requests_before
+      and not any("Name" in n for n in null["sample_born_names"]) and null["llm"]["model"] == "semantic-null",
+      f"{len(null_shape)} answers replayed; e.g. {null['sample_born_names'][-1][:40]!r}")
 asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels, r in arms.items()}
 check("withholding every channel through the model path gives the control, bit for bit",
       arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
