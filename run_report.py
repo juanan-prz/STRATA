@@ -36,7 +36,8 @@ WHAT THE REPORT COMPARES
 
 MODEL HEALTH
   A model that fails or answers empty would leave the field on synthetic names
-  without notice. With a model, two real calls are made before anything runs;
+  without notice. With a model, two real calls are made before anything runs
+  (a construct name and a conflict name: the report prints both answers);
   during the run, it stops when 3 calls in a row fail or more than 10 % of the
   last 50 fail or come back empty. The report is still written, marked
   "aborted", with the reason.
@@ -98,7 +99,7 @@ ACCEPTANCE = ("Phase 3, per run: durable crystals (life >= one breath) in every 
               "window, flicker <= 5 %, constructs trend <= 1.2, cost of the cycle itself flat "
               "(late <= 1.5 x early + 0.5 ms), top-3 energy trend <= 1.2")
 ZERO_POINTS = frozenset(S.ZERO_POINTS)   # left out of the topology: never operands (TMC p.22)
-PROGRESS_EVERY = 25                      # cycles between progress lines
+PROGRESS_EVERY = 25                      # cycles between progress lines (fewer in a short run)
 SAMPLE_NAMES, SAMPLE_CRYSTALS, SAMPLE_TAIL = 60, 40, 40   # how much of each list a run keeps
 
 
@@ -277,6 +278,11 @@ def cycle_metrics(ss):
     }
 
 
+def progress_every(cycles):
+    """Cycles between progress lines: PROGRESS_EVERY, or four lines in a shorter run."""
+    return max(1, min(PROGRESS_EVERY, cycles // 4))
+
+
 def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="standard",
             percepts="synthetic", channels="all", shape=None):
     """One life of `cycles` cycles; returns its record.
@@ -333,7 +339,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             topology.append(field_topology.field_topology(
                 field, cycle=cycle, zero_points=ZERO_POINTS, genealogy=genealogy))
 
-        if cycle % PROGRESS_EVERY == 0:
+        if cycle % progress_every(cycles) == 0:
             log(f"    cycle {cycle:4}  constructs {m['constructs']:4}  "
                 f"apparents {m['apparents']:4}  conflicts {m['conflicts']:3}  "
                 f"BOTH {m['both_frac']:.3f}  calls {llm.health.calls}")
@@ -602,6 +608,11 @@ def print_summary(report, log):
         log(f"  {'':9} model calls {s['model_calls']}  failures {s['model_failures']}  "
             f"empty {s['model_empty']}  errors {s['errors']}")
         log(f"  {'':9} ledger heads {[r['ledger_head'][:16] for r in arm['runs']]}")
+        if name == "llm":                           # the model's own answers, to judge (Rule 0.4)
+            samples = arm["runs"][0]["llm"]["health"]["samples"]
+            for kind in ("name", "conflict"):
+                if samples.get(kind):
+                    log(f"  {'':9} {kind + 's':9} {' | '.join(a[:40] for a in samples[kind][:3])}")
 
     d = report.get("determinism")
     if d:

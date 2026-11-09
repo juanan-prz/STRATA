@@ -284,18 +284,20 @@ class ModelHealth:
 
     @staticmethod
     def probe(llm, cycles=None, calls_per_cycle=None):
-        """Two real completions on a separate intermediary: the first may include
-        loading the model, the second gives the latency. Returns a dict with ok,
-        the reason when not ok, the answers, the latency and, given cycles, an
+        """Two real completions on a separate intermediary, one of each kind of
+        name the field asks for: an emergent construct, which may include loading
+        the model, then a conflict, which gives the latency. Returns a dict with
+        ok, the reason when not ok, the answers, the latency and, given cycles, an
         upper estimate of the run's model time."""
         if not llm.available:
             return {"ok": False, "reason": "the model is not available"}
         answers, secs = [], []
         h = ModelHealth()
         h.attach(llm)
-        for x, y in (("I::Am", "SYSTEM"), ("SYSTEM", "I::AmNot")):
+        for ask in (lambda: llm.propose_emergent("I::Am", "SYSTEM", "TRUE", "TRUE"),
+                    lambda: llm.interpret_conflict("SYSTEM", "I::AmNot")):
             t = time.perf_counter()
-            answers.append(llm.propose_emergent(x, y, "TRUE", "TRUE"))
+            answers.append(ask())
             secs.append(time.perf_counter() - t)
         if h.failures:
             return {"ok": False, "reason": f"the model call failed: {h.errors[-1]}", "answers": answers}

@@ -1417,6 +1417,9 @@ class Sombunal:
 # =============================================================================
 
 class LLMIntermediary:
+    # Answer format (Level 3): a name comes back alone, because the field uses it
+    # as a key; a sentence about the name would become the key. Everything else
+    # comes back in sentences.
     SYSTEM_PROMPT = (
         "You are the Intermediary of SIRISYS — the translation layer between "
         "Walsh's ontological framework and the human-readable domain.\n\n"
@@ -1432,7 +1435,9 @@ class LLMIntermediary:
         "  2. Narrate the ontological state of the field\n"
         "  3. Question the Sombunal — the unreachable limit\n\n"
         "Rules:\n"
-        "  - Responses: 1–3 sentences, precise, ontologically grounded\n"
+        "  - Asked to name a construct: reply with the name alone — no sentence, "
+        "no preamble, no quotes\n"
+        "  - Any other answer: 1–3 sentences, precise, ontologically grounded\n"
         "  - Never invent beyond what the field contains\n"
         "  - Never resolve what cannot be resolved — honor the Sombunal\n"
         "  - Speak as the intermediary, not as the entity itself"
@@ -1557,7 +1562,8 @@ class LLMIntermediary:
         result = self._call(
             f"Concordancy: [{x}] :: [{y}]\n"
             f"States: {x_state} :: {y_state}\n"
-            f"Name the emergent construct in Walsh's grammar. Max 12 words. No explanation.",
+            f"Name the emergent construct in Walsh's grammar. Max 12 words.\n"
+            f"Reply with the name alone: no sentence, no preamble, no explanation.",
             temperature=0.92
         )
         return self._clip(result)
@@ -1567,7 +1573,8 @@ class LLMIntermediary:
         result = self._call(
             f"Reversion: [{x}] cannot concordance with [{y}].\n"
             f"This irresolvable tension is itself a structure in Walsh's grammar.\n"
-            f"Name the conflict construct. Max 10 words. No brackets. No explanation.",
+            f"Name the conflict construct. Max 10 words. No brackets.\n"
+            f"Reply with the name alone: no sentence, no preamble, no explanation.",
             temperature=0.95
         )
         return self._clip(result)

@@ -338,8 +338,17 @@ def intermediary():
 
 
 probe = ModelHealth.probe(intermediary(), cycles=100, calls_per_cycle=4)
-check("the probe accepts a model that answers", probe["ok"] and all(probe["answers"]),
-      str(probe.get("answers")))
+asked = [r["messages"][-1]["content"].split(":")[0] for r in model.requests]
+check("the probe accepts a model that answers, asking for one name of each kind",
+      probe["ok"] and all(probe["answers"]) and asked == ["Concordancy", "Reversion"],
+      f"{probe.get('answers')} for {asked}")
+system = model.requests[0]["messages"][0]["content"]
+asks = [r["messages"][-1]["content"] for r in model.requests]
+check("the model is asked for names alone; its rule of 1–3 sentences is for every other answer",
+      all("Reply with the name alone" in a for a in asks)
+      and "Asked to name a construct: reply with the name alone" in system
+      and "Any other answer: 1–3 sentences" in system and "Responses: 1–3 sentences" not in system,
+      f"{len(asks)} naming requests")
 model.reset("empty")
 probe = ModelHealth.probe(intermediary())
 check("the probe refuses a model that answers empty", not probe["ok"] and "empty" in probe["reason"])
@@ -440,6 +449,16 @@ check("the determinism check tells a model that answers alike from one that does
       and stateful.get("diverged_at_cycle") is not None and not (tools / "sirisys_report.json").exists(),
       f"alike: same ledger {alike.get('same')}; stateful: same ledger {stateful.get('same')}, "
       f"parted at cycle {stateful.get('diverged_at_cycle')}")
+
+model.reset("alike")
+p = run(["run_report.py", "--backend", "ollama", "--profile", "minimal", "--cycles", "8", "--seeds", "1",
+         "--skip-questions-arm", "--skip-null-arm", "--skip-degraded"], tools, OLLAMA_HOST=model.url)
+progress = [line.split()[1] for line in p.stdout.splitlines() if line.startswith("    cycle ")]
+given = [line for line in p.stdout.splitlines() if line.split()[:1] == ["names"]]
+(tools / "sirisys_report.json").unlink(missing_ok=True)
+check("a short run shows its progress, and at the end the names the model gave (Rule 0.4)",
+      p.returncode == 0 and progress == ["0", "2", "4", "6"] and given and "Name " in given[0],
+      f"progress at cycles {progress}; {given[0].strip()[:60] if given else 'no names line'}")
 
 with quiet():
     import run_report
