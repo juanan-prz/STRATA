@@ -79,7 +79,7 @@ Usa el mismo backend, modelo, perfil y máquina en las ejecuciones que vayas a c
 
 Un modelo que falla o responde vacío dejaría el campo con nombres sintéticos sin avisar: la ejecución parecería una ejecución con modelo sin serlo. `sirisys_measures.ModelHealth` lo impide.
 
-- Antes de empezar, `run_report.py` y `live_c2.py` hacen dos llamadas reales y no arrancan si las respuestas faltan o llegan vacías.
+- Antes de empezar, `run_report.py` y `live_c2.py` hacen dos llamadas reales, una de cada tipo de nombre (un constructo emergente y un conflicto), y no arrancan si las respuestas faltan o llegan vacías. `run_report.py` imprime las respuestas (`live_c2.py` las guarda en su archivo): tienen que ser nombres solos, no frases. Al final, `run_report.py` imprime también los primeros nombres que dio el modelo durante la ejecución.
 - Durante la ejecución se detienen (código de salida 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50. El resultado se escribe igualmente, marcado como `aborted` y con el motivo.
 - La prueba inicial registra qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
 - El modo experimento vigila igual: si la vigilancia salta, el motor se pausa una vez y la vista en vivo dice por qué; Play continúa.

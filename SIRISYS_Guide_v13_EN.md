@@ -79,7 +79,7 @@ Keep the same backend, model, profile and machine across runs you intend to comp
 
 A model that fails or answers empty would leave the field on synthetic names without notice: the run would look like a run with a model and not be one. `sirisys_measures.ModelHealth` prevents that.
 
-- Before a run, `run_report.py` and `live_c2.py` make two real calls, and do not start if the answers are missing or empty.
+- Before a run, `run_report.py` and `live_c2.py` make two real calls, one name of each kind (an emergent construct and a conflict), and do not start if the answers are missing or empty. `run_report.py` prints the answers (`live_c2.py` records them in its file): they must be names alone, not sentences. At the end, `run_report.py` also prints the first names the model gave during the run.
 - During the run they stop (exit code 3) when 3 calls in a row fail, or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason.
 - The probe records which model exactly answered (with Ollama: digest, size, parameters and quantization), and the health report keeps the first answers of each kind.
 - Experiment mode watches the same way: when the watch trips, the engine pauses once and the live view says why; Play goes on.
