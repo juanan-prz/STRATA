@@ -191,31 +191,47 @@ def _kind(prompt):
 class Translations:
     """Every label a model gave, in order: what the translator read in the field.
 
-    Wraps the intermediary's three labelling calls on the instance (as ModelHealth
-    wraps _complete); each answer passes through unchanged, so recording changes
-    nothing. Since v13.5 no label reaches the dynamics, so this is a reading, not a
-    measure of the field. Each entry is [cycle, kind, of, label]: kind is "name"
-    (an emergent), "conflict" or "question" (the Sombunal approach); `of` holds the
-    two constructs as the model saw them (their labels, or their keys), empty for
-    a question. Tools set `cycle` before each cycle. Every label lands on a
-    construct, including those that die within the cycle they were born in."""
+    Wraps, on the instance, the intermediary's three labelling calls and the call
+    that reaches the model (_call, as ModelHealth wraps _complete); every answer
+    passes through unchanged, so recording changes nothing. Since v13.5 no label
+    reaches the dynamics, so this is a reading, not a measure of the field.
+
+    Each entry is [cycle, kind, of, label, answer]:
+      kind    "name" (an emergent), "conflict" or "question" (the Sombunal approach);
+      of      the two constructs as the model saw them (their labels, or their
+              keys), empty for a question;
+      label   what the construct shows: the answer cut to MAX_NODE_NAME characters;
+      answer  the model's whole answer, as it wrote it.
+    Tools set `cycle` before each cycle. Every label lands on a construct,
+    including those that die within the cycle they were born in."""
 
     KINDS = {"propose_emergent": "name", "interpret_conflict": "conflict",
              "question_sombunal": "question"}
 
     def __init__(self):
         self.entries, self.cycle = [], None
+        self._answers = []                    # what the model wrote during one labelling call
 
     def attach(self, llm):
+        reach = llm._call
+
+        def call(*args, **kwargs):
+            answer = reach(*args, **kwargs)
+            self._answers.append(answer)
+            return answer
+
+        llm._call = call
         for method, kind in self.KINDS.items():
             inner = getattr(llm, method)
 
             def watched(*args, _inner=inner, _kind=kind, **kwargs):
-                out = _inner(*args, **kwargs)
-                if out:
+                self._answers.clear()
+                label = _inner(*args, **kwargs)
+                if label:
                     seen = [str(a) for a in args[:2]] if _kind != "question" else []
-                    self.entries.append([self.cycle, _kind, seen, out])
-                return out
+                    answer = self._answers[-1] if self._answers else label
+                    self.entries.append([self.cycle, _kind, seen, label, answer])
+                return label
 
             setattr(llm, method, watched)
         return llm

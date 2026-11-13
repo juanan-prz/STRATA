@@ -385,7 +385,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
                       "max": max(lifespans, default=None)},
         "total_closures": closures,
         "sample_born_names": list(born_names),
-        "labels": translations.entries,             # all of them, as [cycle, kind, of, label]
+        "labels": translations.entries,             # all of them, as [cycle, kind, of, label, answer]
         "crystal_labels": crystal_labels,           # the labels of the constructs that crystallized
         "apparents_named": list(crystals),
         "pool_telemetry_tail": list(ss.concordancy.pool_telemetry)[-SAMPLE_TAIL:],

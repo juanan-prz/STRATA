@@ -17,7 +17,8 @@ Writes one JSON document to standard output (redirect it to a file):
   one string per cycle, events separated by ";", each "REL TARGET WEIGHT STATE";
 - the questions in which a model worded the Sombunal approach, per 1000 cycles;
 - with a model, every label it gave (cycle, kind, the two constructs as it saw
-  them, label), and the key and label of each construct that crystallized;
+  them, label, and its whole answer), and the key and label of each construct
+  that crystallized;
 - with a model: the probe and the health of every call;
 - the framework file and its sha256[:16], the machine it ran on and when.
 Without psutil it does not start (exit code 2): the machine cannot be perceived.

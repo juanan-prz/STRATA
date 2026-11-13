@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from sirisys_measures import ModelHealth
+from sirisys_measures import ModelHealth, Translations
 from sirisys_testkit import HERE, Checks, FakeModel, environment, fresh_framework, quiet, raises, read_jsonl, scratch
 
 with quiet():
@@ -568,9 +568,9 @@ replayed = all(lengths(null_shape, k)[:len(lengths(full_shape, k))]
                for k in {k for k, _ in null_shape})             # past the recorded answers it starts over
 check("the semantic null answers with the full arm's lengths, kind by kind and in order, meaningless and "
       "without calling the model", null_shape and replayed and len(model.requests) == requests_before
-      and null["labels"] and not any("Name" in label for *_, label in null["labels"])
+      and null["labels"] and not any("Name" in e[3] for e in null["labels"])
       and null["llm"]["model"] == "semantic-null",
-      f"{len(null_shape)} answers replayed; e.g. {null['labels'][-1][-1][:40]!r}")
+      f"{len(null_shape)} answers replayed; e.g. {null['labels'][-1][3][:40]!r}")
 asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels, r in arms.items()}
 check("withholding every channel through the model path gives the control, bit for bit",
       arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
@@ -581,10 +581,31 @@ check("v13.5: a model never reaches the dynamics — the full arm, the questions
       and all(r["ledger_head_by_cycle"] == control["ledger_head_by_cycle"] for r in (*arms.values(), null))
       and len(arms["all"]["labels"]) == sum(1 for kind, n in arms["all"]["answer_shape"]
                                             if n and kind != "narration")
-      and all(label.startswith("Name ") for *_, label in arms["all"]["labels"])
-      and {label for *_, label in arms["all"]["crystal_labels"]} <= {label for *_, label in arms["all"]["labels"]},
+      and all(e[3].startswith("Name ") and e[3] == S.LLMIntermediary._clip(e[4]) for e in arms["all"]["labels"])
+      and {label for *_, label in arms["all"]["crystal_labels"]} <= {e[3] for e in arms["all"]["labels"]},
       f"{len(set(heads.values()))} distinct heads; {len(arms['all']['labels'])} labels kept, one for each "
       f"answer; {len(arms['all']['crystal_labels'])} of them crystallized")
+
+
+class Wordy(S.LLMIntermediary):
+    """An intermediary whose every answer is longer than a label can be."""
+    def _init(self):
+        self._available = True
+
+    def _complete(self, temperature):
+        return "The Sombunal " + "withholds " * 30 + "what it reveals."
+
+
+wordy, said = Wordy(backend="none"), Translations()
+said.attach(wordy)
+said.cycle = 7
+with quiet():
+    shown = wordy.question_sombunal(0.5)
+(cycle, kind, of, label, answer), = said.entries
+check("the reports keep the model's whole answer beside the label the construct shows",
+      (cycle, kind, of) == (7, "question", []) and label == shown == S.LLMIntermediary._clip(answer)
+      and label.endswith("…") and answer.endswith("what it reveals."),
+      f"label {len(label)} characters, answer {len(answer)}")
 check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
       set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
       and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")
