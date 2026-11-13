@@ -79,7 +79,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
     import field_topology                                   # read-only topology and depth
-    from sirisys_measures import LifeCriteria, ModelHealth, _kind, describe_machine, machine_record
+    from sirisys_measures import LifeCriteria, ModelHealth, Translations, _kind, describe_machine, machine_record
     from sirisys_loader import load_framework
 except ImportError as ex:
     sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
@@ -308,11 +308,14 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     trace, topology, heads, errors, lifespans = [], [], [], [], []
     perceived, born_at = Counter(), dict.fromkeys(field.constructs, 0)
     born_names, crystals = deque(maxlen=SAMPLE_NAMES), deque(maxlen=SAMPLE_CRYSTALS)
-    born_labels = deque(maxlen=SAMPLE_NAMES)        # what a model called them (v13.5: labels)
+    translations, crystal_labels = Translations(), []   # every label a model gave; the crystals' [cycle, key, label]
+    if llm.available:
+        translations.attach(llm)
     closures, aborted, t0 = 0, None, time.perf_counter()
 
     for cycle in range(cycles):
         apparents_before, alive_before = field.apparents_total, set(field.constructs)
+        translations.cycle = cycle
         try:
             with quiet():
                 stream = (S.synthetic_percepts(cycle, seed, prof["include_hour"])
@@ -330,9 +333,10 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         lifespans += [cycle - born_at.pop(n) for n in died if n in born_at]
         born_at.update(dict.fromkeys(new, cycle))
         born_names.extend(sorted(new))
-        born_labels.extend(field.constructs[n].label for n in sorted(new)
-                           if getattr(field.constructs[n], "label", ""))
-        crystals.extend(field.apparents_since(apparents_before))
+        formed = field.apparents_since(apparents_before)
+        crystals.extend(formed)
+        crystal_labels.extend([cycle, n, field.constructs[n].label] for n in formed
+                              if n in field.constructs and getattr(field.constructs[n], "label", ""))
         closures += r["closures"]
 
         m = cycle_metrics(ss)
@@ -381,7 +385,8 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
                       "max": max(lifespans, default=None)},
         "total_closures": closures,
         "sample_born_names": list(born_names),
-        "sample_born_labels": list(born_labels),
+        "labels": translations.entries,             # all of them, as [cycle, kind, of, label]
+        "crystal_labels": crystal_labels,           # the labels of the constructs that crystallized
         "apparents_named": list(crystals),
         "pool_telemetry_tail": list(ss.concordancy.pool_telemetry)[-SAMPLE_TAIL:],
         "final_sizes": {"constructs": len(field.constructs),

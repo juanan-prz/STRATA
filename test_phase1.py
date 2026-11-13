@@ -448,7 +448,7 @@ p = run(["live_c2.py", "40", "none", "minimal", "--replay", "with_model.json"], 
 paired = json.loads(p.stdout) if p.returncode == 0 else {}
 check("a live life with a model, replayed without it, seals the same ledger, and the replay says so "
       "(since v13.5 the model never reaches the dynamics)",
-      with_model.get("model_active") and with_model.get("llm_calls", 0) > 0
+      with_model.get("model_active") and with_model.get("llm_calls", 0) > 0 and with_model.get("labels")
       and paired.get("same_ledger_as_replayed") is True and "same ledger as the replayed run: YES" in p.stderr,
       f"{with_model.get('llm_calls')} model calls; same ledger: {paired.get('same_ledger_as_replayed')}")
 
@@ -568,9 +568,9 @@ replayed = all(lengths(null_shape, k)[:len(lengths(full_shape, k))]
                for k in {k for k, _ in null_shape})             # past the recorded answers it starts over
 check("the semantic null answers with the full arm's lengths, kind by kind and in order, meaningless and "
       "without calling the model", null_shape and replayed and len(model.requests) == requests_before
-      and null["sample_born_labels"] and not any("Name" in n for n in null["sample_born_labels"])
+      and null["labels"] and not any("Name" in label for *_, label in null["labels"])
       and null["llm"]["model"] == "semantic-null",
-      f"{len(null_shape)} answers replayed; e.g. {null['sample_born_labels'][-1][:40]!r}")
+      f"{len(null_shape)} answers replayed; e.g. {null['labels'][-1][-1][:40]!r}")
 asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels, r in arms.items()}
 check("withholding every channel through the model path gives the control, bit for bit",
       arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
@@ -579,8 +579,12 @@ check("v13.5: a model never reaches the dynamics — the full arm, the questions
       "seal the control's ledger, cycle by cycle; what the model said is kept as labels",
       set(heads.values()) == {control["ledger_head"]}
       and all(r["ledger_head_by_cycle"] == control["ledger_head_by_cycle"] for r in (*arms.values(), null))
-      and any(label.startswith("Name ") for label in arms["all"]["sample_born_labels"]),
-      f"{len(set(heads.values()))} distinct heads; labels e.g. {arms['all']['sample_born_labels'][:2]}")
+      and len(arms["all"]["labels"]) == sum(1 for kind, n in arms["all"]["answer_shape"]
+                                            if n and kind != "narration")
+      and all(label.startswith("Name ") for *_, label in arms["all"]["labels"])
+      and {label for *_, label in arms["all"]["crystal_labels"]} <= {label for *_, label in arms["all"]["labels"]},
+      f"{len(set(heads.values()))} distinct heads; {len(arms['all']['labels'])} labels kept, one for each "
+      f"answer; {len(arms['all']['crystal_labels'])} of them crystallized")
 check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
       set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
       and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")

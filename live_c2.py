@@ -16,6 +16,8 @@ Writes one JSON document to standard output (redirect it to a file):
 - what the field perceived: counts per 1000 cycles, and the whole sequence,
   one string per cycle, events separated by ";", each "REL TARGET WEIGHT STATE";
 - the questions in which a model worded the Sombunal approach, per 1000 cycles;
+- with a model, every label it gave (cycle, kind, the two constructs as it saw
+  them, label), and the key and label of each construct that crystallized;
 - with a model: the probe and the health of every call;
 - the framework file and its sha256[:16], the machine it ran on and when.
 Without psutil it does not start (exit code 2): the machine cannot be perceived.
@@ -30,7 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 with contextlib.redirect_stdout(io.StringIO()):
     from sirisys_loader import load_framework
     import field_topology  # read-only topology (pure Python, no networkx)
-    from sirisys_measures import LifeCriteria, ModelHealth, machine_record
+    from sirisys_measures import LifeCriteria, ModelHealth, Translations, machine_record
     S = load_framework(Path(__file__).resolve().parent)
 ARGS = sys.argv[1:]
 REPLAY = None
@@ -95,6 +97,7 @@ if BACKEND != "none":
 life, genealogy = LifeCriteria(S), field_topology.Genealogy()
 zero_points = set(S.ZERO_POINTS.keys())
 topo_trace, per_1000, questions, sequence = [], [], [], []
+translations, crystal_labels = Translations(), []   # every label a model gave; the crystals' [cycle, key, label]
 aborted = None
 t0 = time.time()
 # Output is discarded, not buffered, so memory measures the field alone.
@@ -105,8 +108,10 @@ with contextlib.redirect_stdout(_Null()):
     ss = S.new_session(S.LLMIntermediary(backend=BACKEND))
     if ss.llm.available:
         health.attach(ss.llm)
+        translations.attach(ss.llm)
     for c in range(N):
         t_cycle, t_model = time.perf_counter(), health.model_seconds
+        translations.cycle, apparents_before = c, ss.field.apparents_total
         r = S.run_cycle(ss, c, percepts=recorded[c] if recorded else None, narrate=NARRATE, include_hour=HOUR)
         life.after_cycle(ss, c, (time.perf_counter() - t_cycle) - (health.model_seconds - t_model))
         f = ss.field
@@ -117,6 +122,8 @@ with contextlib.redirect_stdout(_Null()):
         sequence.append(";".join(f"{e['rel']} {e['tgt']} {float(e['weight'])!r} {e['state'].name}"
                                  for e in r["percepts"]))
         questions[-1] += bool(r["question"])
+        crystal_labels.extend([c, n, f.constructs[n].label] for n in f.apparents_since(apparents_before)
+                              if n in f.constructs and f.constructs[n].label)
         # Read-only: genealogy every cycle, topology once per half-breath
         genealogy.update(ss.concordancy, c, f)
         if c % (S.BREATH_PERIOD // 2) == 0:
@@ -142,6 +149,8 @@ out.update({
     "model": ss.llm.model, "model_active": ss.llm.available, "llm_calls": ss.llm.call_count,
     "model_health": health.report() if BACKEND != "none" else None,
     "sombunal_questions_per_1000": questions,
+    "labels": translations.entries,
+    "crystal_labels": crystal_labels,
     "percepts_per_1000": [dict(sorted(p.items())) for p in per_1000],
     "topology_trace": topo_trace,
     "percept_sequence": sequence,

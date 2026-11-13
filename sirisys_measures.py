@@ -188,6 +188,39 @@ def _kind(prompt):
     return "sombunal_question"
 
 
+class Translations:
+    """Every label a model gave, in order: what the translator read in the field.
+
+    Wraps the intermediary's three labelling calls on the instance (as ModelHealth
+    wraps _complete); each answer passes through unchanged, so recording changes
+    nothing. Since v13.5 no label reaches the dynamics, so this is a reading, not a
+    measure of the field. Each entry is [cycle, kind, of, label]: kind is "name"
+    (an emergent), "conflict" or "question" (the Sombunal approach); `of` holds the
+    two constructs as the model saw them (their labels, or their keys), empty for
+    a question. Tools set `cycle` before each cycle. Every label lands on a
+    construct, including those that die within the cycle they were born in."""
+
+    KINDS = {"propose_emergent": "name", "interpret_conflict": "conflict",
+             "question_sombunal": "question"}
+
+    def __init__(self):
+        self.entries, self.cycle = [], None
+
+    def attach(self, llm):
+        for method, kind in self.KINDS.items():
+            inner = getattr(llm, method)
+
+            def watched(*args, _inner=inner, _kind=kind, **kwargs):
+                out = _inner(*args, **kwargs)
+                if out:
+                    seen = [str(a) for a in args[:2]] if _kind != "question" else []
+                    self.entries.append([self.cycle, _kind, seen, out])
+                return out
+
+            setattr(llm, method, watched)
+        return llm
+
+
 class ModelHealth:
     """Watches the intermediary's calls. Trips (sets `tripped` and `reason`) when
     MAX_CONSECUTIVE_FAILURES calls in a row raise, or when more than
