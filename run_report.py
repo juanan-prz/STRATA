@@ -14,9 +14,14 @@ USAGE
   sirisys_determinism.json).
 
 WHAT THE REPORT COMPARES
-  Four arms on the same percept streams. The model reaches the field through
-  two channels: the names it gives constructs (names are keys, and enter every
-  orientation) and the Sombunal questions (they enter the field as constructs).
+  Four arms on the same percept streams. A model could reach the field through
+  two channels: the names it gives constructs and the questions it puts to the
+  Sombunal. Since v13.5 neither reaches the dynamics: names are labels (the keys
+  are the field's own) and the approach to the Sombunal is a law of the field,
+  which a model only words. The four arms must then seal the same ledger, and
+  the report says whether they did ("same ledger in every arm"). Up to v13.4
+  names were keys and questions entered as constructs, and the arms separated
+  the two channels.
     llm            the model, through both channels;
     llm_questions  the model asking only the Sombunal questions; the names are
                    the control's own, so this arm separates the two channels;
@@ -35,8 +40,8 @@ WHAT THE REPORT COMPARES
   twice per breath and the ledger head after every cycle.
 
 MODEL HEALTH
-  A model that fails or answers empty would leave the field on synthetic names
-  without notice. With a model, two real calls are made before anything runs
+  A model that fails or answers empty would leave the field's output without
+  labels, without notice. With a model, two real calls are made before anything runs
   (a construct name and a conflict name: the report prints both answers);
   during the run, it stops when 3 calls in a row fail or more than 10 % of the
   last 50 fail or come back empty. The report is still written, marked
@@ -148,6 +153,8 @@ def integrity_checks():
         "canonical cycle in the framework": hasattr(S, "run_cycle") and hasattr(S, "new_session"),
         "endogenous orientation (no PRNG)": hasattr(S, "orient") and "import random" not in src,
         "self-adjusting tolerance": "def _adjust_tolerance" in src,
+        "names are labels (keys from the field)": "z.label" in src and "cf.label" in src,
+        "Sombunal approach as a field law": "SOMBUNAL_APPROACH_EVERY" in src,
     }
     return checks, hashlib.sha256(src.encode()).hexdigest()[:16]
 
@@ -158,9 +165,9 @@ class ArmIntermediary(S.LLMIntermediary):
     `active=False` keeps the model out (the control). `channels` selects how an
     active model reaches the field:
       "all"        it names constructs and asks the Sombunal questions;
-      "questions"  it only asks the questions: the names are the control's own,
-                   and the framework still spends its model budget as in "all",
-                   so the questions arrive at the same cadence;
+      "questions"  it only asks the questions: the constructs keep the field's
+                   keys and no label, and the framework still spends its model
+                   budget as in "all", so the questions arrive at the same cadence;
       "none"       nothing reaches the model, though the model path is taken: the
                    control reached the long way (test_phase1.py checks it is the
                    control bit for bit).
@@ -169,7 +176,6 @@ class ArmIntermediary(S.LLMIntermediary):
     def __init__(self, active, channels="all", model=None, backend=None):
         self.active, self.channels = active, channels
         self.shape = []                             # (kind, length) of every answer, in order
-        self.cycle = 0                              # set by run_arm: the control's names carry it
         self.health = ModelHealth()
         super().__init__(model=model, backend=backend)
         if self.available:
@@ -179,17 +185,18 @@ class ArmIntermediary(S.LLMIntermediary):
         if self.active:                             # otherwise it stays unavailable
             super()._init()
 
-    # The control's names: the framework's own, the names it gives without a model's
-    # answer (the "none" check in test_phase1.py verifies the result bit for bit).
+    # Outside "all" and "null" the model is not asked for names: the construct
+    # keeps the field's own key and no label (the "none" check in test_phase1.py
+    # verifies the result is the control bit for bit).
     def propose_emergent(self, x, y, x_state, y_state):
         if self.channels in ("all", "null"):
             return super().propose_emergent(x, y, x_state, y_state)
-        return S.control_emergent_name(x, y, self.cycle)
+        return ""
 
     def interpret_conflict(self, x, y):
         if self.channels in ("all", "null"):
             return super().interpret_conflict(x, y)
-        return S.control_conflict_label(x, y)
+        return ""
 
     def question_sombunal(self, instability):
         return "" if self.channels == "none" else super().question_sombunal(instability)
@@ -301,6 +308,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
     trace, topology, heads, errors, lifespans = [], [], [], [], []
     perceived, born_at = Counter(), dict.fromkeys(field.constructs, 0)
     born_names, crystals = deque(maxlen=SAMPLE_NAMES), deque(maxlen=SAMPLE_CRYSTALS)
+    born_labels = deque(maxlen=SAMPLE_NAMES)        # what a model called them (v13.5: labels)
     closures, aborted, t0 = 0, None, time.perf_counter()
 
     for cycle in range(cycles):
@@ -309,7 +317,6 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
             with quiet():
                 stream = (S.synthetic_percepts(cycle, seed, prof["include_hour"])
                           if percepts == "synthetic" else None)
-                llm.cycle = cycle
                 t, model_t = time.perf_counter(), llm.health.model_seconds
                 r = S.run_cycle(ss, cycle, percepts=stream, **prof)
                 field_seconds = time.perf_counter() - t - (llm.health.model_seconds - model_t)
@@ -323,6 +330,8 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         lifespans += [cycle - born_at.pop(n) for n in died if n in born_at]
         born_at.update(dict.fromkeys(new, cycle))
         born_names.extend(sorted(new))
+        born_labels.extend(field.constructs[n].label for n in sorted(new)
+                           if getattr(field.constructs[n], "label", ""))
         crystals.extend(field.apparents_since(apparents_before))
         closures += r["closures"]
 
@@ -330,6 +339,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         m.update({"cycle": cycle, "born": len(new), "died": len(died), "closures": r["closures"],
                   "llm_calls_this_cycle": r["llm_used"], "narrated": bool(r["narration"]),
                   "sombunal_question": bool(r["question"]),
+                  "sombunal_approach": bool(r.get("approach")),
                   "new_apparents": field.apparents_total - apparents_before})
         trace.append(m)
         heads.append(S.get_ledger().head[:16])       # where two runs part, if they do
@@ -371,6 +381,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
                       "max": max(lifespans, default=None)},
         "total_closures": closures,
         "sample_born_names": list(born_names),
+        "sample_born_labels": list(born_labels),
         "apparents_named": list(crystals),
         "pool_telemetry_tail": list(ss.concordancy.pool_telemetry)[-SAMPLE_TAIL:],
         "final_sizes": {"constructs": len(field.constructs),
@@ -526,8 +537,10 @@ def check_model(args, intermediary, streams, log):
     """With a model, prove it answers before anything runs; without one, say why.
     Exits (code 3) when a model was asked for, or is needed, and does not answer."""
     if intermediary.available:
-        # at most MAX calls per cycle in the full arm; one every third cycle in the questions arm
-        questions = 0 if args.determinism or args.skip_questions_arm else 1 / 3
+        # at most MAX calls per cycle in the full arm, plus the question that words the
+        # Sombunal approach once per breath; that question alone in the questions arm
+        every = getattr(S, "SOMBUNAL_APPROACH_EVERY", 3)
+        questions = 1 / every + (0 if args.determinism or args.skip_questions_arm else 1 / every)
         probe = ModelHealth.probe(intermediary, cycles=args.cycles * len(streams),
                                   calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE + questions)
         if not probe["ok"]:
@@ -591,6 +604,17 @@ def run_plan(args, arms, streams, log):
     return out, None
 
 
+def same_ledger(arms):
+    """Whether every arm sealed the same ledger on every stream: what v13.5
+    promises (a model labels and words, and never reaches the dynamics).
+    None when there is a single arm."""
+    runs = [a["runs"] for a in arms.values() if a.get("runs")]
+    if len(runs) < 2:
+        return None
+    n = min(map(len, runs))
+    return all(len({r[i]["ledger_head"] for r in runs}) == 1 for i in range(n))
+
+
 def print_summary(report, log):
     def verdict(v):
         return "PASS" if v else "FAIL" if v is False else "n/a"
@@ -613,6 +637,12 @@ def print_summary(report, log):
             for kind in ("name", "conflict"):
                 if samples.get(kind):
                     log(f"  {'':9} {kind + 's':9} {' | '.join(a[:40] for a in samples[kind][:3])}")
+
+    same = report.get("same_ledger")
+    if same is not None:
+        log()
+        log(f"  same ledger in every arm: {'YES' if same else 'NO'}"
+            + ("" if same else " — the model reached the dynamics (from v13.5 it must not)"))
 
     d = report.get("determinism")
     if d:
@@ -673,6 +703,8 @@ def main(argv=None):
     report["arms"], report["aborted"] = run_plan(args, arms, streams, log)
     if args.determinism and not report["aborted"]:
         report["determinism"] = compare_runs(*report["arms"]["llm"]["runs"])
+    elif not args.determinism:
+        report["same_ledger"] = same_ledger(report["arms"])
     print_summary(report, log)
 
     report["console"] = log.lines

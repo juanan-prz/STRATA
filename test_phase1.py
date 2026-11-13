@@ -201,9 +201,38 @@ with FakeModel("empty") as silent:
         control = S.LLMIntermediary(backend="none")
     muted, alone = ledger_of_life(mute), ledger_of_life(control)
     asked = len(silent.requests)
-check("a model that only answers empty leaves the field exactly where the control is: "
-      "its constructs get the control's names", asked > 0 and muted == alone,
+check("a model that only answers empty leaves the field exactly where the control is "
+      "(since v13.5 no answer reaches the dynamics)", asked > 0 and muted == alone,
       f"{asked} empty answers; same ledger: {muted == alone}")
+
+# The approach to the Sombunal, a law of the field (v13.5): once per breath, with no model
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    ss = S.new_session(S.LLMIntermediary(backend="none"))
+    made, operands, related = [], set(), []
+    for c in range(300):
+        r = S.run_cycle(ss, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
+        made.append(r["approach"])
+        operands |= {op.get(k) for op in ss.concordancy.ops_log if op.get("cycle") == c for k in ("x", "y")}
+        if r["approach"]:                           # the edge to the I, as the cycle leaves it
+            related.append(any(e.src == "I::Am" and e.rel == "APPROACHES" and e.tgt == r["approach"]
+                               and e.state == S.TetraState.NEITHER for e in ss.field.edges))
+every = S.SOMBUNAL_APPROACH_EVERY
+expected = [f"SOMBUNAL::approach@c{c}" if c % every == 0 else None for c in range(300)]
+check("the I approaches the Sombunal once per breath, with no model: a construct the field names, related to "
+      "the I and never an operand of [::]",
+      made == expected and every == S.BREATH_PERIOD and related and all(related)
+      and not any(str(o).startswith("SOMBUNAL::approach@") for o in operands),
+      f"{sum(1 for m in made if m)} approaches in 300 cycles, each related to I::Am (NEITHER): {all(related)}")
+
+kept = S.Construct("Janus test", S.Layer.UMBRA_0)
+kept.label = "Janus"
+back = S.Construct.from_dict(json.loads(json.dumps(kept.to_dict())))
+old_state = kept.to_dict()
+old_state.pop("label")
+check("a construct's label survives a save and a resume; a v13.4 state, which has none, resumes with none",
+      back.label == "Janus" and back.shown == "Janus" and S.Construct.from_dict(old_state).label == ""
+      and S.Construct.from_dict(old_state).shown == "Janus test")
 
 saved_psutil = sys.modules.get("psutil")
 sys.modules["psutil"] = None                        # import psutil now fails, as on a machine without it
@@ -411,6 +440,18 @@ check("live_c2 --replay feeds a recorded life's percepts back: without a model i
       and again.get("replayed_from", {}).get("ledger_head") == first.get("ledger_head"),
       f"{str(first.get('ledger_head'))[:16]} both times")
 
+model.reset("counter")
+p = run(["live_c2.py", "40", "ollama", "minimal"], tools, 300, OLLAMA_HOST=model.url)
+(tools / "with_model.json").write_text(p.stdout, encoding="utf-8")
+with_model = json.loads(p.stdout) if p.returncode == 0 else {}
+p = run(["live_c2.py", "40", "none", "minimal", "--replay", "with_model.json"], tools, 120)
+paired = json.loads(p.stdout) if p.returncode == 0 else {}
+check("a live life with a model, replayed without it, seals the same ledger, and the replay says so "
+      "(since v13.5 the model never reaches the dynamics)",
+      with_model.get("model_active") and with_model.get("llm_calls", 0) > 0
+      and paired.get("same_ledger_as_replayed") is True and "same ledger as the replayed run: YES" in p.stderr,
+      f"{with_model.get('llm_calls')} model calls; same ledger: {paired.get('same_ledger_as_replayed')}")
+
 bare = scratch()                                    # the same tools on a machine without psutil
 for f in TOOL_FILES:
     shutil.copy(HERE / f, bare / f)
@@ -444,11 +485,22 @@ for mode in ("alike", "counter"):          # answers alike to the same request a
     determinism[mode] = (json.loads(written.read_text()).get("determinism") or {}
                          if p.returncode == 0 and written.exists() else {})
 alike, stateful = determinism["alike"], determinism["counter"]
-check("the determinism check tells a model that answers alike from one that does not, in its own file",
-      alike.get("same") is True and stateful.get("same") is False
-      and stateful.get("diverged_at_cycle") is not None and not (tools / "sirisys_report.json").exists(),
+check("the determinism check, in its own file: a model whose answers carry state answers otherwise, "
+      "and the ledger is the same (since v13.5 a model never reaches the dynamics)",
+      alike.get("same") is True and stateful.get("same") is True
+      and (stateful.get("example_different_answers") or {}).get("first") is not None
+      and not (tools / "sirisys_report.json").exists(),
       f"alike: same ledger {alike.get('same')}; stateful: same ledger {stateful.get('same')}, "
-      f"parted at cycle {stateful.get('diverged_at_cycle')}")
+      f"answers that differ: {stateful.get('example_different_answers')}")
+
+model.reset("counter")
+p = run(["run_report.py", "--backend", "ollama", "--profile", "minimal", "--cycles", "30", "--seeds", "1"],
+        tools, OLLAMA_HOST=model.url)
+written = tools / "sirisys_report.json"
+same = json.loads(written.read_text()).get("same_ledger") if p.returncode == 0 and written.exists() else None
+written.unlink(missing_ok=True)
+check("run_report says whether every arm sealed the same ledger, and with v13.5 they do",
+      same is True and "same ledger in every arm: YES" in p.stdout, f"same_ledger {same}")
 
 model.reset("alike")
 p = run(["run_report.py", "--backend", "ollama", "--profile", "minimal", "--cycles", "8", "--seeds", "1",
@@ -516,11 +568,19 @@ replayed = all(lengths(null_shape, k)[:len(lengths(full_shape, k))]
                for k in {k for k, _ in null_shape})             # past the recorded answers it starts over
 check("the semantic null answers with the full arm's lengths, kind by kind and in order, meaningless and "
       "without calling the model", null_shape and replayed and len(model.requests) == requests_before
-      and not any("Name" in n for n in null["sample_born_names"]) and null["llm"]["model"] == "semantic-null",
-      f"{len(null_shape)} answers replayed; e.g. {null['sample_born_names'][-1][:40]!r}")
+      and null["sample_born_labels"] and not any("Name" in n for n in null["sample_born_labels"])
+      and null["llm"]["model"] == "semantic-null",
+      f"{len(null_shape)} answers replayed; e.g. {null['sample_born_labels'][-1][:40]!r}")
 asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels, r in arms.items()}
 check("withholding every channel through the model path gives the control, bit for bit",
       arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
+heads = {name: r["ledger_head"] for name, r in (*arms.items(), ("null", null))}
+check("v13.5: a model never reaches the dynamics — the full arm, the questions only and the semantic null "
+      "seal the control's ledger, cycle by cycle; what the model said is kept as labels",
+      set(heads.values()) == {control["ledger_head"]}
+      and all(r["ledger_head_by_cycle"] == control["ledger_head_by_cycle"] for r in (*arms.values(), null))
+      and any(label.startswith("Name ") for label in arms["all"]["sample_born_labels"]),
+      f"{len(set(heads.values()))} distinct heads; labels e.g. {arms['all']['sample_born_labels'][:2]}")
 check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
       set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
       and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")

@@ -604,6 +604,7 @@
 
   <div id="tooltip">
     <div class="tt-header"><span class="tt-layer-dot" id="tt-layer-dot"></span><span class="tt-name" id="tt-name"></span></div>
+    <div class="tt-row" id="tt-key-row" hidden><span class="k">key</span><span class="v" id="tt-key"></span></div>
     <div class="tt-row" id="tt-kind-row"><span class="k">kind</span><span class="v" id="tt-kind"></span></div>
     <div class="tt-row"><span class="k">layer</span><span class="v" id="tt-layer"></span></div>
     <div class="tt-row"><span class="k">witness</span><span class="v" id="tt-witness"></span></div>
@@ -1117,16 +1118,16 @@ canvas.addEventListener('wheel', e => {
 // ═══ The tooltip ════════════════════════════════════════════════════════════
 
 const tooltip = $('tooltip');
-const questions = new Set();      // the Sombunal questions of this instance: each entered as a construct
+const APPROACH = 'SOMBUNAL::approach@';   // the key of the I's approach to the Sombunal, once per breath
 
 // What a construct is, beyond its layer: a Zero Point, an anchor, a conflict, a
-// Sombunal question, and for a crystal, Universal (the Zero Points) or Exchangeable (TMC p.22)
+// Sombunal approach, and for a crystal, Universal (the Zero Points) or Exchangeable (TMC p.22)
 function kindOf(name, c) {
   const kind = [];
   if (ZERO_POINTS.has(name)) kind.push('zero point');
   else if (ANCHORS.has(name)) kind.push(name === 'SYSTEM' ? 'anchor · perception channel' : 'anchor');
   if (c.conflict) kind.push('conflict');                      // typed by its proof chain
-  if (questions.has(name)) kind.push('Sombunal question');
+  if (name.startsWith(APPROACH)) kind.push('Sombunal approach');
   if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
   return kind.join(' · ');
 }
@@ -1139,7 +1140,11 @@ function refreshTooltip() {
 }
 function showTooltip(name, c, mx, my) {
   const layer = LAYERS[c.layer] || '?', kind = kindOf(name, c);
-  setText('tt-name', c.conflict ? '⊗ ' + name : name);
+  // A model's name for it, if any, is its label; the key is the field's own (v13.5)
+  const shown = c.label || name;
+  setText('tt-name', c.conflict ? '⊗ ' + shown : shown);
+  $('tt-key-row').hidden = !c.label;
+  setText('tt-key', name);
   $('tt-kind-row').hidden = !kind;
   setText('tt-kind', kind);
   setText('tt-layer', layer);
@@ -1650,8 +1655,8 @@ function logSnapshot(snap, crystallized) {
     const vc = c.vc != null ? ' · Vc ' + Number(c.vc).toFixed(3) : '';
     log(snap.cycle, `TERMINATE ${c.name} · ${c.layer || '?'} · ${c.mode || '?'}${vc}`, 'terminate');
   }
-  // With a model: the Intermediary's narration (every 2nd cycle) and the questions
-  // put to the Sombunal (every 3rd), which enter the field as constructs
+  // With a model: the Intermediary's narration (every 2nd cycle) and the question
+  // in which it words the I's approach to the Sombunal (once per breath)
   if (snap.narration) log(snap.cycle, 'narration  ' + snap.narration, 'narration');
   if (snap.question) log(snap.cycle, 'Sombunal ?  ' + snap.question, 'sombunal');
   const watch = snap.model_watch;
@@ -1730,7 +1735,6 @@ function applySnapshot(snap) {
   if (snap.run && currentRun && snap.run !== currentRun) clearField();     // a new instance, reset from anywhere
   currentRun = snap.run || currentRun;
   lastSnapshot = snap;
-  if (snap.question) questions.add(snap.question);
   syncNodes(snap.field);
   relaxLayout(4);
 
@@ -1764,7 +1768,7 @@ function applySnapshot(snap) {
 
 // After a reset: nothing of the previous instance stays on screen
 function clearField() {
-  nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0; questions.clear();
+  nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0;
   metabolism = freshMetabolism(null); metabHover = null; metabStale = true;
   lastSnapshot = null; currentRun = null; lastCrystalCycle = null; watchReported = false;
   for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-concluded', 's-conflicts',

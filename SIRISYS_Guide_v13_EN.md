@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.4 — Technical guide
+# STRATA · SIRISYS v13.5 — Technical guide
 
 [Español](SIRISYS_Guide_v13_ES.md)
 
@@ -25,7 +25,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 
 | File | Purpose |
 |---|---|
-| `Sirisys_Framework_v13_4.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
+| `Sirisys_Framework_v13_5.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
@@ -57,7 +57,7 @@ This installs `numpy` and `psutil` (the field and its real percepts: without `ps
 
 ### What a model does
 
-A model is optional: without one everything runs and constructs get synthetic names. With one, an intermediary names emergents, labels conflicts, narrates the field and asks the Sombunal questions. It reaches the field through two channels: the names it gives (they become construct keys, and so enter every orientation) and the questions (they enter the field as constructs). Every request carries a seed derived from the ledger head and the request itself, and sends the model the last 12 messages of the conversation; the intermediary keeps only the last 20. When the model answers empty or fails, the construct gets the name the control would give it, so an empty answer leaves the field where the control would be.
+A model is optional and, since v13.5, does not change the dynamics: it translates. The field names what it produces (construct keys are its own) and, once per breath, the I approaches the Sombunal, with or without a model. With one, an intermediary gives emergents and conflicts readable names, narrates the field and words each approach to the Sombunal as a question. What it says is kept as the construct's label (`label`), which the console, the views and the reports show and no law reads: a life with a model seals the same ledger as one without, and replays from its history even when the model runtime is not deterministic. Every request carries a seed derived from the ledger head and the request itself, and sends the model the last 12 messages of the conversation; the intermediary keeps only the last 20. Up to v13.4 the model's names were the construct keys and its questions entered the field as constructs.
 
 ### Choosing it
 
@@ -77,7 +77,7 @@ Keep the same backend, model, profile and machine across runs you intend to comp
 
 ### The model watch
 
-A model that fails or answers empty would leave the field on synthetic names without notice: the run would look like a run with a model and not be one. `sirisys_measures.ModelHealth` prevents that.
+A model that fails or answers empty would leave the output without labels, without notice: the run would look like a run with a model and not be one. `sirisys_measures.ModelHealth` prevents that.
 
 - Before a run, `run_report.py` and `live_c2.py` make two real calls, one name of each kind (an emergent construct and a conflict), and do not start if the answers are missing or empty. `run_report.py` prints the answers (`live_c2.py` records them in its file): they must be names alone, not sentences. At the end, `run_report.py` also prints the first names the model gave during the run.
 - During the run they stop (exit code 3) when 3 calls in a row fail, or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason.
@@ -143,7 +143,7 @@ Space works right after a click on any button. A button reached with the keyboar
 
 The glossary (section VIII) defines every counter.
 
-**Event Log** (right). Products of `[::]`, cussive collapses, conclusions, narration, Sombunal questions and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
+**Event Log** (right). Products of `[::]`, cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal, and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
 
 **Pointing at a construct** shows its kind, layer, witness, energy, umbragiac score, banked exchange, Vc, existence mode, chirality, what it crystallized as, Lagrangian tag, proofs and the T it was born at.
 
@@ -204,8 +204,8 @@ Its left panel folds section by section, as in the live view.
 In experiment mode an instance writes one `state.json`, when it ends. For a timeline, copy the state as it grows; for example, with the console demonstration, which resumes the same instance on every run:
 
 ```bash
-python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Keys.**
@@ -249,9 +249,11 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 **The four arms**, on the same streams:
 
 - `llm`: the model, through both channels;
-- `llm_questions`: the model asking only the Sombunal questions, while the names stay the control's own, so that the two channels can be told apart;
-- `llm_null`: the semantic null. On each stream it gives the field the answers the `llm` arm received, in the same order and of the same lengths, but meaningless (text derived from a hash), through both channels and at the same cadence, without calling any model. A model's effect that the null shares comes from naming differently, not from meaning;
+- `llm_questions`: the model only words the Sombunal questions; the constructs get no label;
+- `llm_null`: the semantic null. On each stream it gives the field the answers the `llm` arm received, in the same order and of the same lengths, but meaningless (text derived from a hash), through both channels and at the same cadence, without calling any model;
 - `degraded`: the control, without a model.
+
+Since v13.5 neither channel reaches the dynamics, so the four arms must seal the same ledger. The report says so at the end (`same ledger in every arm: YES`, and `same_ledger` in the file); a NO would mean the model reached the dynamics, which is a bug. Up to v13.4 names were keys and the arms separated the two channels: that is how E2 was read.
 
 Without a model only the control runs, with a warning; when `--backend ollama` or `anthropic` is asked for and the model is not available, nothing runs (exit code 3). Withholding the questions as well gives the control bit for bit, which `test_phase1.py` checks.
 
@@ -263,13 +265,13 @@ Without a model only the control runs, with a warning; when `--backend ollama` o
 - flat cost of the cycle itself, model time excluded: late ≤ 1.5 × early + 0.5 ms;
 - bounded top-3 energy: trend ≤ 1.2.
 
-**Determinism.** The framework has no randomness, but a model runtime may have some even though every request carries a seed derived from the history. `--determinism` runs the model arm on stream 0 twice and says whether both runs sealed the same ledger and, if not, the cycle at which they parted, with an example of different answers. It needs the synthetic percepts and leaves `sirisys_report.json` alone. Every report also prints the ledger head of each run.
+**Determinism.** The framework has no randomness, but a model runtime may have some even though every request carries a seed derived from the history. Since v13.5 that changes only the labels, not the ledger. `--determinism` runs the model arm on stream 0 twice and says whether both runs sealed the same ledger and, if not, the cycle at which they parted; it also gives an example of different answers, if there were any. It needs the synthetic percepts and leaves `sirisys_report.json` alone. Every report also prints the ledger head of each run.
 
 **What the report holds.**
 
 - `config`: framework file, version and the first 16 characters of its SHA-256, the integrity checks, the constants the measurements depend on, cycles, streams, backend, model and its probe, profile, percepts, platform and Python version, and `machine`: system, processor, memory, Python and the `psutil` version, so that results from different machines are never mixed up.
 - `acceptance_criteria`: the criteria in words.
-- `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals and a sample of the names born, the pool telemetry, the model's health, the shape of every answer the field received (kind and length, which the semantic null replays) and any errors. The criteria include `flicker_share_after_genesis`, flicker among the crystals born after the first 100 cycles: exploratory, not part of the verdict.
+- `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals, a sample of the names born and of their labels, the pool telemetry, the model's health, the shape of every answer the field received (kind and length, which the semantic null replays) and any errors. The criteria include `flicker_share_after_genesis`, flicker among the crystals born after the first 100 cycles: exploratory, not part of the verdict.
 - `aborted`, `determinism` (with `--determinism`) and `console`, everything the run printed.
 
 **Exit codes.** 0 the report is written; 1 the framework lacks a mechanism the report measures; 3 a model was asked for and is missing or does not answer, or it stopped answering during the run (the report is then marked `aborted`).
@@ -294,7 +296,7 @@ python3 live_c2.py 3000 ollama minimal > live_ollama.json   # real percepts, the
 python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.json   # the same percepts, no model
 ```
 
-`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions that entered the field. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the machine cannot be perceived, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
+`live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions the model worded. With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the machine cannot be perceived, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
 
 **Replay.** `--replay FILE` feeds the field, cycle by cycle, the percepts another `live_c2.py` run recorded, at full precision, instead of reading the machine; it needs no `psutil`. Without a model, a replayed life seals the same ledger as the life it replays (`ledger_head`, which every run records). With it, a life with the model gets a paired control: the same real percepts, without the model.
 
@@ -306,7 +308,7 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 - edges by tetralemmic state and by layer pair;
 - how much of the BOTH lies in the largest component;
 - the conflict depth of each conflict, which the field caps at the Adsurdic threshold;
-- the genealogical depth by layer: how many `[::]` generations separate each construct from what the field did not produce itself (percepts, anchors, questions).
+- the genealogical depth by layer: how many `[::]` generations separate each construct from what the field did not produce itself (percepts, anchors, approaches to the Sombunal).
 
 The measurement only reads the field: the ledger head is identical with and without it, which `test_phase2_guarantee.py` checks.
 
@@ -358,13 +360,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 It answers `ok` and the number of proofs or, for a damaged record, the position of the first proof that does not belong and why.
 
-**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_4_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
+**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_5_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_4.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_5.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_4.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
+**The framework on its own.** `python3 Sirisys_Framework_v13_5.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
 
 **Files created while running.**
 

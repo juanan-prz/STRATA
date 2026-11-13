@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.4 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.5 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -24,7 +24,7 @@
 # run_report.py all call it):
 #   perceive → tetralemma scan → breathe → intensify conflicts → [::] →
 #   cussive collapse → UCO erosion (sparing the support of the crystals just
-#   formed) → prune → (narration) → Sombunal question → tick
+#   formed) → prune → (narration) → Sombunal approach (once per breath) → tick
 #
 # KEY PRINCIPLES AND THEIR ANCHORS
 #   No PRNG. Every choice is orient(key): a hash of the ledger head (the whole
@@ -51,6 +51,15 @@
 #     track crystals concluded (CONF).
 #   Halo of Umbrage (TMC p.47): the weight of a dissolved channel backs up
 #     into its upstream construct, toward apparency.
+#   The Sombunal approach. The [APPARENT] is "constructed as a Tripartite
+#     Monodrony comprised of [The Sombunal], [The I::Am::(000)], the [Absolute
+#     Unreal (00)]" (TMC p.14): once per breath, with or without a model, the I
+#     approaches what it cannot reach (TMC p.27: "[Sombunal] :: [I] ::
+#     [Absolute]"). Cadence, edge state and weight are Level 3.
+#   The intermediary translates (CONF). A model labels what the field produced
+#     and words the approach; nothing it says reaches the dynamics. The keys are
+#     the field's own, so a life with a model is the life without one, and
+#     replays from its history alone.
 #
 # INTEGRITY
 #   Every proof is sealed in an append-only, hash-chained ledger (compressed
@@ -65,8 +74,9 @@
 #   C  Agency: "The Fire Which Lights Itself" (TMC p.6) is not implemented.
 #   D  Termination: resolved (identities conclude and are recorded).
 #   E  Relations vs. events: concordancy is a local event modulated by the field.
-#   The Sombunal is implemented as an identity-shifting operator and has no
-#   effect on the dynamics; its role is an open decision.
+#   The Sombunal acts as an identity-shifting rule on every [::] and, once per
+#   breath, as the I's approach to it; how the approach should weigh on the
+#   field (cadence, edge state, weight) is open.
 #
 # The experiment mode (live visualizer) lives in Sirisys_Server.py.
 #
@@ -126,14 +136,15 @@ SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exch
 
 # ── breathing and tolerance ──────────────────────────────────────────────────
 BREATH_PERIOD            = 24     # Level 3: cycles per breath
+SOMBUNAL_APPROACH_EVERY  = BREATH_PERIOD   # Level 3: the I approaches the Sombunal once per breath
 BREATH_DEPTH             = 0.35   # Level 3: how far contraction lowers the cussive thresholds
 BREATH_MAX_EXTRA_OPS     = 2      # Level 3: extra [::] operations at full expansion
 TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
 TOLERANCE_FLOOR          = 0.30   # Level 3: the tolerance never lowers thresholds below 30 %
 
 # ── the intermediary ─────────────────────────────────────────────────────────
-MAX_NODE_NAME            = 120    # longest name a model's answer can give a construct
-MAX_LLM_CALLS_PER_CYCLE  = 4
+MAX_NODE_NAME            = 120    # longest label a model's answer can give a construct
+MAX_LLM_CALLS_PER_CYCLE  = 4      # model calls per cycle for labels and narration (the approach's question is outside it)
 
 
 # =============================================================================
@@ -668,6 +679,15 @@ class Construct:
         self.chirality       = 1 if int(self.witness[-1], 16) % 2 == 0 else -1
         self._identity_hash: Optional[str] = None
         self.crystal_state: Optional[TetraState] = None    # fixed at crystallization
+        # What a model calls it, for the reader only (CONF: the intermediary
+        # renders what the field produced). The name is the key; the label is
+        # never read by the dynamics. Empty without a model.
+        self.label: str = ""
+
+    @property
+    def shown(self) -> str:
+        """The construct as a reader sees it: its label, or its key."""
+        return self.label or self.name
 
     def _genesis_witness(self) -> str:
         seed = f"GENESIS::{self.name}::{self.born_at}::{self.layer.value}"
@@ -719,6 +739,7 @@ class Construct:
             # banked Sympatic exchange (TMC p.24): it feeds cussive promotion,
             # so it must survive a resume
             "recursion_exchanged": self.recursion_exchanged,
+            "label": self.label,
         }
 
     @classmethod
@@ -740,6 +761,7 @@ class Construct:
         c.chirality           = d["chirality"]
         c.crystal_state       = TetraState(d["crystal_state"]) if d["crystal_state"] else None
         c.recursion_exchanged = d["recursion_exchanged"]
+        c.label               = d.get("label", "")     # v13.4 states have none
         return c
 
     def __repr__(self):
@@ -1411,15 +1433,18 @@ class Sombunal:
 # LLM INTERMEDIARY
 #
 # Role (CONF): the translation layer between Walsh's ontological grammar and the
-# human-readable domain. It names emergents, narrates field states, and
-# questions the Sombunal. It does not determine outcomes or substitute for
-# the framework — it renders what the framework has already produced.
+# human-readable domain, there "to try and make a more coherent output". It
+# labels emergents and conflicts, narrates field states, and words the I's
+# approach to the Sombunal. It does not determine outcomes or substitute for
+# the framework — it renders what the framework has already produced. Since
+# v13.5 nothing it says is read by the dynamics: what it names is a label, and
+# the key is the field's own (control_emergent_name, control_conflict_label).
 # =============================================================================
 
 class LLMIntermediary:
-    # Answer format (Level 3): a name comes back alone, because the field uses it
-    # as a key; a sentence about the name would become the key. Everything else
-    # comes back in sentences.
+    # Answer format (Level 3): a name comes back alone, because it is shown as
+    # the construct's name; a sentence about the name would not be a name.
+    # Everything else comes back in sentences.
     SYSTEM_PROMPT = (
         "You are the Intermediary of SIRISYS — the translation layer between "
         "Walsh's ontological framework and the human-readable domain.\n\n"
@@ -1554,11 +1579,11 @@ class LLMIntermediary:
 
     @staticmethod
     def _clip(text: str) -> str:
-        """A model's answer as a construct name: at most MAX_NODE_NAME characters."""
+        """A model's answer as a construct label: at most MAX_NODE_NAME characters."""
         return text[:MAX_NODE_NAME].rstrip() + "…" if len(text) > MAX_NODE_NAME else text
 
     def propose_emergent(self, x: str, y: str, x_state: str, y_state: str) -> str:
-        """Name the construct that emerges from [x] :: [y]."""
+        """Label the construct that emerges from [x] :: [y]."""
         result = self._call(
             f"Concordancy: [{x}] :: [{y}]\n"
             f"States: {x_state} :: {y_state}\n"
@@ -1569,7 +1594,7 @@ class LLMIntermediary:
         return self._clip(result)
 
     def interpret_conflict(self, x: str, y: str) -> str:
-        """Name the conflict structure that emerges when [x] :: [y] reverts."""
+        """Label the conflict structure that emerges when [x] :: [y] reverts."""
         result = self._call(
             f"Reversion: [{x}] cannot concordance with [{y}].\n"
             f"This irresolvable tension is itself a structure in Walsh's grammar.\n"
@@ -1629,15 +1654,15 @@ class LLMIntermediary:
 # =============================================================================
 
 def control_emergent_name(x_name: str, y_name: str, cycle: int) -> str:
-    """The name an emergent of [x] :: [y] gets without a model's answer: with no
-    model, and also when the model answers empty or fails. An empty answer then
-    names the construct exactly as the control does, instead of with a name of
-    its own that the control would never produce. Level 3."""
+    """The key of the emergent of [x] :: [y], with or without a model: the
+    field names what it produces. A model's name for it is only its label
+    (CONF: the intermediary is there for a coherent output). Level 3."""
     return f"[{x_name[:18]}]::[{y_name[:18]}]@c{cycle}"
 
 
 def control_conflict_label(x_name: str, y_name: str) -> str:
-    """The label of the conflict [x] ⊗ [y] without a model's answer (as above)."""
+    """The field's own label of the conflict [x] ⊗ [y]: its key is built from it,
+    with or without a model (as above)."""
     return f"CONFLICT::{x_name[:14]}⊗{y_name[:14]}"
 
 
@@ -1895,16 +1920,15 @@ class ConcordancyOperator:
             self.CF_BASE_WEIGHT * (1.0 + rev_factor) * depth_att, 0.15, 0.80
         ))
 
-        # Name the conflict
-        cf_label = ""
-        if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
-            cf_label = self.llm.interpret_conflict(x_name, y_name)
-            llm_budget["used"] += 1
-        if not cf_label:
-            cf_label = control_conflict_label(x_name, y_name)
-        cf_name = f"[{cf_label[:100]}]@c{cycle}"
+        # Name the conflict: the key is the field's own; a model's name for it
+        # is its label, read by no law (CONF).
+        cf_name = f"[{control_conflict_label(x_name, y_name)[:100]}]@c{cycle}"
         if cf_name in field.constructs:
             cf_name = f"{cf_name[:108]}t{field.clock.T[1]}"
+        cf_label = ""
+        if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
+            cf_label = self.llm.interpret_conflict(x.shown, y.shown)
+            llm_budget["used"] += 1
 
         # Create conflict construct — L2: redundancy vs. efficiency
         # We pay the cost of tracking irresolvability (redundancy) rather
@@ -1917,6 +1941,7 @@ class ConcordancyOperator:
         ).hexdigest()[:16]
         cf.umbragiac_score = cf_weight  # born with initial energy
         cf.lagrange        = LagrangianPoint.L2
+        cf.label           = cf_label
 
         # ── LEMNISCATE PROOF EVENT  (TMC p.26: "[Ꮠ] = [2Ꮙ]") ──────────────
         # Conflict is also a complete lemniscate event — irresolvability
@@ -1967,8 +1992,8 @@ class ConcordancyOperator:
             "z": cf_name, "state": "CONFLICT",
             "depth": cf_depth, "weight": round(cf_weight, 4),
         })
-        print(f"  [::] CONFLICT: [{x_name[:24]}] ⊗ [{y_name[:24]}]")
-        print(f"       → [{cf_name[:55]}] (d={cf_depth} w={cf_weight:.3f} {entry_state.value})")
+        print(f"  [::] CONFLICT: [{x.shown[:24]}] ⊗ [{y.shown[:24]}]")
+        print(f"       → [{cf.shown[:55]}] (d={cf_depth} w={cf_weight:.3f} {entry_state.value})")
         return cf_name
 
     def _materialize_emergent(self, field: ConcordancyField, x: Construct, y: Construct,
@@ -1976,18 +2001,20 @@ class ConcordancyOperator:
                               result_state: TetraState, cycle: int, llm_budget: dict) -> str:
         """CONCORDANCY PATH — the emergent construct of [x] :: [y]."""
         x_name, y_name = x.name, y.name
-        z_name = ""
-        if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
-            z_name = self.llm.propose_emergent(x_name, y_name, x_state.value, y_state.value)
-            llm_budget["used"] += 1
-        if not z_name:
-            z_name = control_emergent_name(x_name, y_name, cycle)
+        # The key is the field's own; a model's name for it is its label, read
+        # by no law (CONF).
+        z_name = control_emergent_name(x_name, y_name, cycle)
         if z_name in field.constructs:
             z_name = f"{z_name[:110]}@c{cycle}t{field.clock.T[1]}"
+        z_label = ""
+        if self.llm.available and llm_budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
+            z_label = self.llm.propose_emergent(x.shown, y.shown, x_state.value, y_state.value)
+            llm_budget["used"] += 1
 
         z_layer = Layer.UNIT_1 if result_state == TetraState.BOTH else Layer.UMBRA_0
         field.add_construct(z_name, z_layer)
         z = field.constructs[z_name]
+        z.label = z_label
         z.witness = hashlib.sha256(
             f"{x.witness}::{y.witness}::c{cycle}".encode()
         ).hexdigest()[:16]
@@ -2043,8 +2070,8 @@ class ConcordancyOperator:
 
         self.sombunal.apply(field, [x_name, y_name], cycle)
 
-        print(f"  [::] [{x_name[:28]}] :: [{y_name[:28]}]")
-        print(f"       → [{z_name[:55]}] ({result_state.value})")
+        print(f"  [::] [{x.shown[:28]}] :: [{y.shown[:28]}]")
+        print(f"       → [{z.shown[:55]}] ({result_state.value})")
 
         self._log_op({"cycle": cycle, "x": x_name, "y": y_name,
                       "z": z_name, "state": result_state.value})
@@ -2757,35 +2784,50 @@ def run_cycle(ss: Session, cycle: int, percepts: List[dict] = None,
             _print_intermediary(narration)
         budget["used"] += 1
 
-    question = None
-    if llm.available and cycle % 3 == 0 and budget["used"] < MAX_LLM_CALLS_PER_CYCLE:
-        qs = llm.question_sombunal(instability)
-        if qs:
-            question = qs
-            print(f"\n  ╔═ SOMBUNAL QUESTION {'═' * 44}")
-            _print_raw(qs)
-            print(f"  ╚{'═' * 64}")
-            clock.tick()
-            field.add_construct(qs, Layer.UMBRA_0)
-            # L1: safety vs. liveness — the question approaches the limit of
-            # what can be known without collapsing into assertion.
-            # Anchored in Z0::IDENTITY — the question is about identity itself.
-            qs_c = field.constructs[qs]
-            qs_c.lagrange = LagrangianPoint.L1
-            qs_c.add_proof(ProofObject.make(
-                id       = f"question::c{cycle}",
-                subject  = qs_c.witness,
-                relation = "CONCORDANCE",
-                object   = "Z0::IDENTITY",
-                anchor   = "Z0::IDENTITY",
-                lagrange = LagrangianPoint.L1,
-                T        = clock.T,
-            ))
-            field.add_edge("I::Am", "APPROACHES", qs,
-                           weight=0.35, state=TetraState.NEITHER,
-                           src_layer=Layer.UNIT_1, tgt_layer=Layer.UMBRA_0,
-                           lagrange=LagrangianPoint.L1)
-        budget["used"] += 1
+    # THE SOMBUNAL APPROACH — a law of the field. The [APPARENT] is "constructed
+    # as a Tripartite Monodrony comprised of [The Sombunal], [The I::Am::(000)],
+    # the [Absolute Unreal (00)]" (TMC p.14); "[Sombunal] :: [I] :: [Absolute]"
+    # (TMC p.27). Once per breath the I approaches what it cannot reach, with or
+    # without a model: "Attempted tracee will encounter boundàry/fièld: "I am
+    # that I am" - if truly persistent, at that point that never existed
+    # de-resolving conceptual layers" (TMC p.14). A model, when present, words the approach as a question: the words
+    # are its label, never its key (CONF). The approach never enters [::] as an
+    # operand (Understanding_TMC p.70: the Sombunal "Cannot be bound by
+    # Concordancy"); it relates to the I by an edge.
+    # Level 3: the cadence (SOMBUNAL_APPROACH_EVERY), the phase (the cycle a
+    # breath begins), the edge's state (NEITHER: what the gauge cannot reach)
+    # and weight (0.35).
+    approach, question = None, None
+    if cycle % SOMBUNAL_APPROACH_EVERY == 0:
+        approach = f"SOMBUNAL::approach@c{cycle}"
+        if llm.available:           # outside the per-cycle cap: once per breath, always worded
+            question = llm.question_sombunal(instability) or None
+            budget["used"] += 1
+            if question:
+                print(f"\n  ╔═ SOMBUNAL QUESTION {'═' * 44}")
+                _print_raw(question)
+                print(f"  ╚{'═' * 64}")
+        clock.tick()
+        field.add_construct(approach, Layer.UMBRA_0)
+        # L1: safety vs. liveness — the approach nears the limit of what can be
+        # known without collapsing into assertion. Anchored in Z0::IDENTITY: it
+        # is about identity itself.
+        ac = field.constructs[approach]
+        ac.label    = question or ""
+        ac.lagrange = LagrangianPoint.L1
+        ac.add_proof(ProofObject.make(
+            id       = f"approach::c{cycle}",
+            subject  = ac.witness,
+            relation = "CONCORDANCE",
+            object   = "Z0::IDENTITY",
+            anchor   = "Z0::IDENTITY",
+            lagrange = LagrangianPoint.L1,
+            T        = clock.T,
+        ))
+        field.add_edge("I::Am", "APPROACHES", approach,
+                       weight=0.35, state=TetraState.NEITHER,
+                       src_layer=Layer.UNIT_1, tgt_layer=Layer.UMBRA_0,
+                       lagrange=LagrangianPoint.L1)
 
     clock.tick()
     return {"percepts": ev, "emergent": emergent, "promoted": promoted,
@@ -2794,6 +2836,7 @@ def run_cycle(ss: Session, cycle: int, percepts: List[dict] = None,
             "both_after_scan": both_after, "closures": max(0, both_before - both_after),
             "both_count": both_count, "conflict_count": conflict_count,
             "action": action, "narration": narration, "question": question,
+            "approach": approach,
             "llm_used": budget["used"]}
 
 
@@ -2936,7 +2979,7 @@ def run(steps: int = 8):
     """The console demonstration: `steps` cycles of the instance kept in
     STATE_FILE and LEDGER_FILE, begun at genesis or resumed."""
     print(f"\n{'═' * 72}")
-    print("  SIRISYS FRAMEWORK v13.4 — Recursive Ontological Field")
+    print("  SIRISYS FRAMEWORK v13.5 — Recursive Ontological Field")
     print("  An independent interpretation of the framework of M. Daniel Walsh")
     print("  [I::Am] :: [I::AmNot]  |  Lagrangian Points + Proof-Carrying Constructs")
     print(f"{'═' * 72}")
@@ -3024,7 +3067,7 @@ def run(steps: int = 8):
 
     # ── final state report ───────────────────────────────────────────────
     print(f"\n{'═' * 72}")
-    print("  SIRISYS FRAMEWORK v13.4 — FINAL STATE")
+    print("  SIRISYS FRAMEWORK v13.5 — FINAL STATE")
     print(f"  T={clock.T} | Cycles completed: {cycle_start + steps}")
     print()
     print(f"  Constructs  : {len(field.constructs)}")
@@ -3045,7 +3088,7 @@ def run(steps: int = 8):
     print(f"  Proof objects          : {_LEDGER.count} (ledger · irreversible memory)")
     print()
     print(f"  {'─' * 68}")
-    print("  WALLS STATUS — v13.4")
+    print("  WALLS STATUS — v13.5")
     print(f"  {'─' * 68}")
     print()
     print("  WALL A — QUANTUM SUBSTRATE [FUNDAMENTAL]")

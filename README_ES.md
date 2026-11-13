@@ -20,7 +20,7 @@ Autor: Juan A. Pérez-Gómez.
 | Guía de Mac: instalación y primeros experimentos, paso a paso, para quien nunca ha usado la Terminal | [SIRISYS_Mac_Guide_v13_EN.pdf](SIRISYS_Mac_Guide_v13_EN.pdf) | [SIRISYS_Mac_Guide_v13_ES.pdf](SIRISYS_Mac_Guide_v13_ES.pdf) |
 | Glosario técnico: cada concepto con su fuente y cómo lo implementa el código, y cada contador que muestran las vistas | [SIRISYS_Concepts_v13_EN.pdf](SIRISYS_Concepts_v13_EN.pdf) | [SIRISYS_Concepts_v13_ES.pdf](SIRISYS_Concepts_v13_ES.pdf) |
 
-El código es el framework (`Sirisys_Framework_v13_4.py`), un servidor de experimentos con una vista en vivo en el navegador, un inspector de instancias guardadas, herramientas para ejecuciones medidas y cinco conjuntos de pruebas. La guía técnica describe cada archivo.
+El código es el framework (`Sirisys_Framework_v13_5.py`), un servidor de experimentos con una vista en vivo en el navegador, un inspector de instancias guardadas, herramientas para ejecuciones medidas y cinco conjuntos de pruebas. La guía técnica describe cada archivo.
 
 -----
 
@@ -40,13 +40,13 @@ Abre `http://127.0.0.1:8000` para ver el campo. `Ctrl+C` en la terminal detiene 
 python3 run_report.py --cycles 20 --seeds 1 --backend none    # una ejecución medida corta, sin modelo
 ```
 
-**El modelo es opcional.** Sin él todo funciona y los constructos reciben nombres sintéticos. Con él, nombra los emergentes, etiqueta los conflictos, narra el campo y hace las preguntas al Sombunal, que entran en el campo como constructos. Hay dos backends: Ollama, local (nada sale de la máquina), y la API de Anthropic, cuya clave va solo en la sesión de la terminal (`export ANTHROPIC_API_KEY=...`), nunca en un archivo. La sección 2 de la guía técnica explica los dos, y la vigilancia que detiene una ejecución cuyo modelo falla.
+**El modelo es opcional, y traduce.** El campo nombra lo que produce, y una vez por respiración el I se acerca al Sombunal, con modelo o sin él. Con modelo, el modelo pone nombres legibles a los emergentes y a los conflictos, narra el campo y formula como pregunta cada acercamiento al Sombunal; lo que dice se guarda como etiquetas que ninguna ley lee, así que una vida con modelo sella el mismo ledger que sin él. Hay dos backends: Ollama, local (nada sale de la máquina), y la API de Anthropic, cuya clave va solo en la sesión de la terminal (`export ANTHROPIC_API_KEY=...`), nunca en un archivo. La sección 2 de la guía técnica explica los dos, y la vigilancia que detiene una ejecución cuyo modelo falla.
 
 -----
 
 ## Conceptos básicos
 
-**Capas.** Los constructos viven en cuatro capas: `NULL_00` (solo la ocupa el ancla de origen), `UMBRA_0` (donde nacen los perceptos, las preguntas, los conflictos y la mayoría de los productos), `UNIT_1` (unidades activas, candidatas a cristalizar; aquí nace un producto `BOTH`) y `APPARENT` (cristales). Un constructo sube de capa cuando le llega tensión suficiente (colapso cúsico); un Apparent es incontrovertible.
+**Capas.** Los constructos viven en cuatro capas: `NULL_00` (solo la ocupa el ancla de origen), `UMBRA_0` (donde nacen los perceptos, los acercamientos al Sombunal, los conflictos y la mayoría de los productos), `UNIT_1` (unidades activas, candidatas a cristalizar; aquí nace un producto `BOTH`) y `APPARENT` (cristales). Un constructo sube de capa cuando le llega tensión suficiente (colapso cúsico); un Apparent es incontrovertible.
 
 **Tetralema.** Cada relación tiene uno de cuatro estados: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Un `BOTH` sostenido impulsa la emergencia y se cierra cuando ha intercambiado recursión suficiente. `NEITHER×NEITHER` materializa un conflicto o, pasado un límite por ciclo, la cuarta esquina misma: ninguna combinación es un callejón sin salida.
 
@@ -66,9 +66,9 @@ El glosario define cada término con su fuente.
 
 Proyecto de investigación en desarrollo activo.
 
-- Con perceptos sintéticos y sin modelo, el campo cumple sus criterios de autoajuste: cristales duraderos en cada respiración, poco parpadeo, tamaño acotado, memoria y coste planos. Con los perceptos reales de la máquina, la tasa de cristalización tiende a bajar en ejecuciones largas; está en estudio.
-- La calibración con un modelo local activo está en curso.
-- Las preguntas abiertas figuran en la cabecera del framework como WALLS: sustrato (digital, no analógico), autosostenimiento, agencia, y relaciones frente a eventos. Los papeles del Sombunal y de los puntos lagrangianos son decisiones de diseño abiertas; los puntos lagrangianos etiquetan constructos y pruebas, pero aún no gobiernan ninguna decisión.
+- Con perceptos sintéticos y sin modelo, el campo cumple sus criterios de autoajuste: cristales duraderos en cada respiración, poco parpadeo, tamaño acotado, memoria y coste planos. Con los perceptos reales de una máquina se sostuvo durante 10 000 ciclos: la cristalización más baja de las primeras ventanas era la génesis.
+- Con un modelo local (llama3.1, v13.4), el campo cumplió sus criterios, y el sentido de lo que decía el modelo no cambió la dinámica de forma medible. Desde la v13.5 el modelo solo traduce: sus nombres son etiquetas, y el acercamiento al Sombunal es una ley del campo.
+- Las preguntas abiertas figuran en la cabecera del framework como WALLS: sustrato (digital, no analógico), autosostenimiento, agencia, y relaciones frente a eventos. Cómo debe pesar en el campo el acercamiento al Sombunal (cadencia, estado y peso de su arista) y el papel de los puntos lagrangianos son decisiones de diseño abiertas; los puntos lagrangianos etiquetan constructos y pruebas, pero aún no gobiernan ninguna decisión.
 
 -----
 

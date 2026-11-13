@@ -6,15 +6,16 @@ Defaults: 3000 cycles, no model, standard profile.
 --replay FILE feeds the field, cycle by cycle, the percepts a previous live_c2.py
 run recorded (its percept_sequence) instead of reading this machine: the same
 real percepts, with or without a model. Replaying a run without a model, with
-no model, seals the same ledger (ledger_head). With it, a run with the model
-gets a paired control: its own percepts replayed without the model.
+no model, seals the same ledger (ledger_head). Since v13.5 a model never reaches
+the dynamics, so a run with the model, replayed without it, seals the same
+ledger too: the replay says whether it did ("same ledger as the replayed run").
 
 Writes one JSON document to standard output (redirect it to a file):
 - the Phase 3 criteria (sirisys_measures.LifeCriteria) and their verdict;
 - the topology trace (field_topology), twice per breath;
 - what the field perceived: counts per 1000 cycles, and the whole sequence,
   one string per cycle, events separated by ";", each "REL TARGET WEIGHT STATE";
-- the Sombunal questions that entered the field, per 1000 cycles;
+- the questions in which a model worded the Sombunal approach, per 1000 cycles;
 - with a model: the probe and the health of every call;
 - the framework file and its sha256[:16], the machine it ran on and when.
 Without psutil it does not start (exit code 2): the machine cannot be perceived.
@@ -145,7 +146,11 @@ out.update({
     "topology_trace": topo_trace,
     "percept_sequence": sequence,
 })
+if REPLAY and out["replayed_from"].get("ledger_head") and not aborted and N == source.get("cycles"):
+    out["same_ledger_as_replayed"] = out["ledger_head"] == out["replayed_from"]["ledger_head"]
 print(json.dumps(out, indent=1))
+if "same_ledger_as_replayed" in out:
+    say(f"\n  same ledger as the replayed run: {'YES' if out['same_ledger_as_replayed'] else 'NO'}\n")
 if aborted:
     say(f"\n  STOPPED — model health: {aborted}\n  The JSON is partial. Check Ollama and the model, then run again.\n")
     sys.exit(3)

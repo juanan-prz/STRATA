@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.4 — Guía técnica
+# STRATA · SIRISYS v13.5 — Guía técnica
 
 [English](SIRISYS_Guide_v13_EN.md)
 
@@ -25,7 +25,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 
 | Archivo | Para qué |
 |---|---|
-| `Sirisys_Framework_v13_4.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
+| `Sirisys_Framework_v13_5.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
@@ -57,7 +57,7 @@ Instala `numpy` y `psutil` (el campo y sus perceptos reales: sin `psutil` la má
 
 ### Qué hace un modelo
 
-El modelo es opcional: sin él todo funciona y los constructos reciben nombres sintéticos. Con él, un intermediario nombra los emergentes, etiqueta los conflictos, narra el campo y hace las preguntas al Sombunal. Entra en el campo por dos vías: los nombres que pone (se convierten en las claves de los constructos y, por tanto, entran en cada orientación) y las preguntas (entran en el campo como constructos). Cada petición lleva una semilla derivada de la cabeza del ledger y de la propia petición, y envía al modelo los 12 últimos mensajes de la conversación; el intermediario guarda solo los 20 últimos. Si el modelo responde vacío o falla, el constructo recibe el nombre que le daría el control, así que una respuesta vacía deja el campo donde estaría el control.
+El modelo es opcional y, desde la v13.5, no cambia la dinámica: traduce. El campo nombra lo que produce (las claves de los constructos son suyas) y, una vez por respiración, el I se acerca al Sombunal, con modelo o sin él. Con modelo, un intermediario pone nombres legibles a los emergentes y a los conflictos, narra el campo y formula como pregunta cada acercamiento al Sombunal. Lo que dice se guarda como etiqueta del constructo (`label`), que muestran la consola, las vistas y los informes, y ninguna ley la lee: una vida con modelo sella el mismo ledger que sin él, y se reproduce desde su historia aunque el motor del modelo no sea determinista. Cada petición lleva una semilla derivada de la cabeza del ledger y de la propia petición, y envía al modelo los 12 últimos mensajes de la conversación; el intermediario guarda solo los 20 últimos. Hasta la v13.4 los nombres del modelo eran las claves de los constructos y sus preguntas entraban en el campo como constructos.
 
 ### Cómo elegirlo
 
@@ -77,7 +77,7 @@ Usa el mismo backend, modelo, perfil y máquina en las ejecuciones que vayas a c
 
 ### La vigilancia del modelo
 
-Un modelo que falla o responde vacío dejaría el campo con nombres sintéticos sin avisar: la ejecución parecería una ejecución con modelo sin serlo. `sirisys_measures.ModelHealth` lo impide.
+Un modelo que falla o responde vacío dejaría la salida sin etiquetas sin avisar: la ejecución parecería una ejecución con modelo sin serlo. `sirisys_measures.ModelHealth` lo impide.
 
 - Antes de empezar, `run_report.py` y `live_c2.py` hacen dos llamadas reales, una de cada tipo de nombre (un constructo emergente y un conflicto), y no arrancan si las respuestas faltan o llegan vacías. `run_report.py` imprime las respuestas (`live_c2.py` las guarda en su archivo): tienen que ser nombres solos, no frases. Al final, `run_report.py` imprime también los primeros nombres que dio el modelo durante la ejecución.
 - Durante la ejecución se detienen (código de salida 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50. El resultado se escribe igualmente, marcado como `aborted` y con el motivo.
@@ -143,7 +143,7 @@ Espacio funciona justo después de hacer clic en cualquier botón. Un botón al 
 
 El glosario (sección VIII) define cada contador.
 
-**Event Log** (derecha). Productos de `[::]`, colapsos cúsicos, conclusiones, narración, preguntas al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
+**Event Log** (derecha). Productos de `[::]`, colapsos cúsicos, conclusiones, narración, las preguntas en que el modelo formula los acercamientos al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
 
 **Al señalar un constructo** se ven su tipo, capa, testigo, energía, puntuación umbragíaca, intercambio acumulado, Vc, modo de existencia, quiralidad, como qué cristalizó, etiqueta lagrangiana, pruebas y el T en que nació.
 
@@ -204,8 +204,8 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 En el modo experimento, una instancia escribe un solo `state.json`, al terminar. Para una línea de tiempo, copia el estado según crece; por ejemplo, con la demostración en consola, que reanuda la misma instancia en cada ejecución:
 
 ```bash
-python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_4.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Teclas.**
@@ -249,9 +249,11 @@ python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3  
 **Los cuatro brazos**, sobre los mismos flujos:
 
 - `llm`: el modelo, por las dos vías;
-- `llm_questions`: el modelo solo hace las preguntas al Sombunal y los nombres son los del control, de modo que las dos vías se distinguen;
-- `llm_null`: el nulo semántico. En cada flujo da al campo las respuestas que recibió el brazo `llm`, en el mismo orden y con las mismas longitudes, pero sin sentido (texto derivado de un hash), por las dos vías y con la misma cadencia, sin llamar a ningún modelo. Un efecto del modelo que el nulo también produce viene de nombrar distinto, no del sentido;
+- `llm_questions`: el modelo solo formula las preguntas al Sombunal; los constructos no reciben etiqueta;
+- `llm_null`: el nulo semántico. En cada flujo da al campo las respuestas que recibió el brazo `llm`, en el mismo orden y con las mismas longitudes, pero sin sentido (texto derivado de un hash), por las dos vías y con la misma cadencia, sin llamar a ningún modelo;
 - `degraded`: el control, sin modelo.
+
+Desde la v13.5 ninguna vía llega a la dinámica, así que los cuatro brazos tienen que sellar el mismo ledger. El informe lo dice al final (`same ledger in every arm: YES`, y `same_ledger` en el archivo); un NO querría decir que el modelo ha llegado a la dinámica, y es un error del código. Hasta la v13.4 los nombres eran claves y los brazos separaban las dos vías: así se leyó E2.
 
 Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o `anthropic` y el modelo no está disponible, no corre nada (código de salida 3). Si además se retiran las preguntas, el brazo coincide bit a bit con el control; lo comprueba `test_phase1.py`.
 
@@ -263,13 +265,13 @@ Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o 
 - coste plano del ciclo en sí, sin el tiempo del modelo: final ≤ 1,5 × inicial + 0,5 ms;
 - energía top-3 acotada: tendencia ≤ 1,2.
 
-**Determinismo.** El framework no usa azar, pero el motor de un modelo puede tenerlo aunque cada petición lleve una semilla derivada de la historia. `--determinism` recorre dos veces el flujo 0 con el brazo del modelo y dice si las dos ejecuciones sellaron el mismo ledger y, si no, en qué ciclo se separaron, con un ejemplo de respuestas distintas. Necesita los perceptos sintéticos y no toca `sirisys_report.json`. Todos los informes imprimen además la cabeza del ledger de cada ejecución.
+**Determinismo.** El framework no usa azar, pero el motor de un modelo puede tenerlo aunque cada petición lleve una semilla derivada de la historia. Desde la v13.5 eso solo cambia las etiquetas, no el ledger. `--determinism` recorre dos veces el flujo 0 con el brazo del modelo y dice si las dos ejecuciones sellaron el mismo ledger y, si no, en qué ciclo se separaron; da además un ejemplo de respuestas distintas, si las hubo. Necesita los perceptos sintéticos y no toca `sirisys_report.json`. Todos los informes imprimen además la cabeza del ledger de cada ejecución.
 
 **Qué contiene el informe.**
 
 - `config`: archivo del framework, versión y los 16 primeros caracteres de su SHA-256, las comprobaciones de integridad, las constantes de las que dependen las mediciones, ciclos, flujos, backend, modelo y su prueba inicial, perfil, perceptos, plataforma y versión de Python, y `machine`: sistema, procesador, memoria, Python y la versión de `psutil`, para que nunca se mezclen resultados de máquinas distintas.
 - `acceptance_criteria`: los criterios en palabras.
-- `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales y una muestra de los nombres nacidos, la telemetría de las reservas, la salud del modelo, la forma de cada respuesta que recibió el campo (tipo y longitud, que el nulo semántico repite) y los errores, si los hay. Los criterios incluyen `flicker_share_after_genesis`, el parpadeo entre los cristales nacidos tras los primeros 100 ciclos: exploratorio, no entra en el veredicto.
+- `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales, una muestra de los nombres nacidos y de sus etiquetas, la telemetría de las reservas, la salud del modelo, la forma de cada respuesta que recibió el campo (tipo y longitud, que el nulo semántico repite) y los errores, si los hay. Los criterios incluyen `flicker_share_after_genesis`, el parpadeo entre los cristales nacidos tras los primeros 100 ciclos: exploratorio, no entra en el veredicto.
 - `aborted`, `determinism` (con `--determinism`) y `console`, todo lo que imprimió la ejecución.
 
 **Códigos de salida.** 0: el informe está escrito; 1: al framework le falta un mecanismo que el informe mide; 3: se pidió un modelo y falta o no responde, o dejó de responder durante la ejecución (el informe queda entonces marcado como `aborted`).
@@ -294,7 +296,7 @@ python3 live_c2.py 3000 ollama minimal > live_ollama.json   # perceptos reales, 
 python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.json   # los mismos perceptos, sin modelo
 ```
 
-`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que entraron en el campo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él la máquina no se puede percibir, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
+`live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que formuló el modelo. Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él la máquina no se puede percibir, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
 
 **Repetición.** `--replay ARCHIVO` da al campo, ciclo a ciclo, los perceptos que grabó otra ejecución de `live_c2.py`, con toda su precisión, en lugar de leer la máquina; no necesita `psutil`. Sin modelo, una vida repetida sella el mismo ledger que la vida que repite (`ledger_head`, que toda ejecución registra). Con modelo, una vida con el modelo obtiene un control por pares: los mismos perceptos reales, sin el modelo.
 
@@ -306,7 +308,7 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 - aristas por estado del tetralema y por par de capas;
 - qué parte del BOTH está en la componente mayor;
 - la profundidad de cada conflicto, que el campo limita en el umbral Adsurdic;
-- la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, preguntas).
+- la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, acercamientos al Sombunal).
 
 La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella, y lo comprueba `test_phase2_guarantee.py`.
 
@@ -358,13 +360,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 Responde `ok` y el número de pruebas o, si el registro está dañado, la posición de la primera prueba que no encaja y por qué.
 
-**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_4_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
+**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_5_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_4.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_5.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_4.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_5.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda.
 
 **Archivos que se crean al ejecutar.**
 

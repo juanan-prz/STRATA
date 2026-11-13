@@ -277,7 +277,7 @@ class ExperimentEngine:
             modes[mode] += 1
             layers[c.layer.name] += 1
             constructs.append({
-                "name": c.name, "layer": c.layer.value, "born_at": list(c.born_at),
+                "name": c.name, "label": c.label, "layer": c.layer.value, "born_at": list(c.born_at),
                 "witness": c.witness, "umbragiac_score": round(c.umbragiac_score, 4),
                 "energy": round(energy.get(c.name, 0.0), 4),
                 "lagrange": c.lagrange.name if c.lagrange else None,
