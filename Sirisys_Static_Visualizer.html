@@ -835,6 +835,10 @@ function deriveView(state, file) {
 
 const APPROACH = 'SOMBUNAL::approach@';   // the key of the I's approach to the Sombunal, once per breath
 
+// A construct as a reader sees it: by its label if a model gave one, otherwise by its key,
+// which is the field's own (the framework's Construct.shown, v13.5)
+const shownName = (name, c) => c.label || name;
+
 // What a construct is, beyond its layer (as in the live view); up to v13.4 the I
 // approached the Sombunal through the model's questions, which entered as constructs
 function kindOf(name, c, view) {
@@ -1126,7 +1130,8 @@ function drawLabels(px, only) {
   for (const [name, c] of view.constructs) {
     const p = positions.get(name);
     if (!p || !onShow(name, c) || (only && !only.has(name))) continue;
-    ctx.fillText(name.length > 26 ? name.slice(0, 24) + '…' : name, p.x, p.y + sizeOf(name, c) + 3 * px);
+    const text = shownName(name, c);
+    ctx.fillText(text.length > 26 ? text.slice(0, 24) + '…' : text, p.x, p.y + sizeOf(name, c) + 3 * px);
   }
 }
 
@@ -1209,8 +1214,7 @@ canvas.addEventListener('wheel', e => {
 const tooltip = $('tooltip');
 function showTooltip(name, mx, my) {
   const c = view.constructs.get(name), kind = kindOf(name, c, view);
-  const shown = c.label || name;                 // a model's name is a label; the key is the field's (v13.5)
-  setText('tt-name', c.conflict ? '⊗ ' + shown : shown);
+  setText('tt-name', (c.conflict ? '⊗ ' : '') + shownName(name, c));
   setText('tt-line', [LAYERS[c.layer], kind, modeText(view.mode.get(name)), 'Vc ' + view.vc.get(name).vc.toFixed(3)]
     .filter(Boolean).join(' · '));
   tooltip.style.left = tooltip.style.top = '0px';
@@ -1422,7 +1426,7 @@ function renderInspector() {
 
   const head = el('div', 'construct-name'), dot = el('span', 'dot');
   dot.style.background = COLOR.layer[LAYERS[c.layer]];
-  head.append(dot, el('span', null, c.conflict ? '⊗ ' + (c.label || name) : (c.label || name)));
+  head.append(dot, el('span', null, (c.conflict ? '⊗ ' : '') + shownName(name, c)));
   parts.push(head);
   if (c.label) parts.push(el('div', 'construct-kind', 'key ' + name));
   const kind = kindOf(name, c, view);
