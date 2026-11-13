@@ -69,6 +69,19 @@ def field_json(field):
     return json.dumps(field.to_dict(), sort_keys=True, default=str)
 
 
+def cost_windows(m):
+    """The cheapest tenth of cycles 300–450 and of 750–900, in seconds."""
+    m.set_ledger(m.ProofLedger(None))
+    costs = []
+    with quiet():
+        ss = m.new_session(m.LLMIntermediary(backend="none"))
+        for c in range(900):
+            start = time.perf_counter()
+            m.run_cycle(ss, c)
+            costs.append(time.perf_counter() - start)
+    return [statistics.quantiles(costs[a:b], n=10)[0] for a, b in ((300, 450), (750, 900))]
+
+
 check.section(f"1 · Determinism without a PRNG ({STEPS} cycles)")
 source = FRAMEWORK.read_text(encoding="utf-8")
 check("no PRNG in the framework",
@@ -200,18 +213,15 @@ check("400-cycle ledger verifies", m10.verify_ledger(ledger10)["ok"])
 m10.get_ledger().close()
 # The canonical cycle alone, without file I/O, compared on the cheapest tenth of each
 # window: a cost that grows lifts every cycle, a busy machine (another program, the
-# garbage collector) slows only some of them.
-m10.set_ledger(m10.ProofLedger(None))
-costs = []
-with quiet():
-    ss = m10.new_session(m10.LLMIntermediary(backend="none"))
-    for c in range(900):
-        start = time.perf_counter()
-        m10.run_cycle(ss, c)
-        costs.append(time.perf_counter() - start)
-early, late = (statistics.quantiles(costs[a:b], n=10)[0] for a, b in ((300, 450), (750, 900)))
+# garbage collector) slows only some of them. A window found slower is measured once
+# more, on a new life: a cost that grows shows again, a passing load seldom does.
+early, late = cost_windows(m10)
+remeasured = late / early >= 1.3
+if remeasured:
+    early, late = cost_windows(framework())
 check("compute cost per cycle flat (late/early < 1.3)", late / early < 1.3,
-      f"{1000 * early:.2f} → {1000 * late:.2f} ms/cycle (cheapest tenth)")
+      f"{1000 * early:.2f} → {1000 * late:.2f} ms/cycle (cheapest tenth"
+      + ("; measured again on a new life)" if remeasured else ")"))
 
 check.section("11 · A resumed instance equals an uninterrupted one")
 

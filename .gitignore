@@ -49,8 +49,11 @@ phase3_measurements.json
 sirisys_v13_state.json
 sirisys_v13_ledger*
 *_result.json
-live_none.json
-live_ollama.json
+live_*.json
+*_report.json
+machine.txt
+control.txt
+e0.txt
 *.jsonl
 *.jsonl.gz
 *.torn
@@ -58,6 +61,10 @@ live_ollama.json
 # Logs and temporary outputs
 *.log
 *.tmp
+
+# Private notes, never committed
+CHANGELOG*
+private_*
 
 # Credentials — never commit an API key
 .env.local

@@ -336,7 +336,7 @@ def run_arm(seed, cycles, llm_active, log, model=None, backend=None, profile="st
         formed = field.apparents_since(apparents_before)
         crystals.extend(formed)
         crystal_labels.extend([cycle, n, field.constructs[n].label] for n in formed
-                              if n in field.constructs and getattr(field.constructs[n], "label", ""))
+                              if n in field.constructs and field.constructs[n].label)
         closures += r["closures"]
 
         m = cycle_metrics(ss)

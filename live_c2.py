@@ -111,7 +111,8 @@ with contextlib.redirect_stdout(_Null()):
         translations.attach(ss.llm)
     for c in range(N):
         t_cycle, t_model = time.perf_counter(), health.model_seconds
-        translations.cycle, apparents_before = c, ss.field.apparents_total
+        translations.cycle = c
+        apparents_before = ss.field.apparents_total
         r = S.run_cycle(ss, c, percepts=recorded[c] if recorded else None, narrate=NARRATE, include_hour=HOUR)
         life.after_cycle(ss, c, (time.perf_counter() - t_cycle) - (health.model_seconds - t_model))
         f = ss.field
