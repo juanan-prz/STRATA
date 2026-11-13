@@ -201,9 +201,9 @@ class ArmIntermediary(S.LLMIntermediary):
     def question_sombunal(self, instability):
         return "" if self.channels == "none" else super().question_sombunal(instability)
 
-    def _call(self, prompt, temperature=0.85):
+    def _call(self, prompt, temperature=0.85, remember=True):
         """Every answer the field receives, and its shape: (kind, length), 0 when empty."""
-        text = super()._call(prompt, temperature)
+        text = super()._call(prompt, temperature, remember)
         self.shape.append((_kind(prompt), len(text.strip())))
         return text
 
@@ -230,7 +230,7 @@ class NullIntermediary(ArmIntermediary):
         return True
 
     def _complete(self, temperature):
-        kind = _kind(self.history[-1]["content"])
+        kind = _kind(self.request[-1]["content"])
         lengths = self.by_kind.get(kind) or [0]
         i = self.used[kind]
         self.used[kind] += 1
@@ -542,12 +542,16 @@ def check_model(args, intermediary, streams, log):
     """With a model, prove it answers before anything runs; without one, say why.
     Exits (code 3) when a model was asked for, or is needed, and does not answer."""
     if intermediary.available:
-        # at most MAX calls per cycle in the full arm, plus the question that words the
-        # Sombunal approach once per breath; that question alone in the questions arm
+        # at most MAX calls per cycle in the full arm (names, without memory; with the
+        # standard profile one of them narrates, with a thread), plus the question
+        # that words the Sombunal approach once per breath, with a thread; that
+        # question alone in the questions arm
         every = getattr(S, "SOMBUNAL_APPROACH_EVERY", 3)
         questions = 1 / every + (0 if args.determinism or args.skip_questions_arm else 1 / every)
+        narrating = 1 if PROFILES[args.profile]["narrate"] else 0
         probe = ModelHealth.probe(intermediary, cycles=args.cycles * len(streams),
-                                  calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE + questions)
+                                  calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE - narrating,
+                                  thread_calls_per_cycle=questions + narrating)
         if not probe["ok"]:
             log()
             log(f"  STOP: the model does not answer properly — {probe['reason']}.")
@@ -555,9 +559,9 @@ def check_model(args, intermediary, streams, log):
             log("  Nothing was run. Fix the model (ollama list; try a general-purpose")
             log("  model with --model) and run again.")
             sys.exit(3)
-        log(f"  model probe        : ok · {probe.get('call_full_context_s', probe['call_s'])} s per call "
-            f"with a run's context ({probe['call_s']} s without; first call, with loading: "
-            f"{probe['load_s']} s)")
+        log(f"  model probe        : ok · {probe['call_s']} s per name (without memory); "
+            f"{probe.get('call_full_context_s', probe['call_s'])} s per question with a run's thread "
+            f"(first call, with loading: {probe['load_s']} s)")
         log(f"  model time, at most: ~{probe['estimated_model_hours_max']} h "
             f"for the model runs ({args.cycles} cycles x {len(streams)} streams)")
         if probe.get("model"):

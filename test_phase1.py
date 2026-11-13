@@ -163,6 +163,22 @@ check("ollama request carries system prompt, history and options",
       and request.get("options", {}).get("temperature") == 1.10,
       f"temperature {request.get('options', {}).get('temperature')}")
 check("ollama on loopback is local", llm.is_local)
+with FakeModel("counter") as model:
+    with quiet():
+        llm = S.LLMIntermediary(backend="ollama", host=model.url)
+        first = llm.propose_emergent("A", "B", "TRUE", "BOTH")
+        llm.question_sombunal(0.5)
+        llm.interpret_conflict("A", "C")
+        llm.question_sombunal(0.6)
+        again = llm.propose_emergent("A", "B", "TRUE", "BOTH")
+    sent = [r["messages"] for r in model.requests]
+kept = json.dumps(llm.history)
+check("a name is asked for without memory: its request carries the prompt alone, it leaves nothing in the "
+      "thread, and the same name asked again sends the same request; the question keeps its thread",
+      [len(m) - 1 for m in sent] == [1, 1, 1, 3, 1] and sent[0] == sent[4]
+      and "Concordancy" not in kept and "Reversion" not in kept and len(llm.history) == 4
+      and sent[3][1]["content"].startswith("Instability: 0.5000"),
+      f"messages sent besides the system prompt: {[len(m) - 1 for m in sent]}; thread: {len(llm.history)} messages")
 with quiet():
     remote = S.LLMIntermediary(backend="ollama", host="http://10.0.0.5:11434")
 check("ollama on another host is NOT local", not remote.is_local)
@@ -370,19 +386,19 @@ probed = intermediary()
 probe = ModelHealth.probe(probed, cycles=100, calls_per_cycle=4)
 asked = [r["messages"][-1]["content"].split(":")[0] for r in model.requests]
 sent = [len(r["messages"]) - 1 for r in model.requests]          # messages besides the system prompt
-check("the probe accepts a model that answers, asking for one name of each kind, and estimates "
-      "the run's time from a third call that carries a run's full context",
-      probe["ok"] and all(probe["answers"]) and asked == ["Concordancy", "Reversion", "Concordancy"]
-      and sent == [1, 3, S.LLM_CONTEXT] and "call_full_context_s" in probe
-      and len(probed.history) == 4 and "probe::" not in json.dumps(probed.history),
+check("the probe accepts a model that answers, asking for one name of each kind, without memory, and "
+      "times a question that carries a run's full thread; it leaves no thread behind",
+      probe["ok"] and all(probe["answers"]) and asked == ["Concordancy", "Reversion", "Instability"]
+      and sent == [1, 1, S.LLM_CONTEXT] and "call_full_context_s" in probe
+      and probed.history == [] and probe.get("estimated_model_hours_max") is not None,
       f"{probe.get('answers')} for {asked[:2]}; context sent {sent}")
 system = model.requests[0]["messages"][0]["content"]
 asks = [r["messages"][-1]["content"] for r in model.requests]
 check("the model is asked for names alone; its rule of 1–3 sentences is for every other answer",
-      all("Reply with the name alone" in a for a in asks)
+      all("Reply with the name alone" in a for a in asks[:2]) and "Reply with the name alone" not in asks[2]
       and "Asked to name a construct: reply with the name alone" in system
       and "Any other answer: 1–3 sentences" in system and "Responses: 1–3 sentences" not in system,
-      f"{len(asks)} naming requests")
+      f"{len(asks[:2])} naming requests and a question")
 model.reset("empty")
 probe = ModelHealth.probe(intermediary())
 check("the probe refuses a model that answers empty", not probe["ok"] and "empty" in probe["reason"])

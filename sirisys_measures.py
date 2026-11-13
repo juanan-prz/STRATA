@@ -262,7 +262,7 @@ class ModelHealth:
         inner = llm._complete
 
         def watched(temperature):
-            kind = _kind(llm.history[-1]["content"]) if llm.history else "other"
+            kind = _kind(llm.request[-1]["content"]) if llm.request else "other"
             t = time.perf_counter()
             try:
                 out = inner(temperature)
@@ -332,15 +332,17 @@ class ModelHealth:
         return ident
 
     @staticmethod
-    def probe(llm, cycles=None, calls_per_cycle=None):
+    def probe(llm, cycles=None, calls_per_cycle=None, thread_calls_per_cycle=0.0):
         """Two real completions on a separate intermediary, one of each kind of
         name the field asks for: an emergent construct, which may include loading
         the model, then a conflict. Their answers are the samples Rule 0.4 judges.
-        A third call is timed with a full context, as every request of a run
-        carries the last messages of its history: that latency, not the bare one
-        (several times shorter), gives the estimate. Returns a dict with ok, the
-        reason when not ok, the answers, the latencies and, given cycles, an upper
-        estimate of the run's model time."""
+        A name is asked for without memory, so its latency is the bare one. A
+        third call, a question, is timed with a full thread, as the calls that
+        keep one (the approach's question, the narration) carry the last messages
+        of it: that latency, several times the bare one, is theirs. Returns a dict
+        with ok, the reason when not ok, the answers, the latencies and, given
+        cycles, an upper estimate of the run's model time: calls_per_cycle names
+        and thread_calls_per_cycle calls with a thread, per cycle."""
         if not llm.available:
             return {"ok": False, "reason": "the model is not available"}
         answers, secs = [], []
@@ -363,27 +365,27 @@ class ModelHealth:
         if full is not None:
             out["call_full_context_s"] = round(full, 2)
         if cycles and calls_per_cycle:
-            per_call = full if full is not None else secs[1]
-            out["estimated_model_hours_max"] = round(cycles * calls_per_cycle * per_call / 3600, 1)
+            per_thread = full if full is not None else secs[1]
+            out["estimated_model_hours_max"] = round(
+                cycles * (calls_per_cycle * secs[1] + thread_calls_per_cycle * per_thread) / 3600, 1)
         return out
 
     @staticmethod
     def _full_context_seconds(llm, health):
-        """One more naming request, timed, with the history filled as in a run: the
-        intermediary sends the model its last messages (LLM_CONTEXT), each pair a
-        request and its name. They differ from one another, so the model cannot
-        reuse the previous call's context. The history is put back afterwards.
-        None when the call fails or answers empty."""
+        """One question, timed, with the thread filled as in a run: the
+        intermediary sends the model the last messages of it (LLM_CONTEXT), each
+        pair a question and its answer. They differ from one another, so the model
+        cannot reuse the previous call's context. The thread is put back
+        afterwards. None when the call fails or answers empty."""
         saved = list(llm.history)
         llm.history[:] = [m for i in range(10) for m in (
-            {"role": "user", "content": f"Concordancy: [probe::{i}::a] :: [probe::{i}::b]\n"
-                                        f"States: BOTH :: NEITHER\n"
-                                        f"Name the emergent construct in Walsh's grammar. Max 12 words.\n"
-                                        f"Reply with the name alone: no sentence, no preamble, no explanation."},
-            {"role": "assistant", "content": f"Probe Construct {i}"})]
+            {"role": "user", "content": f"Instability: 0.{4000 + i}. The Sombunal prevents complete resolution "
+                                        f"of any identity. What cannot be reached from within this field, "
+                                        f"and what does that impossibility reveal? (probe::{i})"},
+            {"role": "assistant", "content": f"The probe cannot reach its own ground {i}."})]
         failures = health.failures
         t = time.perf_counter()
-        answer = llm.propose_emergent("SYSTEM", "I::AmNot", "BOTH", "NEITHER")
+        answer = llm.question_sombunal(0.5)
         seconds = time.perf_counter() - t
         llm.history[:] = saved
         return seconds if answer.strip() and health.failures == failures else None

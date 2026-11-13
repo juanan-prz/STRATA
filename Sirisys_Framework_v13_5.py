@@ -59,7 +59,9 @@
 #   The intermediary translates (CONF). A model labels what the field produced
 #     and words the approach; nothing it says reaches the dynamics. The keys are
 #     the field's own, so a life with a model is the life without one, and
-#     replays from its history alone.
+#     replays from its history alone. It names without memory: a label depends
+#     on what it translates and on what the field hands it (the parents'
+#     labels), never on the intermediary's earlier answers.
 #
 # INTEGRITY
 #   Every proof is sealed in an append-only, hash-chained ledger (compressed
@@ -123,7 +125,7 @@ TERMINATION_WINDOW       = 200    # termination_log
 TERMINATED_INDEX_WINDOW  = 1000   # names remembered for reincarnation
 LINEAGE_WINDOW           = 50     # identity lineage of each construct
 APPARENT_LOG_WINDOW      = 200    # recent crystallization names (apparents_total counts all)
-LLM_CONTEXT              = 12     # messages the model is sent with each request
+LLM_CONTEXT              = 12     # messages sent with a request that keeps a thread (question, narration)
 LLM_HISTORY_WINDOW       = 20     # messages the intermediary keeps (and a snapshot saves)
 MODE_WINDOW              = 5      # recent proofs the existence mode reads (and a snapshot keeps)
 
@@ -1439,6 +1441,17 @@ class Sombunal:
 # the framework — it renders what the framework has already produced. Since
 # v13.5 nothing it says is read by the dynamics: what it names is a label, and
 # the key is the field's own (control_emergent_name, control_conflict_label).
+# A name is asked for without memory: the request carries the prompt alone and
+# the exchange is not kept, so a label depends only on what it translates and
+# on what the field hands it (the parents' labels). The memory of a life is
+# the field's; a translator that remembered its own names would grow a second
+# lineage of names beside the field's (in E2 and E3′ they lengthened from one
+# word to five or more within a life, each life in its own style). The same
+# concordance asked again gets the same name: "A will be A each time you see
+# it" (TMC p.33). The question that words the approach and the narration keep
+# a thread: they speak of the life as it goes, and the approach is
+# "Iterational progress" (TMC p.14).
+# Level 3: which calls keep a thread.
 # =============================================================================
 
 class LLMIntermediary:
@@ -1487,6 +1500,7 @@ class LLMIntermediary:
         self.host        = (host if host.startswith("http") else "http://" + host).rstrip("/")
         self.max_tokens  = max_tokens
         self.history     = history or []
+        self.request     = []                # the messages of the request in progress
         self._client     = None
         self._available  = False
         self._call_count = 0
@@ -1543,7 +1557,7 @@ class LLMIntermediary:
             return json.loads(r.read().decode("utf-8"))
 
     def _complete(self, temperature: float) -> str:
-        messages = self.history[-LLM_CONTEXT:]
+        messages = self.request
         if self.backend == "anthropic":
             r = self._client.messages.create(
                 model=self.model, max_tokens=self.max_tokens,
@@ -1558,23 +1572,26 @@ class LLMIntermediary:
                         "seed": int(orient("llm::" + messages[-1]["content"]) * 2**31)}})
         return r["message"]["content"].strip()
 
-    def _call(self, prompt: str, temperature: float = 0.85) -> str:
+    def _call(self, prompt: str, temperature: float = 0.85, remember: bool = True) -> str:
+        """One request. With remember, it carries the thread (the last
+        LLM_CONTEXT messages, this prompt included) and the exchange joins it;
+        without, it carries the prompt alone and leaves nothing behind."""
         if not self._available:
             return ""
-        self.history.append({"role": "user", "content": prompt})
+        prompt_msg = {"role": "user", "content": prompt}
+        self.request = (self.history[-(LLM_CONTEXT - 1):] if remember else []) + [prompt_msg]
         try:
             text = self._complete(temperature)
-            self.history.append({"role": "assistant", "content": text})
+            if remember:
+                self.history += [prompt_msg, {"role": "assistant", "content": text}]
             self._call_count += 1
             return text
         except Exception as ex:
             print(f"  [LLM] Call failed: {ex}")
-            if self.history and self.history[-1]["role"] == "user":
-                self.history.pop()
             return ""
         finally:
-            # The model only ever sees the last LLM_CONTEXT messages; older ones
-            # would only grow memory (about 8,000 messages per 1000 cycles).
+            # The thread keeps the last LLM_HISTORY_WINDOW messages; older ones
+            # would only grow memory.
             del self.history[:-LLM_HISTORY_WINDOW]
 
     @staticmethod
@@ -1589,7 +1606,7 @@ class LLMIntermediary:
             f"States: {x_state} :: {y_state}\n"
             f"Name the emergent construct in Walsh's grammar. Max 12 words.\n"
             f"Reply with the name alone: no sentence, no preamble, no explanation.",
-            temperature=0.92
+            temperature=0.92, remember=False
         )
         return self._clip(result)
 
@@ -1600,7 +1617,7 @@ class LLMIntermediary:
             f"This irresolvable tension is itself a structure in Walsh's grammar.\n"
             f"Name the conflict construct. Max 10 words. No brackets.\n"
             f"Reply with the name alone: no sentence, no preamble, no explanation.",
-            temperature=0.95
+            temperature=0.95, remember=False
         )
         return self._clip(result)
 

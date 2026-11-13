@@ -85,15 +85,16 @@ health = ModelHealth()
 if BACKEND != "none":
     with contextlib.redirect_stdout(io.StringIO()):
         probe_llm = S.LLMIntermediary(backend=BACKEND)
-    probe = ModelHealth.probe(probe_llm, cycles=N, calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE)
+    probe = ModelHealth.probe(probe_llm, cycles=N, calls_per_cycle=S.MAX_LLM_CALLS_PER_CYCLE - NARRATE,
+                              thread_calls_per_cycle=1 / S.SOMBUNAL_APPROACH_EVERY + NARRATE)
     out["model_probe"] = probe
     if not probe["ok"]:
         out["aborted"] = f"model probe: {probe['reason']}"
         print(json.dumps(out, indent=1))
         say(f"\n  STOP: the model does not answer properly — {probe['reason']}.\n  Nothing was run.\n")
         sys.exit(3)
-    say(f"  model ok · {probe['model']['name']} · {probe.get('call_full_context_s', probe['call_s'])} s per call "
-        f"with a run's context · model time at most "
+    say(f"  model ok · {probe['model']['name']} · {probe['call_s']} s per name, "
+        f"{probe.get('call_full_context_s', probe['call_s'])} s per question with a run's thread · model time at most "
         f"~{probe['estimated_model_hours_max']} h for {N} cycles")
 
 life, genealogy = LifeCriteria(S), field_topology.Genealogy()
