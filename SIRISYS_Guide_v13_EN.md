@@ -82,6 +82,7 @@ A model that fails or answers empty would leave the output without labels, witho
 - Before a run, `run_report.py` and `live_c2.py` make two real calls, one name of each kind (an emergent construct and a conflict), and do not start if the answers are missing or empty. `run_report.py` prints the answers (`live_c2.py` records them in its file): they must be names alone, not sentences. At the end, `run_report.py` also prints the first names the model gave during the run.
 - During the run they stop (exit code 3) when 3 calls in a row fail, or more than 10 % of the last 50 fail or come back empty. The output is still written, marked `aborted`, with the reason.
 - The probe records which model exactly answered (with Ollama: digest, size, parameters and quantization), and the health report keeps the first answers of each kind.
+- The probe estimates the model time with a third call that carries a run's context (the last messages of the history): without it the call is several times faster and the estimate would fall short. It is an upper bound; the machine's free memory counts too.
 - Experiment mode watches the same way: when the watch trips, the engine pauses once and the live view says why; Play goes on.
 
 -----

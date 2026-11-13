@@ -82,6 +82,7 @@ Un modelo que falla o responde vacío dejaría la salida sin etiquetas sin avisa
 - Antes de empezar, `run_report.py` y `live_c2.py` hacen dos llamadas reales, una de cada tipo de nombre (un constructo emergente y un conflicto), y no arrancan si las respuestas faltan o llegan vacías. `run_report.py` imprime las respuestas (`live_c2.py` las guarda en su archivo): tienen que ser nombres solos, no frases. Al final, `run_report.py` imprime también los primeros nombres que dio el modelo durante la ejecución.
 - Durante la ejecución se detienen (código de salida 3) si fallan 3 llamadas seguidas, o si fallan o llegan vacías más del 10 % de las últimas 50. El resultado se escribe igualmente, marcado como `aborted` y con el motivo.
 - La prueba inicial registra qué modelo respondió exactamente (con Ollama: digest, tamaño, parámetros y cuantización), y el informe de salud guarda las primeras respuestas de cada tipo.
+- La prueba inicial estima el tiempo de modelo con una tercera llamada que lleva el contexto de una ejecución (los últimos mensajes del historial): sin él, la llamada es varias veces más rápida y la estimación se quedaría corta. Es un máximo; la memoria libre de la máquina también cuenta.
 - El modo experimento vigila igual: si la vigilancia salta, el motor se pausa una vez y la vista en vivo dice por qué; Play continúa.
 
 -----

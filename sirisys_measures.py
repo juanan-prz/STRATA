@@ -335,9 +335,12 @@ class ModelHealth:
     def probe(llm, cycles=None, calls_per_cycle=None):
         """Two real completions on a separate intermediary, one of each kind of
         name the field asks for: an emergent construct, which may include loading
-        the model, then a conflict, which gives the latency. Returns a dict with
-        ok, the reason when not ok, the answers, the latency and, given cycles, an
-        upper estimate of the run's model time."""
+        the model, then a conflict. Their answers are the samples Rule 0.4 judges.
+        A third call is timed with a full context, as every request of a run
+        carries the last messages of its history: that latency, not the bare one
+        (several times shorter), gives the estimate. Returns a dict with ok, the
+        reason when not ok, the answers, the latencies and, given cycles, an upper
+        estimate of the run's model time."""
         if not llm.available:
             return {"ok": False, "reason": "the model is not available"}
         answers, secs = [], []
@@ -356,6 +359,31 @@ class ModelHealth:
                               "budget thinking; choose a general-purpose model)"}
         out = {"ok": True, "answers": answers, "load_s": round(secs[0], 2), "call_s": round(secs[1], 2),
                "model": ModelHealth.identity(llm)}
+        full = ModelHealth._full_context_seconds(llm, h)
+        if full is not None:
+            out["call_full_context_s"] = round(full, 2)
         if cycles and calls_per_cycle:
-            out["estimated_model_hours_max"] = round(cycles * calls_per_cycle * secs[1] / 3600, 1)
+            per_call = full if full is not None else secs[1]
+            out["estimated_model_hours_max"] = round(cycles * calls_per_cycle * per_call / 3600, 1)
         return out
+
+    @staticmethod
+    def _full_context_seconds(llm, health):
+        """One more naming request, timed, with the history filled as in a run: the
+        intermediary sends the model its last messages (LLM_CONTEXT), each pair a
+        request and its name. They differ from one another, so the model cannot
+        reuse the previous call's context. The history is put back afterwards.
+        None when the call fails or answers empty."""
+        saved = list(llm.history)
+        llm.history[:] = [m for i in range(10) for m in (
+            {"role": "user", "content": f"Concordancy: [probe::{i}::a] :: [probe::{i}::b]\n"
+                                        f"States: BOTH :: NEITHER\n"
+                                        f"Name the emergent construct in Walsh's grammar. Max 12 words.\n"
+                                        f"Reply with the name alone: no sentence, no preamble, no explanation."},
+            {"role": "assistant", "content": f"Probe Construct {i}"})]
+        failures = health.failures
+        t = time.perf_counter()
+        answer = llm.propose_emergent("SYSTEM", "I::AmNot", "BOTH", "NEITHER")
+        seconds = time.perf_counter() - t
+        llm.history[:] = saved
+        return seconds if answer.strip() and health.failures == failures else None

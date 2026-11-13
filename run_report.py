@@ -555,8 +555,9 @@ def check_model(args, intermediary, streams, log):
             log("  Nothing was run. Fix the model (ollama list; try a general-purpose")
             log("  model with --model) and run again.")
             sys.exit(3)
-        log(f"  model probe        : ok · {probe['call_s']} s per call "
-            f"(first call, with loading: {probe['load_s']} s)")
+        log(f"  model probe        : ok · {probe.get('call_full_context_s', probe['call_s'])} s per call "
+            f"with a run's context ({probe['call_s']} s without; first call, with loading: "
+            f"{probe['load_s']} s)")
         log(f"  model time, at most: ~{probe['estimated_model_hours_max']} h "
             f"for the model runs ({args.cycles} cycles x {len(streams)} streams)")
         if probe.get("model"):

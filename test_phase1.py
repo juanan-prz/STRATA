@@ -366,11 +366,16 @@ def intermediary():
         return S.LLMIntermediary(backend="ollama", host=model.url)
 
 
-probe = ModelHealth.probe(intermediary(), cycles=100, calls_per_cycle=4)
+probed = intermediary()
+probe = ModelHealth.probe(probed, cycles=100, calls_per_cycle=4)
 asked = [r["messages"][-1]["content"].split(":")[0] for r in model.requests]
-check("the probe accepts a model that answers, asking for one name of each kind",
-      probe["ok"] and all(probe["answers"]) and asked == ["Concordancy", "Reversion"],
-      f"{probe.get('answers')} for {asked}")
+sent = [len(r["messages"]) - 1 for r in model.requests]          # messages besides the system prompt
+check("the probe accepts a model that answers, asking for one name of each kind, and estimates "
+      "the run's time from a third call that carries a run's full context",
+      probe["ok"] and all(probe["answers"]) and asked == ["Concordancy", "Reversion", "Concordancy"]
+      and sent == [1, 3, S.LLM_CONTEXT] and "call_full_context_s" in probe
+      and len(probed.history) == 4 and "probe::" not in json.dumps(probed.history),
+      f"{probe.get('answers')} for {asked[:2]}; context sent {sent}")
 system = model.requests[0]["messages"][0]["content"]
 asks = [r["messages"][-1]["content"] for r in model.requests]
 check("the model is asked for names alone; its rule of 1–3 sentences is for every other answer",
