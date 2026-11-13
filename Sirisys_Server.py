@@ -50,8 +50,9 @@ THE CRITERIA
 
 THE MODEL WATCH
   With a model, the engine watches every call as run_report.py does
-  (sirisys_measures.ModelHealth): a model that fails or answers empty would
-  leave the field on synthetic names without notice. When the watch trips, the
+  (sirisys_measures.ModelHealth). The field does not need the model (since
+  v13.5 it only labels and words), but one that fails or answers empty would,
+  unnoticed, leave the constructs without labels. When the watch trips, the
   engine pauses once and the status and the snapshots say why; Play goes on.
 
 REQUIREMENTS
@@ -270,7 +271,7 @@ class ExperimentEngine:
         concluded = [_conclusion(t.meta or {}) for t in (f.termination_log[-new:] if new > 0 else [])]
         energy = self.ss.concordancy._energy_map(f)            # what [::] selection weighs
         modes = dict.fromkeys(("OMEGA", "LEMNISCATE", "NEUTRAL"), 0)
-        layers = dict.fromkeys(("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT"), 0)
+        layers = dict.fromkeys(LAYER_NAMES, 0)
         constructs = []
         for c in f.constructs.values():
             mode = f.compute_existence_mode(c)
@@ -410,7 +411,6 @@ class ExperimentEngine:
         return {"running": self.running, "cycle": self.cycle, "T": list(self.ss.clock.T),
                 "stream": self.stream if self.stream is not None else "live",
                 "cycle_delay_ms": self.cycle_delay_ms,
-                "llm_active": llm.available, "llm": repr(llm),
                 "model": {"backend": llm.backend, "name": llm.model, "active": llm.available,
                           "watch": self._model_watch()},
                 "mode": "experiment", "profile": self.profile, "run": self.run_dir.name,

@@ -143,7 +143,7 @@ Space works right after a click on any button. A button reached with the keyboar
 
 The glossary (section VIII) defines every counter.
 
-**Event Log** (right). Products of `[::]`, cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal, and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
+**Event Log** (right). Products of `[::]` (unfolded, each by its key and, with a model, its label), cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal, and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
 
 **Pointing at a construct** shows its kind, layer, witness, energy, umbragiac score, banked exchange, Vc, existence mode, chirality, what it crystallized as, Lagrangian tag, proofs and the T it was born at.
 
@@ -197,7 +197,7 @@ Its left panel folds section by section, as in the live view.
 
 **Opening.** *Open state.json…* (or O), or drop the files anywhere on the page. A run folder's `state.json` is the usual file; the framework's own `sirisys_v13_state.json` (§8) opens too.
 
-**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first name that contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how much it has exchanged of the quantum it closes at (12). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
+**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first construct whose key or label contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how much it has exchanged of the quantum it closes at (12). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
 
 **Several files of one instance** make a timeline: a slider, ◀ ▶ (or ← →) and Play, about one state per second. Stepping forward, a ring marks each construct the previous state did not hold, and *Since the previous file* gives the cycles, born, concluded, crystallized and the population, from the two files' own totals. Files of different runs are shown, with a warning and no counts between them.
 

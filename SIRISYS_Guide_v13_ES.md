@@ -143,7 +143,7 @@ Espacio funciona justo después de hacer clic en cualquier botón. Un botón al 
 
 El glosario (sección VIII) define cada contador.
 
-**Event Log** (derecha). Productos de `[::]`, colapsos cúsicos, conclusiones, narración, las preguntas en que el modelo formula los acercamientos al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
+**Event Log** (derecha). Productos de `[::]` (al desplegarlos, cada uno por su clave y, con modelo, su etiqueta), colapsos cúsicos, conclusiones, narración, las preguntas en que el modelo formula los acercamientos al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
 
 **Al señalar un constructo** se ven su tipo, capa, testigo, energía, puntuación umbragíaca, intercambio acumulado, Vc, modo de existencia, quiralidad, como qué cristalizó, etiqueta lagrangiana, pruebas y el T en que nació.
 
@@ -197,7 +197,7 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 
 **Abrir.** *Open state.json…* (u O), o suelta los archivos en cualquier punto de la página. Lo habitual es el `state.json` de una carpeta de ejecución; también se abre el `sirisys_v13_state.json` del propio framework (§8).
 
-**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer nombre que contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones; una relación BOTH dice además cuánto ha intercambiado del cuanto al que se cierra (12). Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
+**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer constructo cuya clave o etiqueta contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones; una relación BOTH dice además cuánto ha intercambiado del cuanto al que se cierra (12). Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
 
 **Varios archivos de una misma instancia** forman una línea de tiempo: un deslizador, ◀ ▶ (o ← →) y Play, a un estado por segundo aproximadamente. Al avanzar, un anillo marca cada constructo que el estado anterior no tenía, y *Since the previous file* da los ciclos, nacidos, concluidos, cristalizados y la población, a partir de los totales de los dos archivos. Los archivos de ejecuciones distintas se muestran, con un aviso y sin cuentas entre ellos.
 

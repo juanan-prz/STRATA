@@ -534,7 +534,7 @@
       <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
     </div>
     <div class="ctrl-group floating">
-      <input class="search" id="search" list="names" placeholder="find a construct…" aria-label="find a construct by name" autocomplete="off">
+      <input class="search" id="search" list="names" placeholder="find a construct…" aria-label="find a construct by key or label" autocomplete="off">
       <datalist id="names"></datalist>
     </div>
   </div>
@@ -809,7 +809,7 @@ function deriveView(state, file) {
   const field = state.field, clock = state.clock;
   const view = {
     state, file, constructs: new Map(), edges: field.edges, edgesOf: new Map(),
-    mode: new Map(), vc: new Map(), dominant: new Map(), questions: new Set(), percepts: new Set(),
+    mode: new Map(), vc: new Map(), dominant: new Map(), approached: new Set(), percepts: new Set(),
     ops: new Map(),                                 // product name → the [::] that made it
     carriers: new Map(PROOF_RELATIONS.map(r => [r, new Set()])),   // relation → whose saved proofs carry it
   };
@@ -817,7 +817,7 @@ function deriveView(state, file) {
   for (const e of field.edges) {
     view.edgesOf.get(e.src)?.push(e);
     if (e.tgt !== e.src) view.edgesOf.get(e.tgt)?.push(e);
-    if (e.src === 'I::Am' && e.rel === 'APPROACHES') view.questions.add(e.tgt);
+    if (e.src === 'I::Am' && e.rel === 'APPROACHES') view.approached.add(e.tgt);
     if (e.src === 'SYSTEM' && e.rel === 'PERCEIVES') view.percepts.add(e.tgt);
   }
   for (const op of state.ops_log || []) view.ops.set(op.z, op);
@@ -833,13 +833,16 @@ function deriveView(state, file) {
   return view;
 }
 
-// What a construct is, beyond its layer (as in the live view)
+const APPROACH = 'SOMBUNAL::approach@';   // the key of the I's approach to the Sombunal, once per breath
+
+// What a construct is, beyond its layer (as in the live view); up to v13.4 the I
+// approached the Sombunal through the model's questions, which entered as constructs
 function kindOf(name, c, view) {
   const kind = [];
   if (ZERO_POINTS.has(name)) kind.push('zero point');
   else if (ANCHORS.has(name)) kind.push(name === 'SYSTEM' ? 'anchor · perception channel' : 'anchor');
   if (c.conflict) kind.push('conflict');
-  if (view.questions.has(name) || name.startsWith('SOMBUNAL::approach@')) kind.push('Sombunal approach');
+  if (name.startsWith(APPROACH) || view.approached.has(name)) kind.push('Sombunal approach');
   if (c.layer === APPARENT) kind.push(ZERO_POINTS.has(name) ? 'universal' : 'exchangeable');
   return kind.join(' · ');
 }
@@ -1357,8 +1360,10 @@ function renderBreakdowns(t) {
   renderLagrangian(view.state.field.constructs);
   for (const l of LAYERS) filterCounts.layer[l].textContent = t.layers[l];
   for (const s of STATES) filterCounts.state[s].textContent = t.states[s];
-  $('names').replaceChildren(...Array.from(view.constructs.keys()).sort().map(name => {
-    const option = el('option'); option.value = name; return option;
+  $('names').replaceChildren(...Array.from(view.constructs).sort(([a], [b]) => a < b ? -1 : 1).map(([name, c]) => {
+    const option = el('option'); option.value = name;
+    if (c.label) option.label = c.label;
+    return option;
   }));
 }
 
@@ -1381,12 +1386,14 @@ function kv(key, value, title) {
   row.append(...spaced([el('span', 'k', key), v]));
   return row;
 }
-// A construct named in the inspector: a link when it is in the field; otherwise its
-// name, and, where it could be expected there, that it no longer is
+// A construct named in the inspector: a link when it is in the field, by its label if a
+// model gave one (its key on hover); otherwise its key, and, where it could be expected
+// there, that it no longer is
 function nameRef(name, sayGone = true) {
   if (view.constructs.has(name)) {
-    const link = el('button', 'link', name);
+    const label = view.constructs.get(name).label, link = el('button', 'link', label || name);
     link.type = 'button';
+    if (label) link.title = name;
     link.onclick = () => select(name, true);
     return link;
   }
@@ -1487,9 +1494,9 @@ function renderInspector() {
     parts.push(g);
   } else {
     parts.push(el('p', 'note', ANCHORS.has(name) ? 'An anchor: present from the start.'
-      : view.questions.has(name) ? (name.startsWith('SOMBUNAL::approach@')
-          ? "The I's approach to the Sombunal, once per breath (TMC p.14); a model, if present, words it as a question (its label)."
-          : 'A question the intermediary put to the Sombunal: it entered the field as a construct (up to v13.4).')
+      : name.startsWith(APPROACH)
+        ? "The I's approach to the Sombunal, once per breath (TMC p.14); a model, if present, words it as a question (its label)."
+      : view.approached.has(name) ? 'A question the intermediary put to the Sombunal: it entered the field as a construct (up to v13.4).'
       : view.percepts.has(name) ? 'A percept: it entered the field from SYSTEM.'
       : 'Not among the last 50 operations this file keeps.'));
   }
@@ -1513,7 +1520,7 @@ function renderInspector() {
 
 // With nothing selected: how to inspect, and the field's last crystallizations and conclusions
 function overviewParts() {
-  const field = view.state.field, parts = [el('p', 'note', 'Click a construct, or find it by name.')];
+  const field = view.state.field, parts = [el('p', 'note', 'Click a construct, or find it by its key or label.')];
   const crystals = (field.apparent_log || []).slice(-12).reverse();
   if (crystals.length) {
     parts.push(el('h3', null, 'Last crystallized'));
@@ -1713,16 +1720,17 @@ $('btn-next').onclick = () => step(1);
 $('btn-play').onclick = togglePlaying;
 $('tl-slider').oninput = () => { stopPlaying(); show(Number($('tl-slider').value)); };
 
-// Find: a name picked from the list or typed in full selects at once; Enter finds the first
-// name that contains what was typed, and says so when none does
+// Find: a key picked from the list or typed in full selects at once; Enter finds the first
+// construct whose key or label contains what was typed, and says so when none does
 const search = $('search');
 function find() {
   const text = search.value.trim();
   if (!view || !text) return;
+  const sought = text.toLowerCase();
   const found = view.constructs.has(text) ? text
-    : Array.from(view.constructs.keys()).find(n => n.toLowerCase().includes(text.toLowerCase()));
+    : Array.from(view.constructs).find(([n, c]) => `${n} ${c.label || ''}`.toLowerCase().includes(sought))?.[0];
   search.setAttribute('aria-invalid', String(!found));
-  search.title = found ? '' : 'no construct has this in its name';
+  search.title = found ? '' : 'no construct has this in its key or label';
   if (found) select(found, true);
 }
 search.addEventListener('input', () => {

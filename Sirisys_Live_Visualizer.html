@@ -486,7 +486,8 @@
   .log-entry.event summary::-webkit-details-marker { display: none; }
   .log-entry.event summary::after { content: ' ▸'; color: var(--text-dim); }
   .log-entry.event[open] summary::after { content: ' ▾'; }
-  .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; white-space: pre-line; }
+  .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; }
+  .log-entry .names .label { color: var(--text); }   /* a model's label; then the field's key, as the line goes on */
   .log-entry.cussive { border-left-color: var(--layer-UNIT_1); color: var(--layer-UNIT_1); }
   .log-entry.cussive.crystal { border-left-color: var(--layer-APPARENT); background: var(--apparent-soft); color: var(--layer-APPARENT); }
   .log-entry.terminate { border-left-color: var(--concluded); color: var(--text-muted); }
@@ -1204,7 +1205,7 @@ function renderModel(watch) {
   let text, title, tone = '';
   if (!model.active) {
     text = model.backend === 'none' ? 'no model' : 'model unavailable';
-    title = 'constructs are named synthetically'
+    title = 'no labels: the field names what it produces'
       + (model.backend === 'none' ? '' : ` (degraded: the ${model.backend} model was not available at start)`);
   } else {
     text = 'model ' + model.name;
@@ -1630,16 +1631,23 @@ function addEntry(entry, cycle, content, kind, into = entry) {
   while (ofKind.length > LOG_KEPT) ofKind[0].remove();
   if (following) logBox.scrollTop = logBox.scrollHeight;
 }
-// A cycle's [::] products and cussive collapses; the names given to the products
-// (by the model, when there is one) open beneath it
+// A cycle's [::] products and cussive collapses; the products open beneath it, each
+// by its key and, with a model, its label (one that concluded within the cycle, by its key)
 function logCycle(snap, crystallized) {
   let summary = `[::] ${snap.events}`;
   if (snap.promoted > 0) summary += ` · cussive ${snap.promoted}`;
   if (crystallized.length) summary += ` · crystallized ${crystallized.length}`;
   const names = snap.emergent_names || [];
   if (!names.length) { log(snap.cycle, summary, 'event'); return; }
-  const entry = el('details', 'log-entry event'), head = el('summary');
-  entry.append(head, el('div', 'names', names.join('\n')));
+  const labels = new Map(snap.field.constructs.filter(c => c.label).map(c => [c.name, c.label]));
+  const entry = el('details', 'log-entry event'), head = el('summary'), list = el('div', 'names');
+  for (const n of names) {
+    const line = el('div');
+    if (labels.has(n)) line.append(el('span', 'label', labels.get(n)), ' · ');
+    line.append(n);
+    list.append(line);
+  }
+  entry.append(head, list);
   addEntry(entry, snap.cycle, summary, 'event', head);
 }
 function logSnapshot(snap, crystallized) {
@@ -1663,7 +1671,7 @@ function logSnapshot(snap, crystallized) {
   if (watch && watch.tripped && !watchReported) {
     watchReported = true;
     log(snap.cycle, `model watch tripped: ${watch.reason}. The server paused; Play goes on, `
-                  + 'with constructs named synthetically while the model fails.', 'model');
+                  + 'the constructs without labels while the model fails.', 'model');
   }
 }
 
