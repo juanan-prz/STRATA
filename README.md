@@ -67,7 +67,7 @@ The glossary defines every term with its source.
 Research project under active development.
 
 - On synthetic percepts and without a model, the field meets its self-adjustment criteria: durable crystals every breath, little flicker, bounded size, flat memory and cost. On a machine's real percepts it held over 10,000 cycles: the lower crystallization of the first windows was the genesis.
-- With a local model (llama3.1, v13.4) the field met its criteria, and the model's meaning made no measurable difference to the dynamics. Since v13.5 the model only translates: its names are labels, and the approach to the Sombunal is a law of the field.
+- With a local model (llama3.1, v13.4) the field met its criteria, and the model's meaning made no measurable difference to the dynamics. Since v13.5 the model only translates: its names are labels, and the approach to the Sombunal is a law of the field. On a Mac with v13.5 and real percepts, the field met its criteria over 10,000 cycles, and a life with the model (363 calls), replayed without it, sealed the same ledger.
 - Open questions are recorded in the framework header as WALLS: substrate (digital, not analog), self-sustenance, agency, and relations versus events. How the approach to the Sombunal should weigh on the field (cadence, edge state, weight) and the role of the Lagrangian points are open design decisions; the Lagrangian points tag constructs and proofs but do not yet govern any decision.
 
 -----

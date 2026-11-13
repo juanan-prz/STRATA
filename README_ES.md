@@ -67,7 +67,7 @@ El glosario define cada término con su fuente.
 Proyecto de investigación en desarrollo activo.
 
 - Con perceptos sintéticos y sin modelo, el campo cumple sus criterios de autoajuste: cristales duraderos en cada respiración, poco parpadeo, tamaño acotado, memoria y coste planos. Con los perceptos reales de una máquina se sostuvo durante 10 000 ciclos: la cristalización más baja de las primeras ventanas era la génesis.
-- Con un modelo local (llama3.1, v13.4), el campo cumplió sus criterios, y el sentido de lo que decía el modelo no cambió la dinámica de forma medible. Desde la v13.5 el modelo solo traduce: sus nombres son etiquetas, y el acercamiento al Sombunal es una ley del campo.
+- Con un modelo local (llama3.1, v13.4), el campo cumplió sus criterios, y el sentido de lo que decía el modelo no cambió la dinámica de forma medible. Desde la v13.5 el modelo solo traduce: sus nombres son etiquetas, y el acercamiento al Sombunal es una ley del campo. En un Mac, con la v13.5 y perceptos reales, el campo cumplió sus criterios durante 10 000 ciclos, y una vida con el modelo (363 llamadas), repetida sin él, selló el mismo ledger.
 - Las preguntas abiertas figuran en la cabecera del framework como WALLS: sustrato (digital, no analógico), autosostenimiento, agencia, y relaciones frente a eventos. Cómo debe pesar en el campo el acercamiento al Sombunal (cadencia, estado y peso de su arista) y el papel de los puntos lagrangianos son decisiones de diseño abiertas; los puntos lagrangianos etiquetan constructos y pruebas, pero aún no gobiernan ninguna decisión.
 
 -----
