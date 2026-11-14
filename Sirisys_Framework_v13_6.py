@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.5 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.6 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -39,7 +39,9 @@
 #   Exchangeable crystals. Apparents are "Exchangeable" or "Universal" (TMC
 #     p.22); Zero Points are the Universal ones, every other Apparent can be an
 #     operand and stays incontrovertible. A crystal relays a share of the
-#     tension it holds to its products (sympatic exchange, TMC p.24).
+#     tension it holds to its products (sympatic exchange, TMC p.24), and
+#     holds at most the tension of its own commitment, whenever it banked it:
+#     once collapsed it is no "free modulator" (Understanding_TMC p.81).
 #   Existence. "all [Apparents] must be [Existents]" (TMC p.22): nothing
 #     crystallizes that prune would orphan (edge_holds is the single test).
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
@@ -948,6 +950,15 @@ class ConcordancyField:
         if name in self.constructs:
             c = self.constructs[name]
             c.layer = Layer.APPARENT
+            # A crystal holds at most the tension of its own commitment, also
+            # what it banked before committing: once collapsed it "cannot
+            # re-participate in the symbolic field as a free modulator"
+            # (Understanding_TMC p.81). Without this, a construct that banked
+            # exchanges before crystallizing held up to two of them (~24) and
+            # relayed tens of times what any other crystal can, by the order of
+            # the steps alone. The excess is held by no one, like the share an
+            # anchor or a full crystal cannot hold (Level 3).
+            c.recursion_exchanged = min(THRESHOLD_APPARENT, c.recursion_exchanged)
             # The tetralemmic state it crystallized in is fixed with it: an
             # Apparent is incontrovertible (TMC p.14), so its own exchanges
             # cannot rewrite what it is.

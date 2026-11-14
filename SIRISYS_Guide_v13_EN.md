@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.5 — Technical guide
+# STRATA · SIRISYS v13.6 — Technical guide
 
 [Español](SIRISYS_Guide_v13_ES.md)
 
@@ -25,7 +25,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 
 | File | Purpose |
 |---|---|
-| `Sirisys_Framework_v13_5.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
+| `Sirisys_Framework_v13_6.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
@@ -205,8 +205,8 @@ Its left panel folds section by section, as in the live view.
 In experiment mode an instance writes one `state.json`, when it ends. For a timeline, copy the state as it grows; for example, with the console demonstration, which resumes the same instance on every run:
 
 ```bash
-python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_5.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Keys.**
@@ -362,13 +362,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 It answers `ok` and the number of proofs or, for a damaged record, the position of the first proof that does not belong and why.
 
-**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_5_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
+**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_6_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_5.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_5.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
+**The framework on its own.** `python3 Sirisys_Framework_v13_6.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
 
 **Files created while running.**
 

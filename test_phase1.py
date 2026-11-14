@@ -213,6 +213,26 @@ check("a name is the first non-empty line of the model's answer: a note after it
       and S.LLMIntermediary._name_of("\n  Discordia Apparens  \n(Explanation: ...)") == "Discordia Apparens"
       and S.LLMIntermediary._name_of("") == "" and S.LLMIntermediary._name_of("x" * 300).endswith("…"),
       repr(S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering")))
+# The crystal's cap holds whenever the tension was banked (Understanding_TMC p.81; the code's own rule)
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    cs = S.new_session(S.LLMIntermediary(backend="none"))
+cs.field.add_construct("CAP::banked", S.Layer.UNIT_1)
+cs.field.constructs["CAP::banked"].recursion_exchanged = 2 * S.TetralemmaEngine.EXCHANGE_QUANTUM
+cs.field.lock_apparent("CAP::banked")
+over = 0
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    ls = S.new_session(S.LLMIntermediary(backend="none"))
+    for c in range(300):
+        S.run_cycle(ls, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
+        over += sum(1 for n, k in ls.field.constructs.items()
+                    if k.layer == S.Layer.APPARENT and k.recursion_exchanged > S.THRESHOLD_APPARENT + 1e-12)
+crystals = sum(1 for k in ls.field.constructs.values() if k.layer == S.Layer.APPARENT)
+check("a crystal holds at most the tension of its own commitment, also what it banked before committing: locked "
+      "with twice the quantum banked it keeps THRESHOLD_APPARENT, and in a 300-cycle life no crystal ever holds more",
+      cs.field.constructs["CAP::banked"].recursion_exchanged == S.THRESHOLD_APPARENT and over == 0 and crystals > 0,
+      f"{crystals} crystals at cycle 300, {over} crystal-cycles over the cap")
 check("a name is asked for without memory: its request carries the prompt alone, it leaves nothing in the "
       "thread, and the same name asked again sends the same request; the question keeps its thread",
       [len(m) - 1 for m in sent] == [1, 1, 1, 3, 1] and sent[0] == sent[4]

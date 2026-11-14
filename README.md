@@ -20,7 +20,7 @@ Author: Juan A. Pérez-Gómez.
 | Mac guide: installation and first experiments, step by step, for first-time users of the Terminal | [SIRISYS_Mac_Guide_v13_EN.pdf](SIRISYS_Mac_Guide_v13_EN.pdf) | [SIRISYS_Mac_Guide_v13_ES.pdf](SIRISYS_Mac_Guide_v13_ES.pdf) |
 | Technical glossary: every concept with its source and how the code implements it, and every counter the views show | [SIRISYS_Concepts_v13_EN.pdf](SIRISYS_Concepts_v13_EN.pdf) | [SIRISYS_Concepts_v13_ES.pdf](SIRISYS_Concepts_v13_ES.pdf) |
 
-The code is the framework (`Sirisys_Framework_v13_5.py`), an experiment server with a live view in the browser, an inspector for saved instances, tools for measured runs, and five test suites. The technical guide describes each file.
+The code is the framework (`Sirisys_Framework_v13_6.py`), an experiment server with a live view in the browser, an inspector for saved instances, tools for measured runs, and five test suites. The technical guide describes each file.
 
 -----
 
@@ -68,6 +68,7 @@ Research project under active development.
 
 - On synthetic percepts and without a model, the field meets its self-adjustment criteria: durable crystals every breath, little flicker, bounded size, flat memory and cost. On a machine's real percepts it held over 10,000 cycles: the lower crystallization of the first windows was the genesis.
 - With a local model (llama3.1, v13.4) the field met its criteria, and the model's meaning made no measurable difference to the dynamics. Since v13.5 the model only translates: its names are labels, and the approach to the Sombunal is a law of the field. On a Mac with v13.5 and real percepts, the field met its criteria over 10,000 cycles, and a life with the model (363 calls), replayed without it, sealed the same ledger.
+- Since v13.6 a crystal holds at most the tension of its own commitment, also what it banked before committing; until then a construct that banked exchanges before crystallizing could hold up to two of them and pass on tens of times what any other crystal can, by the order of the steps alone. In a pre-registered test on fresh synthetic streams and real percepts, the field kept its criteria and flickered less, at 9 % fewer durable crystals in long lives.
 - Open questions are recorded in the framework header as WALLS: substrate (digital, not analog), self-sustenance, agency, and relations versus events. How the approach to the Sombunal should weigh on the field (cadence, edge state, weight) and the role of the Lagrangian points are open design decisions; the Lagrangian points tag constructs and proofs but do not yet govern any decision.
 
 -----
