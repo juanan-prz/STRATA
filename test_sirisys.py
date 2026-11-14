@@ -2,8 +2,9 @@
 
 Determinism without a PRNG, the cost of a cycle, time that never goes back, a
 complete and tamper-evident record, resume, torn writes, a single writer,
-conflict identity across reloads, bounded memory, flat cost, and a resumed
-instance that equals an uninterrupted one.
+conflict identity across reloads, bounded memory, flat cost, a resumed
+instance that equals an uninterrupted one, and a console that resumes as every
+program does.
 No model and no network: the framework's own run(), with a fixed perception.
 Usage: python3 test_sirisys.py        (the first life lasts STEPS=40 cycles)"""
 import contextlib
@@ -86,9 +87,13 @@ check.section(f"1 · Determinism without a PRNG ({STEPS} cycles)")
 source = FRAMEWORK.read_text(encoding="utf-8")
 check("no PRNG in the framework",
       not re.search(r"^\s*(import|from)\s+(random|secrets)\b|\brandom\.\w+\(", source, re.M))
+named = re.search(r"_v(\d+)_(\d+)\.py$", FRAMEWORK.name)
+check("one version, the file name's: no string in the framework writes a version of its own",
+      bool(named) and getattr(fresh_framework(), "__version__", None) == f"{named[1]}.{named[2]}"
+      and not re.search(r'"[^"\n]*\bv\d+\.\d+[^"\n]*"', source), FRAMEWORK.name)
 home, twin_home = scratch(), scratch()
 m = framework()
-(field, *_), seconds, _ = live(m, home, STEPS)
+(field, _, _, operator, *_), seconds, _ = live(m, home, STEPS)
 twin = framework()
 (twin_field, *_), _, _ = live(twin, twin_home, STEPS)
 twin.get_ledger().close()
@@ -119,6 +124,8 @@ check("every snapshot proof is in the ledger", all(p["chain_hash"] in sealed for
       f"({len(records) - len(snapshot)} only in ledger)")
 check("snapshot ledger head == ledger file head",
       state["ledger"]["head"] == records[-1]["chain_hash"] and state["ledger"]["count"] == len(records))
+check("the snapshot keeps the operations the instance keeps (a resumed instance reads what it read)",
+      state["ops_log"] == json.loads(json.dumps(operator.ops_log)), f"{len(state['ops_log'])} operations")
 
 check.section("5 · Tampering is detected")
 v = m.verify_ledger(ledger)
@@ -250,5 +257,28 @@ def head_after(total, cut=None):
 straight, with_cut = head_after(200), head_after(200, cut=97)
 check("same ledger head after 200 cycles, with or without a cut at cycle 97", straight == with_cut,
       straight[:16])
+
+check.section("12 · The console resumes as every program does")
+home12, m12 = scratch(), framework()
+live(m12, home12, 3)
+m12.get_ledger().close()
+state12 = home12 / m12.STATE_FILE
+check("run() keeps the previous record and the high-water mark",
+      state12.with_name(state12.name + ".prev").exists() and state12.with_name(state12.name + ".hwm").exists())
+state12.write_text("{ damaged", encoding="utf-8")
+m12 = framework()
+_, _, printed = live(m12, home12, 2)
+m12.get_ledger().close()
+check("a damaged record resumes from the previous one, never from a fresh field",
+      f"({state12.name}.prev)" in printed and "First boot" not in printed
+      and m12.verify_ledger(home12 / m12.LEDGER_FILE)["ok"])
+for record in home12.glob(state12.name + "*"):
+    record.unlink()
+m12 = framework()
+kept = len(read_jsonl(home12 / m12.LEDGER_FILE))
+check("a ledger whose state is gone is never written over by a new field",
+      raises(lambda: live(m12, home12, 1), m12.ContinuityError, "no state record")
+      and len(read_jsonl(home12 / m12.LEDGER_FILE)) == kept, f"{kept} proofs kept")
+m12.get_ledger().close()
 
 check.finish()
