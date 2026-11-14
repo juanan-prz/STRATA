@@ -184,15 +184,31 @@ class ExperimentEngine:
             self.life = LifeCriteria(S)
         except ImportError:
             log.warning("sirisys_measures.py not found: the criteria are not measured")
-        self.health = None                      # the model watch; watching changes nothing in the calls
-        if self.ss.llm.available:
-            # Only a run with a model needs the watch: importing this file does not
-            from sirisys_measures import ModelHealth
-            self.health = ModelHealth()
-            self.health.attach(self.ss.llm)
+        self._watch_model()
         self._paused_for_model = False
         log.info("Experiment instance %s (framework %s, LLM %s)",
                  self.run_dir.name, S.__sirisys_file__, self.ss.llm)
+
+    def _watch_model(self) -> None:
+        """With a model: the watch, and what the model says (the whole of each answer).
+        Neither changes the calls."""
+        self.health = self.said = None
+        if self.ss.llm.available:
+            # Only a run with a model needs them: importing this file does not
+            from sirisys_measures import ModelHealth, Translations
+            self.health = ModelHealth()
+            self.health.attach(self.ss.llm)
+            self.said = Translations()
+            self.said.attach(self.ss.llm)
+
+    def _whole_question(self) -> str | None:
+        """The cycle's Sombunal question as the model wrote it: its label, the snapshot's
+        `question`, is cut to MAX_NODE_NAME characters. What the model said is kept one cycle."""
+        if not self.said:
+            return None
+        asked = [answer for _, kind, _, _, answer in self.said.entries if kind == "question"]
+        self.said.entries.clear()
+        return asked[-1] if asked else None
 
     def save(self) -> None:
         with quiet():
@@ -237,7 +253,8 @@ class ExperimentEngine:
                 self._paused_for_model, self.running = True, False   # once: Play goes on
                 log.warning("The model watch tripped: %s. Paused: press Play to go on regardless.",
                             self.health.reason)
-            snapshot = self._snapshot(r, [line for line in printed.getvalue().splitlines() if line.strip()], before)
+            console = [line for line in printed.getvalue().splitlines() if line.strip()]
+            snapshot = self._snapshot(r, console, before, self._whole_question())
             if self.life:
                 self.life.after_cycle(self.ss, self.cycle, field_seconds)
                 if (self.cycle + 1) % CRITERIA_EVERY == 0:
@@ -252,7 +269,7 @@ class ExperimentEngine:
                 loop.call_soon_threadsafe(event.set)
 
     # ── snapshots (the visualizer reads these keys: add, never rename) ───
-    def _snapshot(self, r: dict, console: list[str], before: set) -> dict:
+    def _snapshot(self, r: dict, console: list[str], before: set, question_full: str | None) -> dict:
         f = self.ss.field
         new = f.terminations_total - self._terminations_seen
         self._terminations_seen = f.terminations_total
@@ -297,6 +314,7 @@ class ExperimentEngine:
             "conflicts": r["conflict_count"], "closures": r["closures"],
             "both_edges": r["both_count"], "reincarnations": f.reincarnations,
             "action": r["action"], "narration": r["narration"], "question": r["question"],
+            "question_full": question_full,
             "breath": f.breaths, "contraction": r["contraction"], "tolerance": round(f.tolerance, 3),
             "concluded": concluded,
             "metabolism": self._metabolism(before, concluded, r["promoted"], crystallized),

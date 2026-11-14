@@ -683,10 +683,24 @@ said.cycle = 7
 with quiet():
     shown = wordy.question_sombunal(0.5)
 (cycle, kind, of, label, answer), = said.entries
-check("the reports keep the model's whole answer beside the label the construct shows",
+# The live view too: each snapshot carries the cycle's whole question beside its label
+with quiet():
+    talker = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    talker.ss.llm = Wordy(backend="none")
+    talker._watch_model()
+    talker.running = True
+    wait_for(lambda: talker.cycle >= 30)
+    talker.running = False
+    time.sleep(0.2)
+live_questions = [s for s in talker.drain() if s["question"]]
+talker.shutdown()
+check("the reports and the live view keep the model's whole answer beside the label the construct shows",
       (cycle, kind, of) == (7, "question", []) and label == shown == S.LLMIntermediary._clip(answer)
-      and label.endswith("…") and answer.endswith("what it reveals."),
-      f"label {len(label)} characters, answer {len(answer)}")
+      and label.endswith("…") and answer.endswith("what it reveals.")
+      and live_questions and not talker.said.entries
+      and all(s["question_full"] == answer and s["question"] == label for s in live_questions),
+      f"label {len(label)} characters, answer {len(answer)}; "
+      f"{len(live_questions)} questions in the live view's snapshots")
 check("the questions-only arm asks the model nothing but the Sombunal questions, as often as the full arm",
       set(arms["questions"]["llm"]["health"]["calls_by_kind"]) == {"sombunal_question"}
       and asked["questions"] == asked["all"] > 0, f"{asked['questions']} questions in both")

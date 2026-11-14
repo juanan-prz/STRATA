@@ -144,7 +144,7 @@ Space works right after a click on any button. A button reached with the keyboar
 
 The glossary (section VIII) defines every counter.
 
-**Event Log** (right). Products of `[::]` (unfolded, each by its key and, with a model, its label), cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal, and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
+**Event Log** (right). Products of `[::]` (unfolded, each by its key and, with a model, its label), cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal (a question longer than a label shows its label and opens, by its arrow ▸, to the whole of it), and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
 
 **Pointing at a construct** shows its kind, layer, witness, energy, umbragiac score, banked exchange, Vc, existence mode, chirality, what it crystallized as, Lagrangian tag, proofs and the T it was born at.
 

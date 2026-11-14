@@ -144,7 +144,7 @@ Espacio funciona justo después de hacer clic en cualquier botón. Un botón al 
 
 El glosario (sección VIII) define cada contador.
 
-**Event Log** (derecha). Productos de `[::]` (al desplegarlos, cada uno por su clave y, con modelo, su etiqueta), colapsos cúsicos, conclusiones, narración, las preguntas en que el modelo formula los acercamientos al Sombunal y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
+**Event Log** (derecha). Productos de `[::]` (al desplegarlos, cada uno por su clave y, con modelo, su etiqueta), colapsos cúsicos, conclusiones, narración, las preguntas en que el modelo formula los acercamientos al Sombunal (una pregunta más larga que una etiqueta muestra su etiqueta y se despliega, con su flecha ▸, entera) y avisos del modelo. Un clic en la etiqueta de un tipo lo oculta o lo muestra; se guardan las 150 entradas más recientes de cada tipo.
 
 **Al señalar un constructo** se ven su tipo, capa, testigo, energía, puntuación umbragíaca, intercambio acumulado, Vc, modo de existencia, quiralidad, como qué cristalizó, etiqueta lagrangiana, pruebas y el T en que nació.
 

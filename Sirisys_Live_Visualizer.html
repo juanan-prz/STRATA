@@ -482,11 +482,13 @@
     border-radius: 0 var(--r-sm) var(--r-sm) 0;
   }
   .log-entry.event { border-left-color: var(--accent); }
-  .log-entry.event summary { cursor: pointer; list-style: none; }
-  .log-entry.event summary::-webkit-details-marker { display: none; }
-  .log-entry.event summary::after { content: ' ▸'; color: var(--text-dim); }
-  .log-entry.event[open] summary::after { content: ' ▾'; }
+  details.log-entry summary { cursor: pointer; list-style: none; }   /* an entry that opens by its arrow */
+  details.log-entry summary::-webkit-details-marker { display: none; }
+  details.log-entry summary::after { content: ' ▸'; color: var(--text-dim); }
+  details.log-entry[open] summary::after { content: ' ▾'; }
   .log-entry .names { margin: 2px 0 0 var(--sp-3); color: var(--text-muted); font-size: 10px; }
+  details.log-entry[open] .cut { display: none; }       /* a question: its label closed, the whole of it open */
+  .log-entry .whole { margin: 2px 0 0 var(--sp-3); white-space: pre-wrap; }
   .log-entry .names .label { color: var(--text); }   /* a model's label; then the field's key, as the line goes on */
   .log-entry.cussive { border-left-color: var(--layer-UNIT_1); color: var(--layer-UNIT_1); }
   .log-entry.cussive.crystal { border-left-color: var(--layer-APPARENT); background: var(--apparent-soft); color: var(--layer-APPARENT); }
@@ -1718,6 +1720,16 @@ function logCycle(snap, crystallized) {
   entry.append(head, list);
   addEntry(entry, snap.cycle, summary, 'event', head);
 }
+// The question that words the I's approach to the Sombunal. Its label is cut to a construct
+// label's length; when the model said more, the entry opens, by its arrow, to the whole of it.
+function logQuestion(snap) {
+  const whole = snap.question_full;
+  if (!whole || whole === snap.question) { log(snap.cycle, 'Sombunal ?  ' + snap.question, 'sombunal'); return; }
+  const entry = el('details', 'log-entry sombunal'), head = el('summary'), text = el('span', null, 'Sombunal ?  ');
+  text.append(el('span', 'cut', snap.question));
+  entry.append(head, el('div', 'whole', whole.trim()));
+  addEntry(entry, snap.cycle, text, 'sombunal', head);
+}
 function logSnapshot(snap, crystallized) {
   if (snap.events > 0 || snap.promoted > 0) logCycle(snap, crystallized);
   // From the framework's console: each cussive collapse, and what went wrong with the model
@@ -1734,7 +1746,7 @@ function logSnapshot(snap, crystallized) {
   // With a model: the Intermediary's narration (every 2nd cycle) and the question
   // in which it words the I's approach to the Sombunal (once per breath)
   if (snap.narration) log(snap.cycle, 'narration  ' + snap.narration, 'narration');
-  if (snap.question) log(snap.cycle, 'Sombunal ?  ' + snap.question, 'sombunal');
+  if (snap.question) logQuestion(snap);
   const watch = snap.model_watch;
   if (watch && watch.tripped && !watchReported) {
     watchReported = true;
