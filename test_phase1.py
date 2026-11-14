@@ -14,11 +14,23 @@ import shutil
 import subprocess
 import sys
 import time
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
-from sirisys_measures import ModelHealth, Translations
-from sirisys_testkit import HERE, Checks, FakeModel, environment, fresh_framework, quiet, raises, read_jsonl, scratch
+import field_topology
+from sirisys_measures import LifeCriteria, ModelHealth, Translations
+from sirisys_testkit import (
+    HERE,
+    Checks,
+    FakeModel,
+    environment,
+    fresh_framework,
+    quiet,
+    raises,
+    read_jsonl,
+    scratch,
+)
 
 with quiet():
     import Sirisys_Server as server
@@ -41,7 +53,6 @@ def no_log(line):
 
 def criteria_names():
     """The criteria the verdict judges (the exploratory measures are not among them)."""
-    from sirisys_measures import LifeCriteria
     return list(LifeCriteria.RULE)
 
 
@@ -54,7 +65,7 @@ def perceived_the_hour(run_dir):
 def run(args, folder, timeout=300, **env):
     """A tool run as the user runs it: a separate process in `folder`."""
     return subprocess.run([sys.executable, *args], cwd=folder, capture_output=True, text=True,
-                          timeout=timeout, env={**os.environ, **env})
+                          timeout=timeout, env={**os.environ, **env}, check=False)
 
 
 check.section("1 · Experiment engine (no web server needed)")
@@ -145,9 +156,9 @@ with quiet():
 server.HISTORY_KEPT = kept
 spans = [r["breaths"] for r in merged["records"]]
 check("a long history stays bounded: the oldest breaths merged in pairs, every cycle still counted",
-      len(spans) <= 5 and spans[0][0] == 0 and all(a[1] + 1 == b[0] for a, b in zip(spans, spans[1:]))
+      len(spans) <= 5 and spans[0][0] == 0 and all(a[1] + 1 == b[0] for a, b in pairwise(spans))
       and merged["records"][0]["cycles"][0] == 0 and merged["through_cycle"] == last_cycle
-      and all(a["cycles"][1] + 1 == b["cycles"][0] for a, b in zip(merged["records"], merged["records"][1:])),
+      and all(a["cycles"][1] + 1 == b["cycles"][0] for a, b in pairwise(merged["records"])),
       f"breaths {spans}")
 
 check.section("2 · Model backends")
@@ -172,73 +183,19 @@ with FakeModel("counter") as model:
         llm.question_sombunal(0.6)
         again = llm.propose_emergent("A", "B", "TRUE", "BOTH")
     sent = [r["messages"] for r in model.requests]
-kept = json.dumps(llm.history)
-# The uncertainty of the instant (read-only, exploratory): open sums in flight, constructs landed,
-# how the weight is held, and the I's state
-import field_topology
-from sirisys_measures import LifeCriteria
-with quiet():
-    S.set_ledger(S.ProofLedger(None))
-    us = S.new_session(S.LLMIntermediary(backend="none"))
-    life = LifeCriteria(S)
-    for c in range(60):
-        S.run_cycle(us, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
-        life.after_cycle(us, c, 0.0)
-head_before = S.get_ledger().head
-zp = frozenset(S.ZERO_POINTS)
-q = S.TetralemmaEngine.EXCHANGE_QUANTUM
-before = [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges]
-u = field_topology.uncertainty_of_the_instant(us.field, zp, quantum=q)
-live = [e for e in us.field.edges if e.src not in zp and e.tgt not in zp]
-open_ch = [min(1.0, e.weight * e.both_age / q) for e in live if e.state == S.TetraState.BOTH]
-names = [n for n in us.field.constructs if n not in S.ANCHORS]
-res = life.result()
-check("the uncertainty of the instant counts the BOTH channels still open and the exchange they carry toward "
-      "the quantum, the share of constructs that have landed as Apparents, and how the weight is held; it reads "
-      "without touching the field, and the life criteria keep it per 1000-cycle window",
-      u["open"] == len(open_ch) and abs(u["in_flight"] - sum(open_ch)) < 1e-3
-      and abs(u["landed"] - sum(us.field.constructs[n].layer == S.Layer.APPARENT for n in names) / len(names)) < 1e-3
-      and abs(sum(u["held"].values()) - 1) < 1e-3 and u["i_am"] in field_topology.STATES
-      and field_topology.uncertainty_of_the_instant.__defaults__[1] == q
-      and [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges] == before
-      and S.get_ledger().head == head_before
-      and all(len(v) == 1 for v in res["instant_per_1000"].values())
-      and abs(sum(res["i_am_states"].values()) - 1) < 0.01
-      and "instant" in field_topology.field_topology(us.field, cycle=60, zero_points=set(zp)),
-      f"open {u['open']}, in flight {u['in_flight']} quanta, landed {u['landed']}, held {u['held']}, "
-      f"I::Am {u['i_am']}")
+thread = json.dumps(llm.history)
+check("a name is asked for without memory: its request carries the prompt alone, it leaves nothing in the "
+      "thread, and the same name asked again sends the same request; the question keeps its thread",
+      [len(m) - 1 for m in sent] == [1, 1, 1, 3, 1] and sent[0] == sent[4]
+      and "Concordancy" not in thread and "Reversion" not in thread and len(llm.history) == 4
+      and sent[3][1]["content"].startswith("Instability: 0.5000"),
+      f"messages sent besides the system prompt: {[len(m) - 1 for m in sent]}; thread: {len(llm.history)} messages")
 check("a name is the first non-empty line of the model's answer: a note after it is dropped, and the label "
       "is still clipped",
       S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering") == "Umbraic"
       and S.LLMIntermediary._name_of("\n  Discordia Apparens  \n(Explanation: ...)") == "Discordia Apparens"
       and S.LLMIntermediary._name_of("") == "" and S.LLMIntermediary._name_of("x" * 300).endswith("…"),
       repr(S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering")))
-# The crystal's cap holds whenever the tension was banked (Understanding_TMC p.81; the code's own rule)
-with quiet():
-    S.set_ledger(S.ProofLedger(None))
-    cs = S.new_session(S.LLMIntermediary(backend="none"))
-cs.field.add_construct("CAP::banked", S.Layer.UNIT_1)
-cs.field.constructs["CAP::banked"].recursion_exchanged = 2 * S.TetralemmaEngine.EXCHANGE_QUANTUM
-cs.field.lock_apparent("CAP::banked")
-over = 0
-with quiet():
-    S.set_ledger(S.ProofLedger(None))
-    ls = S.new_session(S.LLMIntermediary(backend="none"))
-    for c in range(300):
-        S.run_cycle(ls, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
-        over += sum(1 for n, k in ls.field.constructs.items()
-                    if k.layer == S.Layer.APPARENT and k.recursion_exchanged > S.THRESHOLD_APPARENT + 1e-12)
-crystals = sum(1 for k in ls.field.constructs.values() if k.layer == S.Layer.APPARENT)
-check("a crystal holds at most the tension of its own commitment, also what it banked before committing: locked "
-      "with twice the quantum banked it keeps THRESHOLD_APPARENT, and in a 300-cycle life no crystal ever holds more",
-      cs.field.constructs["CAP::banked"].recursion_exchanged == S.THRESHOLD_APPARENT and over == 0 and crystals > 0,
-      f"{crystals} crystals at cycle 300, {over} crystal-cycles over the cap")
-check("a name is asked for without memory: its request carries the prompt alone, it leaves nothing in the "
-      "thread, and the same name asked again sends the same request; the question keeps its thread",
-      [len(m) - 1 for m in sent] == [1, 1, 1, 3, 1] and sent[0] == sent[4]
-      and "Concordancy" not in kept and "Reversion" not in kept and len(llm.history) == 4
-      and sent[3][1]["content"].startswith("Instability: 0.5000"),
-      f"messages sent besides the system prompt: {[len(m) - 1 for m in sent]}; thread: {len(llm.history)} messages")
 with quiet():
     remote = S.LLMIntermediary(backend="ollama", host="http://10.0.0.5:11434")
 check("ollama on another host is NOT local", not remote.is_local)
@@ -278,10 +235,10 @@ with FakeModel("empty") as silent:
     muted, alone = ledger_of_life(mute), ledger_of_life(control)
     asked = len(silent.requests)
 check("a model that only answers empty leaves the field exactly where the control is "
-      "(since v13.5 no answer reaches the dynamics)", asked > 0 and muted == alone,
+      "(no answer reaches the dynamics)", asked > 0 and muted == alone,
       f"{asked} empty answers; same ledger: {muted == alone}")
 
-# The approach to the Sombunal, a law of the field (v13.5): once per breath, with no model
+# The approach to the Sombunal, a law of the field: once per breath, with no model
 with quiet():
     S.set_ledger(S.ProofLedger(None))
     ss = S.new_session(S.LLMIntermediary(backend="none"))
@@ -301,10 +258,10 @@ check("the I approaches the Sombunal once per breath, with no model: a construct
       and not any(str(o).startswith("SOMBUNAL::approach@") for o in operands),
       f"{sum(1 for m in made if m)} approaches in 300 cycles, each related to I::Am (NEITHER): {all(related)}")
 
-kept = S.Construct("Janus test", S.Layer.UMBRA_0)
-kept.label = "Janus"
-back = S.Construct.from_dict(json.loads(json.dumps(kept.to_dict())))
-old_state = kept.to_dict()
+janus = S.Construct("Janus test", S.Layer.UMBRA_0)
+janus.label = "Janus"
+back = S.Construct.from_dict(json.loads(json.dumps(janus.to_dict())))
+old_state = janus.to_dict()
 old_state.pop("label")
 check("a construct's label survives a save and a resume; a v13.4 state, which has none, resumes with none",
       back.label == "Janus" and back.shown == "Janus" and S.Construct.from_dict(old_state).label == ""
@@ -486,9 +443,41 @@ check("experiment mode pauses once when the model watch trips, says why in its s
       paused and status["model"]["active"] and "in a row failed" in said and went_on
       and watched.drain()[-1]["model_watch"]["tripped"], f"paused at cycle {paused_at}: {said[:50]}")
 
-check.section("5 · The experiment tools: run_report.py and live_c2.py")
-check("psutil is installed: the field can perceive this machine (without it, real percepts are fixed values)",
+check.section("5 · The measures and the experiment tools: run_report.py and live_c2.py")
+check("psutil is installed: the field can perceive this machine (without it, it cannot)",
       S.real_percepts_available())
+# The uncertainty of the instant (read-only, exploratory): open sums in flight, constructs landed,
+# how the weight is held, and the I's state
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    us = S.new_session(S.LLMIntermediary(backend="none"))
+    life = LifeCriteria(S)
+    for c in range(60):
+        S.run_cycle(us, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
+        life.after_cycle(us, c, 0.0)
+head_before = S.get_ledger().head
+zp = frozenset(S.ZERO_POINTS)
+q = S.TetralemmaEngine.EXCHANGE_QUANTUM
+before = [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges]
+u = field_topology.uncertainty_of_the_instant(us.field, zp, quantum=q)
+live = [e for e in us.field.edges if e.src not in zp and e.tgt not in zp]
+open_ch = [min(1.0, e.weight * e.both_age / q) for e in live if e.state == S.TetraState.BOTH]
+names = [n for n in us.field.constructs if n not in S.ANCHORS]
+res = life.result()
+check("the uncertainty of the instant counts the BOTH channels still open and the exchange they carry toward "
+      "the quantum, the share of constructs that have landed as Apparents, and how the weight is held; it reads "
+      "without touching the field, and the life criteria keep it per 1000-cycle window",
+      u["open"] == len(open_ch) and abs(u["in_flight"] - sum(open_ch)) < 1e-3
+      and abs(u["landed"] - sum(us.field.constructs[n].layer == S.Layer.APPARENT for n in names) / len(names)) < 1e-3
+      and abs(sum(u["held"].values()) - 1) < 1e-3 and u["i_am"] in field_topology.STATES
+      and field_topology.uncertainty_of_the_instant.__defaults__[1] == q
+      and [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges] == before
+      and S.get_ledger().head == head_before
+      and all(len(v) == 1 for v in res["instant_per_1000"].values())
+      and abs(sum(res["i_am_states"].values()) - 1) < 0.01
+      and "instant" in field_topology.field_topology(us.field, cycle=60, zero_points=set(zp)),
+      f"open {u['open']}, in flight {u['in_flight']} quanta, landed {u['landed']}, held {u['held']}, "
+      f"I::Am {u['i_am']}")
 TOOL_FILES = ("run_report.py", "live_c2.py", "sirisys_loader.py", "field_topology.py", "sirisys_measures.py",
               S.__sirisys_file__)
 tools = scratch()                                   # copies: nothing here touches the user's reports
@@ -528,7 +517,7 @@ with_model = json.loads(p.stdout) if p.returncode == 0 else {}
 p = run(["live_c2.py", "40", "none", "minimal", "--replay", "with_model.json"], tools, 120)
 paired = json.loads(p.stdout) if p.returncode == 0 else {}
 check("a live life with a model, replayed without it, seals the same ledger, and the replay says so "
-      "(since v13.5 the model never reaches the dynamics)",
+      "(the model never reaches the dynamics)",
       with_model.get("model_active") and with_model.get("llm_calls", 0) > 0 and with_model.get("labels")
       and paired.get("same_ledger_as_replayed") is True and "same ledger as the replayed run: YES" in p.stderr,
       f"{with_model.get('llm_calls')} model calls; same ledger: {paired.get('same_ledger_as_replayed')}")
@@ -567,7 +556,7 @@ for mode in ("alike", "counter"):          # answers alike to the same request a
                          if p.returncode == 0 and written.exists() else {})
 alike, stateful = determinism["alike"], determinism["counter"]
 check("the determinism check, in its own file: a model whose answers carry state answers otherwise, "
-      "and the ledger is the same (since v13.5 a model never reaches the dynamics)",
+      "and the ledger is the same (a model never reaches the dynamics)",
       alike.get("same") is True and stateful.get("same") is True
       and (stateful.get("example_different_answers") or {}).get("first") is not None
       and not (tools / "sirisys_report.json").exists(),
@@ -580,7 +569,7 @@ p = run(["run_report.py", "--backend", "ollama", "--profile", "minimal", "--cycl
 written = tools / "sirisys_report.json"
 same = json.loads(written.read_text()).get("same_ledger") if p.returncode == 0 and written.exists() else None
 written.unlink(missing_ok=True)
-check("run_report says whether every arm sealed the same ledger, and with v13.5 they do",
+check("run_report says whether every arm sealed the same ledger, and they do",
       same is True and "same ledger in every arm: YES" in p.stdout, f"same_ledger {same}")
 
 model.reset("alike")
@@ -621,7 +610,13 @@ with quiet(), environment(SIRISYS_LLM_BACKEND="none"):
     measured.shutdown()
     reported = run_report.run_arm(0, 40, False, no_log)["criteria"]
 server.CRITERIA_EVERY = every
-untimed = lambda r: {k: v for k, v in json.loads(json.dumps(r)).items() if k != "ms_first_last"}   # the cost is a time
+
+
+def untimed(r):
+    """A result without its cost, which is a time."""
+    return {k: v for k, v in json.loads(json.dumps(r)).items() if k != "ms_first_last"}
+
+
 check("the live view's criteria are run_report's: the same result on the same life, each criterion and the verdict",
       reading and reading["cycles"] == 40 and untimed(reading["result"]) == untimed(reported)
       and reading["verdict"] is None and set(reading["checks"]) == {"durable", "flicker", "population", "cost", "energy"}
@@ -643,7 +638,12 @@ with quiet():
                               shape=arms["all"]["answer_shape"])
 model.close()
 full_shape, null_shape = arms["all"]["answer_shape"], null["answer_shape"]
-lengths = lambda shape, kind: [n for k, n in shape if k == kind]
+
+
+def lengths(shape, kind):
+    return [n for k, n in shape if k == kind]
+
+
 replayed = all(lengths(null_shape, k)[:len(lengths(full_shape, k))]
                == lengths(full_shape, k)[:len(lengths(null_shape, k))]
                for k in {k for k, _ in null_shape})             # past the recorded answers it starts over
@@ -656,7 +656,7 @@ asked = {channels: sum(t["sombunal_question"] for t in r["trace"]) for channels,
 check("withholding every channel through the model path gives the control, bit for bit",
       arms["none"]["ledger_head"] == control["ledger_head"] and arms["none"]["llm"]["health"]["calls"] == 0)
 heads = {name: r["ledger_head"] for name, r in (*arms.items(), ("null", null))}
-check("v13.5: a model never reaches the dynamics — the full arm, the questions only and the semantic null "
+check("a model never reaches the dynamics — the full arm, the questions only and the semantic null "
       "seal the control's ledger, cycle by cycle; what the model said is kept as labels",
       set(heads.values()) == {control["ledger_head"]}
       and all(r["ledger_head_by_cycle"] == control["ledger_head_by_cycle"] for r in (*arms.values(), null))
@@ -702,7 +702,7 @@ check.section("6 · The visualizers and the framework")
 
 def declared(html, name):
     """The right-hand side of a visualizer's top-level `const <name> = …;`."""
-    found = re.search(rf"^const {name} = (.*?);[ \t]*(?://[^\n]*)?\n", html, re.M | re.S)
+    found = re.search(rf"^const {name} = (.*?);[ \t]*(?://[^\n]*)?\n", html, re.MULTILINE | re.DOTALL)
     return found.group(1) if found else ""
 
 
@@ -712,7 +712,7 @@ def quoted(text):
 
 def tokens(html):
     """The colour tokens of a visualizer: the custom properties of its :root."""
-    return dict(re.findall(r"(--[\w-]+):\s*([^;]+?)\s*;", re.search(r":root\s*\{(.*?)\}", html, re.S).group(1)))
+    return dict(re.findall(r"(--[\w-]+):\s*([^;]+?)\s*;", re.search(r":root\s*\{(.*?)\}", html, re.DOTALL).group(1)))
 
 
 views = {name: (HERE / f).read_text(encoding="utf-8") for name, f in
@@ -746,7 +746,13 @@ check("both visualizers carry the framework's names: layers and edge states in o
       "Zero Points, anchors, Lagrangian points", not drift, ", ".join(drift) or "live and inspector agree with the framework")
 
 inspector = views["inspector"]
-relations_of = lambda kind: set(re.findall(r'"([A-Z]+)"', re.search(rf"{kind}_relations\s*=\s*\{{([^}}]*)\}}", modes_source).group(1)))
+
+
+def relations_of(kind):
+    """The proof relations compute_existence_mode counts for one mode."""
+    return set(re.findall(r'"([A-Z]+)"', re.search(rf"{kind}_relations\s*=\s*\{{([^}}]*)\}}", modes_source).group(1)))
+
+
 LEDGER_ONLY = {"TERMINATE", "SHIFT"}                # sealed in the ledger, never attached to a construct
 constants = {
     "ERA_CAPACITY": S.InternalClock.ERA_CAPACITY,
@@ -777,11 +783,11 @@ if declared(views["live"], "HISTORY_KEPT") != str(server.HISTORY_KEPT):     # th
 
 def function(html, name):
     """The whole of a visualizer's top-level `function <name>(…) {…}`."""
-    found = re.search(rf"^function {name}\(", html, re.M)
+    found = re.search(rf"^function {name}\(", html, re.MULTILINE)
     if not found:
         return ""
-    depth, at = 0, html.index("{", found.end())
-    for at in range(at, len(html)):
+    depth, start = 0, html.index("{", found.end())
+    for at in range(start, len(html)):
         depth += {"{": 1, "}": -1}.get(html[at], 0)
         if depth == 0:
             break

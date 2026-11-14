@@ -322,7 +322,7 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 
 | Prueba | Qué protege |
 |---|---|
-| `test_sirisys.py` | El registro y la vida de una instancia: determinismo sin generador aleatorio, un tiempo que nunca retrocede, un ledger completo y a prueba de manipulación, la reanudación, las escrituras cortadas, un solo escritor, memoria acotada, coste plano, y una instancia reanudada igual a una no interrumpida |
+| `test_sirisys.py` | El registro y la vida de una instancia: determinismo sin generador aleatorio, un tiempo que nunca retrocede, un ledger completo y a prueba de manipulación, la reanudación, las escrituras cortadas, un solo escritor, memoria acotada, coste plano, una instancia reanudada igual a una no interrumpida, y una consola que reanuda como todos los programas |
 | `test_phase1.py` | Todo lo que rodea al campo: el motor del experimento, los backends del modelo, los perfiles, la capa web, la vigilancia del modelo, `run_report.py` y `live_c2.py`, y los nombres y constantes que las vistas comparten con el framework |
 | `test_phase2_guarantee.py` | Medir nunca cambia lo medido, con modelo y sin él; la profundidad genealógica |
 | `test_phase4.py` | El ledger por segmentos: manipulación entre segmentos, cortes de corriente durante una rotación, uso del disco |
@@ -333,14 +333,13 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 - los Zero Points nunca son operandos;
 - el operando mayor lidera y transmite su quiralidad;
 - un cristal nunca se degrada ni se altera;
+- un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de cristalizar;
 - nada sale del campo sin prueba de terminación;
 - ningún cristal concluye en el ciclo en que se forma;
 - los conflictos respetan la Stop Chasm y la profundidad Adsurdic (TMC p.41);
 - las anclas nunca concluyen;
 - la tolerancia se mantiene entre su suelo y 1;
 - con modelo, cada petición lleva una semilla orientada por la historia, y dos ejecuciones idénticas sellan el mismo ledger.
-
-Hay un caso conocido, que solo se admite durante la primera respiración: un cristal nuevo cuyo soporte BOTH erosiona la UCO en ese mismo ciclo.
 
 -----
 
@@ -368,7 +367,7 @@ Responde `ok` y el número de pruebas o, si el registro está dañado, la posici
 export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_6.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_6.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
 
 **Archivos que se crean al ejecutar.**
 
@@ -377,6 +376,6 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
 | `sirisys_runs/` | El modo experimento, una carpeta por instancia |
 | `sirisys_report.json`, `sirisys_determinism.json` | `run_report.py` |
 | `phase3_measurements.json` | `measure_phase3.py` |
-| `sirisys_v13_state.json`, `sirisys_v13_ledger*` | El framework ejecutado por sí solo |
+| `sirisys_v13_state.json*`, `sirisys_v13_ledger*` | El framework ejecutado por sí solo |
 
 Ninguno pertenece al repositorio; `.gitignore` los excluye, junto con los resultados de `soak.py` y `live_c2.py` cuando se nombran como en estos ejemplos (`soak_result.json`, `live_none.json`, `live_ollama.json`).

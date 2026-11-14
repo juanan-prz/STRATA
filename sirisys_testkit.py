@@ -11,7 +11,6 @@ import atexit
 import contextlib
 import hashlib
 import importlib.util
-import io
 import json
 import os
 import shutil
@@ -24,7 +23,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from sirisys_loader import find_framework  # noqa: E402
+from sirisys_loader import find_framework, quiet  # noqa: E402
 
 FRAMEWORK = find_framework(HERE)[1]          # the newest, or the one SIRISYS_FRAMEWORK pins
 
@@ -51,16 +50,6 @@ class Checks:
         for name, detail in failed:
             print(f"  FAIL: {name}" + (f" — {detail}" if detail else ""))
         sys.exit(1 if failed else 0)
-
-
-class _Discard(io.TextIOBase):
-    def write(self, s):
-        return len(s)
-
-
-def quiet():
-    """Silence the framework's own printing."""
-    return contextlib.redirect_stdout(_Discard())
 
 
 def fresh_framework(**overrides):

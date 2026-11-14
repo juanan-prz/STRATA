@@ -27,6 +27,7 @@ import sys
 import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
+from typing import ClassVar
 
 import field_topology
 
@@ -36,11 +37,11 @@ def _processor():
     try:
         if sys.platform == "darwin":
             return subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
-                                  text=True, timeout=2).stdout.strip()
+                                  text=True, timeout=2, check=False).stdout.strip()
         for line in Path("/proc/cpuinfo").read_text().splitlines():
             if line.lower().startswith("model name"):
                 return line.split(":", 1)[1].strip()
-    except Exception:                                            # a record, never a gate
+    except (OSError, subprocess.SubprocessError):                # a record, never a gate
         pass
     return platform.processor()
 
@@ -66,7 +67,6 @@ def describe_machine(rec):
              f"{rec['memory_gb']} GB" if rec["memory_gb"] else None,
              f"Python {rec['python']}", f"psutil {rec['psutil']}" if rec["psutil"] else "no psutil"]
     return " · ".join(p for p in parts if p)
-
 
 
 def _window_means(values, window=1000):
@@ -162,7 +162,7 @@ class LifeCriteria:
 
     # The Phase 3 acceptance rule, criterion by criterion, in the order it is judged: what
     # each asks, in words (the live view shows them), and the test
-    RULE = {
+    RULE: ClassVar[dict] = {
         "durable": ("at least 1 crystal living a breath in every 1000 cycles",
                     lambda r: min(r["durable_per_1000"]) >= 1),
         "flicker": ("at most 5 % of crystals gone within a breath",
@@ -227,8 +227,8 @@ class Translations:
     Tools set `cycle` before each cycle. Every label lands on a construct,
     including those that die within the cycle they were born in."""
 
-    KINDS = {"propose_emergent": "name", "interpret_conflict": "conflict",
-             "question_sombunal": "question"}
+    KINDS: ClassVar[dict[str, str]] = {"propose_emergent": "name", "interpret_conflict": "conflict",
+                                       "question_sombunal": "question"}
 
     def __init__(self):
         self.entries, self.cycle = [], None
@@ -330,7 +330,10 @@ class ModelHealth:
 
     def report(self):
         lat = sorted(self.latencies)
-        q = lambda p: round(lat[min(len(lat) - 1, int(p * len(lat)))], 3) if lat else None
+
+        def q(p):
+            return round(lat[min(len(lat) - 1, int(p * len(lat)))], 3) if lat else None
+
         return {"calls": self.calls, "ok": self.ok, "failures": self.failures,
                 "empty": self.empty, "calls_by_kind": dict(self.by_kind),
                 "empty_by_kind": dict(self.empty_by_kind),
@@ -349,7 +352,7 @@ class ModelHealth:
                 for m in llm._http_json("GET", "/api/tags", timeout=5).get("models", []):
                     if m.get("name") == llm.model or m.get("model") == llm.model:
                         ident.update({k: m[k] for k in ("digest", "size", "details") if k in m})
-            except Exception as ex:                              # identity is a record, not a gate
+            except Exception as ex:          # noqa: BLE001 — identity is a record, not a gate
                 ident["error"] = repr(ex)[:120]
         return ident
 

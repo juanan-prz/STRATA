@@ -23,6 +23,7 @@ in play (open BOTH channels, constructs not yet Apparent) and what has landed.
 Does not mutate the field, seal proofs, or call the model.
 """
 from collections import defaultdict
+from itertools import combinations
 
 STATES = ("TRUE", "FALSE", "BOTH", "NEITHER")
 FOUNDATION = frozenset({"I::Am", "I::AmNot", "SYSTEM"})    # the anchors besides the Zero Points
@@ -113,14 +114,8 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
         in_deg[e.tgt] += 1
     total_deg = {n: in_deg.get(n, 0) + out_deg.get(n, 0) for n in nodes}
 
-    # Deterministic: sort by degree desc then name asc for tie-breaking
-    if total_deg:
-        max_deg_entry = max(sorted(total_deg.items()), key=lambda x: (x[1], x[0]))
-        max_deg = max_deg_entry[1]
-        max_deg_node = max_deg_entry[0]
-    else:
-        max_deg = 0
-        max_deg_node = ""
+    # The highest degree; between equals, the last name in order (deterministic)
+    max_deg_node, max_deg = max(total_deg.items(), key=lambda x: (x[1], x[0]), default=("", 0))
     max_deg_share = round(max_deg / max(2 * E, 1), 4)
 
     # --- Weakly connected components (BFS on undirected view, no ZPs) ---
@@ -143,14 +138,12 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
             if n in comp:
                 continue
             comp.add(n)
-            for nb in sorted(undir[n]):  # deterministic
-                if nb not in comp and nb in nodes:
-                    stack.append(nb)
+            stack.extend(nb for nb in sorted(undir[n]) if nb not in comp and nb in nodes)  # deterministic
         visited |= comp
         wccs.append(comp)
 
     wcc_sizes = sorted((len(c) for c in wccs), reverse=True)
-    # Deterministic largest: by size desc, then by sorted min-name asc
+    # The largest; between equals, the one whose first name comes last (deterministic)
     largest_wcc = max(wccs, key=lambda c: (len(c), min(c))) if wccs else set()
     largest_wcc_share = round(len(largest_wcc) / max(V, 1), 4) if V else 0.0
 
@@ -181,13 +174,7 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
         if k < 2:
             continue
         nodes_with_neighbors += 1
-        tri_v = 0
-        neighbor_list = sorted(neighbors)
-        for i in range(len(neighbor_list)):
-            for j in range(i + 1, len(neighbor_list)):
-                a, b = neighbor_list[i], neighbor_list[j]
-                if b in undir[a]:
-                    tri_v += 1
+        tri_v = sum(1 for a, b in combinations(sorted(neighbors), 2) if b in undir[a])
         triangles += tri_v
         # Each pair counts once; factor of 2 in numerator for undirected
         clustering_sum += (2 * tri_v) / (k * (k - 1))
@@ -222,10 +209,8 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
     edge_depth = defaultdict(int)
     for e in edges:
         d = getattr(e, "concordancy_depth", 0)
-        if d > edge_depth[e.src]:
-            edge_depth[e.src] = d
-        if d > edge_depth[e.tgt]:
-            edge_depth[e.tgt] = d
+        edge_depth[e.src] = max(edge_depth[e.src], d)
+        edge_depth[e.tgt] = max(edge_depth[e.tgt], d)
     conflict_hist = defaultdict(int)
     for n in sorted(nodes):
         if getattr(field.constructs[n], "conflict", False):
@@ -238,14 +223,14 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
         "zero_points": zp_count,
         "weak_components": len(wccs),
         "largest_wcc_share": largest_wcc_share,
-        "wcc_sizes_top5": wcc_sizes[:5] if len(wcc_sizes) > 5 else wcc_sizes,
+        "wcc_sizes_top5": wcc_sizes[:5],
         "strong_cycles": len(multi_scc),
         "largest_scc_size": max(len(c) for c in multi_scc) if multi_scc else 0,
         "reciprocity": reciprocity,
         "triangles": triangle_count,
         "clustering": clustering,
         "max_degree": max_deg,
-        "max_degree_node": max_deg_node[:60] if max_deg_node else "",
+        "max_degree_node": max_deg_node[:60],
         "max_degree_share": max_deg_share,
         "edge_states": dict(state_counts),
         "layer_pairs": dict(layer_pairs),
@@ -327,7 +312,7 @@ def _tarjan_iterative(nodes, adj):
 
     Returns list of sets, each set being one SCC.
     """
-    index_counter = [0]
+    counter = 0
     stack = []
     on_stack = set()
     indices = {}
@@ -341,9 +326,8 @@ def _tarjan_iterative(nodes, adj):
         # Each frame: (node, neighbor_iterator, phase)
         # phase 0 = entering, phase 1 = returning from child
         call_stack = [(root, iter(sorted(adj[root])), 0, None)]
-        indices[root] = index_counter[0]
-        lowlinks[root] = index_counter[0]
-        index_counter[0] += 1
+        indices[root] = lowlinks[root] = counter
+        counter += 1
         stack.append(root)
         on_stack.add(root)
 
@@ -362,16 +346,15 @@ def _tarjan_iterative(nodes, adj):
                     continue
                 if w not in indices:
                     # Unvisited -- push child frame
-                    indices[w] = index_counter[0]
-                    lowlinks[w] = index_counter[0]
-                    index_counter[0] += 1
+                    indices[w] = lowlinks[w] = counter
+                    counter += 1
                     stack.append(w)
                     on_stack.add(w)
                     call_stack[-1] = (v, nbr_iter, 1, w)
                     call_stack.append((w, iter(sorted(adj[w])), 0, None))
                     found_child = True
                     break
-                elif w in on_stack:
+                if w in on_stack:
                     lowlinks[v] = min(lowlinks[v], indices[w])
 
             if not found_child:

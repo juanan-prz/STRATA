@@ -75,7 +75,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from sirisys_loader import load_framework  # noqa: E402
+from sirisys_loader import load_framework, quiet  # noqa: E402
 
 S = load_framework(HERE)
 if not all(hasattr(S, name) for name in ("run_cycle", "new_session", "ProofLedger")):
@@ -91,16 +91,6 @@ HISTORY_KEPT = 2048             # metabolism records before the oldest are merge
 CRITERIA_EVERY = 200            # cycles between two readings of the criteria
 LAYER_NAMES = ("NULL_00", "UMBRA_0", "UNIT_1", "APPARENT")
 log = logging.getLogger("sirisys")
-
-
-class _Discard(io.TextIOBase):
-    def write(self, s):
-        return len(s)
-
-
-def quiet():
-    """Silence the framework's own printing."""
-    return contextlib.redirect_stdout(_Discard())
 
 
 def parse_stream(value):
@@ -217,7 +207,7 @@ class ExperimentEngine:
                 continue
             try:
                 self._step()
-            except Exception:                                   # noqa: BLE001
+            except Exception:
                 log.exception("Cycle %d raised", self.cycle)
                 self.running = False
             finally:
@@ -466,12 +456,11 @@ def _reply(engine, message):
 def create_app(engine):
     """The web interface of one engine (INTERFACE, at the top of this file)."""
     # Only the experiment mode needs the web framework: importing this file does not
-    from contextlib import asynccontextmanager
     from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
     from fastapi.responses import HTMLResponse, JSONResponse
 
-    @asynccontextmanager
-    async def lifespan(app):
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
         yield
         engine.shutdown()                                       # Ctrl+C: save the instance
 

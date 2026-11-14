@@ -19,13 +19,16 @@ instance on the framework it was born with), set the environment variable:
 
 Usage, from any program in the same folder:
 
-    from sirisys_loader import load_framework
+    from sirisys_loader import load_framework, quiet
     S = load_framework()
     print(S.__sirisys_file__, S.__sirisys_version__)
+    with quiet():                     # the framework's own printing, discarded
+        ...
 
 The cycle (new_session, run_cycle) and continuity (resume_session,
 save_session_atomic) live in the framework itself, so every program runs the
-same loop by construction. This file only finds and loads the framework.
+same loop by construction. This file only finds and loads the framework, and
+silences it for the programs that measure it.
 """
 import contextlib
 import importlib.util
@@ -36,6 +39,19 @@ import sys
 from pathlib import Path
 
 PATTERN = re.compile(r"^Sirisys_Framework_v(\d+)_(\d+)\.py$")
+
+
+class _Discard(io.TextIOBase):
+    """A text stream that keeps nothing."""
+
+    def write(self, s):
+        return len(s)
+
+
+def quiet():
+    """Discard the framework's own printing. Discarded, not buffered: memory
+    and the cost of a cycle then measure the field alone."""
+    return contextlib.redirect_stdout(_Discard())
 
 
 def find_framework(folder=None):
@@ -66,21 +82,19 @@ def find_framework(folder=None):
     return found[-1]
 
 
-def load_framework(folder=None, quiet=True):
-    """Load the newest framework as a module and return it."""
+def load_framework(folder=None, silent=True):
+    """Load the newest framework (or the pinned one) as a module and return it."""
     version, path = find_framework(folder)
     name = "sirisys_framework"
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
-    if quiet:
-        with contextlib.redirect_stdout(io.StringIO()):
-            spec.loader.exec_module(mod)
-    else:
+    with quiet() if silent else contextlib.nullcontext():
         spec.loader.exec_module(mod)
     mod.__sirisys_file__ = path.name
     mod.__sirisys_path__ = str(path)
-    mod.__sirisys_version__ = f"{version[0]}.{version[1]}"
+    # the version the file states (v13.6 on); before it, the one its name gives
+    mod.__sirisys_version__ = getattr(mod, "__version__", f"{version[0]}.{version[1]}")
     return mod
 
 

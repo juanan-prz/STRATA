@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """SIRISYS — instrumented runs and their report.
 
 USAGE
@@ -58,14 +57,13 @@ DETERMINISM
 EXIT CODES
   0  the report is written
   1  the framework lacks a mechanism this report measures
+  2  live percepts were asked for and this machine cannot be perceived (no psutil)
   3  a model was asked for and is missing or does not answer, or it stopped
      answering during the run (the report is then marked "aborted")
 """
 import argparse
-import contextlib
 import hashlib
 import inspect
-import io
 import json
 import platform
 import statistics
@@ -78,9 +76,16 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))       # the loader, the measures and the framework live beside this file
 try:
-    import field_topology                                   # read-only topology and depth
-    from sirisys_measures import LifeCriteria, ModelHealth, Translations, _kind, describe_machine, machine_record
-    from sirisys_loader import load_framework
+    import field_topology  # read-only topology and depth
+    from sirisys_loader import load_framework, quiet
+    from sirisys_measures import (
+        LifeCriteria,
+        ModelHealth,
+        Translations,
+        _kind,
+        describe_machine,
+        machine_record,
+    )
 except ImportError as ex:
     sys.exit(f"ERROR: {ex}. Keep run_report.py, sirisys_loader.py, sirisys_measures.py, "
              "field_topology.py and the framework file in one folder.")
@@ -116,17 +121,6 @@ def _prune_default(name):
 # Read from the framework, so the report records what ran rather than what this file assumes
 BOTH_FLOOR, MIN_REFERENCES = _prune_default("both_floor"), _prune_default("min_references")
 EXCHANGE_QUANTUM = getattr(S.TetralemmaEngine, "EXCHANGE_QUANTUM", None)
-
-
-class _Discard(io.TextIOBase):
-    """Where the framework's own printing goes while a run is measured."""
-
-    def write(self, s):
-        return len(s)
-
-
-def quiet():
-    return contextlib.redirect_stdout(_Discard())
 
 
 def integrity_checks():
@@ -239,11 +233,9 @@ class NullIntermediary(ArmIntermediary):
 
 def meaningless(length, key):
     """Letters and spaces derived from a hash: the length of an answer without its meaning."""
-    out, block = [], 0
-    while len("".join(out)) < length:
-        out.append(hashlib.sha256(f"{key}::{block}".encode()).hexdigest())
-        block += 1
-    letters = "".join(chr(ord("a") + int(c, 16) % 16) for c in "".join(out))
+    blocks = -(-length // 64)                       # a hex digest is 64 characters
+    digits = "".join(hashlib.sha256(f"{key}::{b}".encode()).hexdigest() for b in range(blocks))
+    letters = "".join(chr(ord("a") + int(c, 16)) for c in digits)
     text = " ".join(letters[i:i + 6] for i in range(0, len(letters), 6))[:length]
     return text[:-1] + letters[0] if text.endswith(" ") else text
 
@@ -446,13 +438,13 @@ def compare_runs(a, b):
     If not, the first cycle whose ledger head differs, and an example of answers
     that differ when one is among the recorded samples (the first of each kind)."""
     ha, hb = a["ledger_head_by_cycle"], b["ledger_head_by_cycle"]
-    parted = next((i for i, (x, y) in enumerate(zip(ha, hb)) if x != y),
+    parted = next((i for i, (x, y) in enumerate(zip(ha, hb, strict=False)) if x != y),
                   None if len(ha) == len(hb) else min(len(ha), len(hb)))
     example = None
     sa, sb = a["llm"]["health"]["samples"], b["llm"]["health"]["samples"]
     for kind in sorted(set(sa) | set(sb)):
         xs, ys = sa.get(kind, []), sb.get(kind, [])
-        i = next((i for i, (x, y) in enumerate(zip(xs, ys)) if x != y), None)
+        i = next((i for i, (x, y) in enumerate(zip(xs, ys, strict=False)) if x != y), None)
         if i is not None and (example is None or i < example["index"]):
             example = {"kind": kind, "index": i, "first": xs[i], "second": ys[i]}
     return {"same": a["ledger_head"] == b["ledger_head"],
@@ -546,7 +538,7 @@ def check_model(args, intermediary, streams, log):
         # standard profile one of them narrates, with a thread), plus the question
         # that words the Sombunal approach once per breath, with a thread; that
         # question alone in the questions arm
-        every = getattr(S, "SOMBUNAL_APPROACH_EVERY", 3)
+        every = S.SOMBUNAL_APPROACH_EVERY
         questions = 1 / every + (0 if args.determinism or args.skip_questions_arm else 1 / every)
         narrating = 1 if PROFILES[args.profile]["narrate"] else 0
         probe = ModelHealth.probe(intermediary, cycles=args.cycles * len(streams),

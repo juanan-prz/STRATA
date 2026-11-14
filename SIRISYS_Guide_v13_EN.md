@@ -322,7 +322,7 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 
 | Suite | What it guards |
 |---|---|
-| `test_sirisys.py` | The record and the life of one instance: determinism without a PRNG, time that never goes back, a complete and tamper-evident ledger, resume, torn writes, a single writer, bounded memory, flat cost, and a resumed instance that equals an uninterrupted one |
+| `test_sirisys.py` | The record and the life of one instance: determinism without a PRNG, time that never goes back, a complete and tamper-evident ledger, resume, torn writes, a single writer, bounded memory, flat cost, a resumed instance that equals an uninterrupted one, and a console that resumes as every program does |
 | `test_phase1.py` | Everything around the field: the experiment engine, the model backends, the profiles, the web layer, the model watch, `run_report.py` and `live_c2.py`, and the names and constants the views share with the framework |
 | `test_phase2_guarantee.py` | Measuring never changes what is measured, with and without a model; the genealogical depth |
 | `test_phase4.py` | The segmented ledger: tampering across segments, power cuts during a rotation, disk use |
@@ -333,14 +333,13 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 - Zero Points are never operands;
 - the older operand leads and hands its chirality on;
 - a crystal is never demoted or altered;
+- a crystal holds at most the tension of its own commitment, also what it banked before crystallizing;
 - nothing leaves the field without a termination proof;
 - no crystal concludes in the cycle it forms;
 - conflicts respect the Stop Chasm and the Adsurdic depth (TMC p.41);
 - the anchors never conclude;
 - the tolerance stays between its floor and 1;
 - with a model in the loop, every request carries a seed oriented by the history, and two identical runs seal the same ledger.
-
-One case is known and allowed only during the first breath: a new crystal whose BOTH support is eroded by UCO in the same cycle.
 
 -----
 
@@ -368,7 +367,7 @@ It answers `ok` and the number of proofs or, for a damaged record, the position 
 export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_6.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed.
+**The framework on its own.** `python3 Sirisys_Framework_v13_6.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed. It resumes as every program does: it keeps the previous record (`.prev`) and a high-water mark (`.hwm`) beside the state, falls back to the previous record when the newest is damaged, and refuses to start a fresh field over a ledger whose state is gone.
 
 **Files created while running.**
 
@@ -377,6 +376,6 @@ export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
 | `sirisys_runs/` | Experiment mode, one folder per instance |
 | `sirisys_report.json`, `sirisys_determinism.json` | `run_report.py` |
 | `phase3_measurements.json` | `measure_phase3.py` |
-| `sirisys_v13_state.json`, `sirisys_v13_ledger*` | The framework run on its own |
+| `sirisys_v13_state.json*`, `sirisys_v13_ledger*` | The framework run on its own |
 
 None of these belong in the repository; `.gitignore` excludes them, together with the outputs of `soak.py` and `live_c2.py` when they are named as in these examples (`soak_result.json`, `live_none.json`, `live_ollama.json`).

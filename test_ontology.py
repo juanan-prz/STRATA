@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Ontological invariants of the field, checked cycle by cycle.
 
 The other suites guard the record (chain, cuts, tampering, continuity). This
@@ -8,6 +7,8 @@ one guards what the field must be, from the primary source:
     (Law 6, TMC p.35; first chirality dyad, p.50).
   - An Apparent is incontrovertible: while it exists it is never demoted, its
     crystal state never changes and its identity never shifts (TMC p.14).
+  - A crystal holds at most the tension of its own commitment, whenever it
+    banked it: once collapsed it is no "free modulator" (Understanding_TMC p.81).
   - Nothing vanishes silently: every construct that leaves the field leaves a
     TERMINATE proof (Compiler Guide pp.203-204).
   - The Stop Chasm and the Adsurdic threshold (TMC p.41): never more than
@@ -16,10 +17,7 @@ one guards what the field must be, from the primary source:
   - The anchors (Zero Points, I::Am, I::AmNot, SYSTEM) never conclude.
   - The field's own tolerance stays between its floor and 1.
   - "all [Apparents] must be [Existents]" (TMC p.22): no crystal concludes in
-    the cycle it forms. Known exception, to be closed in the next framework
-    version: during the first breath, UCO can erode a new crystal's BOTH support
-    after collapse checked it, and prune then orphans it. The check allows it
-    only within the first breath.
+    the cycle it forms.
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -34,8 +32,8 @@ with quiet():
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 400
 CO = S.ConcordancyOperator
 INVARIANTS = ("zp_operand", "leader_not_older", "chirality_not_leader", "crystal_changed",
-              "vanished_silently", "stop_chasm", "adsurdic", "anchor_concluded", "tolerance_out",
-              "crystal_concluded_at_birth")
+              "crystal_over_cap", "vanished_silently", "stop_chasm", "adsurdic", "anchor_concluded",
+              "tolerance_out", "crystal_concluded_at_birth")
 check = Checks()
 
 
@@ -58,6 +56,9 @@ def broken_in(ss, cycle, present, crystals, terminations_before):
         if c is not None and (c.layer != S.Layer.APPARENT or c.crystal_state != state
                               or c.version != version):
             yield "crystal_changed"
+    for c in f.constructs.values():
+        if c.layer == S.Layer.APPARENT and c.recursion_exchanged > S.THRESHOLD_APPARENT + 1e-12:
+            yield "crystal_over_cap"
     for name in present - set(f.constructs):
         if name not in ended:
             yield "vanished_silently"
@@ -115,6 +116,16 @@ check("the older operand leads (Law 6, TMC p.35)", not broken["leader_not_older"
 check("the product inherits the leader's handedness (TMC p.50)", not broken["chirality_not_leader"])
 check("a crystal is never demoted, restated or shifted (TMC p.14)", not broken["crystal_changed"],
       f"{formed} crystals formed")
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    probe = S.new_session(S.LLMIntermediary(backend="none"))
+probe.field.add_construct("CAP::banked", S.Layer.UNIT_1)
+probe.field.constructs["CAP::banked"].recursion_exchanged = 2 * S.TetralemmaEngine.EXCHANGE_QUANTUM
+probe.field.lock_apparent("CAP::banked")
+check("a crystal holds at most the tension of its own commitment, also what it banked before committing "
+      "(Understanding_TMC p.81): locked with twice the quantum banked it keeps THRESHOLD_APPARENT, and no "
+      "crystal ever holds more", probe.field.constructs["CAP::banked"].recursion_exchanged == S.THRESHOLD_APPARENT
+      and not broken["crystal_over_cap"], f"{len(broken['crystal_over_cap'])} crystal-cycles over the cap")
 check("nothing leaves the field without a TERMINATE proof", not broken["vanished_silently"])
 check("at most MAX_CONFLICTS_PER_CYCLE conflicts in a cycle (Stop Chasm, TMC p.41)", not broken["stop_chasm"])
 check("conflict recursion never passes MAX_CF_DEPTH (Adsurdic threshold, TMC p.41)", not broken["adsurdic"])

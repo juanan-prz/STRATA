@@ -6,8 +6,9 @@ import gzip
 import hashlib
 import json
 import shutil
+from itertools import pairwise
 
-from sirisys_testkit import Checks, FRAMEWORK, fresh_framework, quiet, scratch
+from sirisys_testkit import FRAMEWORK, Checks, fresh_framework, quiet, scratch
 
 SEGMENT = 64 * 1024
 CYCLES, RESUMED_TO = 300, 400
@@ -50,7 +51,7 @@ check("rotation produced compressed segments; chain verifies across them",
       len(index) >= 3 and v["ok"] and v["count"] == m.get_ledger().count,
       f"{len(index)} segments, {v['count']} proofs")
 times = [tuple(r["time"]) for r in records(m, path)]
-check("time never goes back across segments", all(b >= a for a, b in zip(times, times[1:])))
+check("time never goes back across segments", all(b >= a for a, b in pairwise(times)))
 
 resumed = fresh_framework(SEGMENT_BYTES=SEGMENT)
 resumed.set_ledger(resumed.ProofLedger(path))

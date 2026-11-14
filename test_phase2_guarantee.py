@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Measuring never changes what is measured.
 
 The same life twice: once with every observer the experiment tools use (the
@@ -50,9 +49,9 @@ def field_json(ss):
 check.section(f"1 · Observers change nothing ({N} cycles)")
 m, ss, head_on, genealogy = life(N, observe=True)
 _, ss_off, head_off, _ = life(N, observe=False)
-check("ledger head identical with topology on/off", head_on == head_off,
+check("the same ledger head with every observer on and with none", head_on == head_off,
       f"on={head_on[:16]}  off={head_off[:16]}")
-check("field state identical with topology on/off", field_json(ss) == field_json(ss_off))
+check("the same field with every observer on and with none", field_json(ss) == field_json(ss_off))
 with FakeModel("alike") as model:
     *_, model_on, _ = life(N // 2, observe=True, host=model.url)
     *_, model_off, _ = life(N // 2, observe=False, host=model.url)

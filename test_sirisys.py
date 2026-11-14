@@ -16,7 +16,15 @@ import re
 import statistics
 import time
 
-from sirisys_testkit import Checks, FRAMEWORK, fresh_framework, quiet, raises, read_jsonl, scratch
+from sirisys_testkit import (
+    FRAMEWORK,
+    Checks,
+    fresh_framework,
+    quiet,
+    raises,
+    read_jsonl,
+    scratch,
+)
 
 STEPS = int(os.environ.get("STEPS", "40"))
 # The machine's own readings would make two lives incomparable: three fixed states, in turn
@@ -86,7 +94,7 @@ def cost_windows(m):
 check.section(f"1 · Determinism without a PRNG ({STEPS} cycles)")
 source = FRAMEWORK.read_text(encoding="utf-8")
 check("no PRNG in the framework",
-      not re.search(r"^\s*(import|from)\s+(random|secrets)\b|\brandom\.\w+\(", source, re.M))
+      not re.search(r"^\s*(import|from)\s+(random|secrets)\b|\brandom\.\w+\(", source, re.MULTILINE))
 named = re.search(r"_v(\d+)_(\d+)\.py$", FRAMEWORK.name)
 check("one version, the file name's: no string in the framework writes a version of its own",
       bool(named) and getattr(fresh_framework(), "__version__", None) == f"{named[1]}.{named[2]}"
@@ -194,7 +202,7 @@ check("sealing into a closed file ledger raises (no silent loss)",
 check.section("9 · Conflict identity survives reload, even with long chains")
 m9 = framework()
 probe = m9.Construct("probe", m9.Layer.UMBRA_0)
-between = dict(subject="a", object="b", anchor="Z2::CONCORDANCY", lagrange=m9.LagrangianPoint.L2)
+between = {"subject": "a", "object": "b", "anchor": "Z2::CONCORDANCY", "lagrange": m9.LagrangianPoint.L2}
 probe.add_proof(m9.ProofObject.make(id="g", relation="CONFLICT", T=(0, 1), tensate_role="TENSOUT", **between))
 for i in range(80):                                      # pushes the founding proof out of the window
     probe.add_proof(m9.ProofObject.make(id=f"p{i}", relation="INTENSIFY", T=(0, 2 + i), **between))

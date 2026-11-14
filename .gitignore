@@ -46,7 +46,7 @@ sirisys_*/
 sirisys_report.json
 sirisys_determinism.json
 phase3_measurements.json
-sirisys_v13_state.json
+sirisys_v13_state.json*
 sirisys_v13_ledger*
 *_result.json
 live_*.json
