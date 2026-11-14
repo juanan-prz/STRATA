@@ -16,9 +16,9 @@ Autor: Juan A. Pérez-Gómez.
 
 | Documento | English | Español |
 |---|---|---|
-| Guía técnica: cada archivo, modo, opción y resultado | [SIRISYS_Guide_v13_EN.md](SIRISYS_Guide_v13_EN.md) | [SIRISYS_Guide_v13_ES.md](SIRISYS_Guide_v13_ES.md) |
-| Guía de Mac: instalación y primeros experimentos, paso a paso, para quien nunca ha usado la Terminal | [SIRISYS_Mac_Guide_v13_EN.pdf](SIRISYS_Mac_Guide_v13_EN.pdf) | [SIRISYS_Mac_Guide_v13_ES.pdf](SIRISYS_Mac_Guide_v13_ES.pdf) |
-| Glosario técnico: cada concepto con su fuente y cómo lo implementa el código, y cada contador que muestran las vistas | [SIRISYS_Concepts_v13_EN.pdf](SIRISYS_Concepts_v13_EN.pdf) | [SIRISYS_Concepts_v13_ES.pdf](SIRISYS_Concepts_v13_ES.pdf) |
+| Guía técnica: cada archivo, modo, opción y resultado | [EN_SIRISYS_Guide_v13.md](EN_SIRISYS_Guide_v13.md) | [ES_SIRISYS_Guide_v13.md](ES_SIRISYS_Guide_v13.md) |
+| Guía de Mac: instalación y primeros experimentos, paso a paso, para quien nunca ha usado la Terminal | [EN_SIRISYS_Mac_Guide_v13.pdf](EN_SIRISYS_Mac_Guide_v13.pdf) | [ES_SIRISYS_Mac_Guide_v13.pdf](ES_SIRISYS_Mac_Guide_v13.pdf) |
+| Glosario técnico: cada concepto con su fuente y cómo lo implementa el código, y cada contador que muestran las vistas | [EN_SIRISYS_Concepts_v13.pdf](EN_SIRISYS_Concepts_v13.pdf) | [ES_SIRISYS_Concepts_v13.pdf](ES_SIRISYS_Concepts_v13.pdf) |
 
 El código es el framework (`Sirisys_Framework_v13_6.py`), un servidor de experimentos con una vista en vivo en el navegador, un inspector de instancias guardadas, herramientas para ejecuciones medidas y cinco conjuntos de pruebas. La guía técnica describe cada archivo.
 

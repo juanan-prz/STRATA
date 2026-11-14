@@ -1,8 +1,8 @@
 # STRATA · SIRISYS v13.6 — Technical guide
 
-[Español](SIRISYS_Guide_v13_ES.md)
+[Español](ES_SIRISYS_Guide_v13.md)
 
-The manual of STRATA: what every file does, every mode and option, and what each output contains. The [README](README.md) introduces the project, the glossary (`SIRISYS_Concepts_v13_EN.pdf`) defines the concepts and their sources, and the Mac guide (`SIRISYS_Mac_Guide_v13_EN.pdf`) takes a first-time user through installation step by step.
+The manual of STRATA: what every file does, every mode and option, and what each output contains. The [README](README.md) introduces the project, the glossary (`EN_SIRISYS_Concepts_v13.pdf`) defines the concepts and their sources, and the Mac guide (`EN_SIRISYS_Mac_Guide_v13.pdf`) takes a first-time user through installation step by step.
 
 Some names carry the project's development phases: the self-adjustment criteria were adopted in Phase 3 (hence `measure_phase3.py` and "Phase 3" in the interface), and the test suites `test_phase1.py`, `test_phase2_guarantee.py` and `test_phase4.py` guard what each phase added.
 
@@ -37,10 +37,10 @@ Keep every file in one folder, with no subfolders: each program finds the others
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | The test suites |
 | `sirisys_testkit.py` | What the suites share: the checks and their summary, fresh copies of the framework, a local stand-in for a model |
 | `requirements.txt` | Python dependencies |
-| `README.md`, `README_ES.md` | The front page (English, Spanish) |
-| `SIRISYS_Guide_v13_EN.md`, `SIRISYS_Guide_v13_ES.md` | This guide (English, Spanish) |
-| `SIRISYS_Mac_Guide_v13_EN.pdf`, `SIRISYS_Mac_Guide_v13_ES.pdf` | Step-by-step setup on a Mac (English, Spanish) |
-| `SIRISYS_Concepts_v13_EN.pdf`, `SIRISYS_Concepts_v13_ES.pdf` | Technical glossary: every concept with its source and how the code implements it, and every counter the views show (English, Spanish) |
+| `README.md`, `ES_README.md` | The front page (English, Spanish) |
+| `EN_SIRISYS_Guide_v13.md`, `ES_SIRISYS_Guide_v13.md` | This guide (English, Spanish) |
+| `EN_SIRISYS_Mac_Guide_v13.pdf`, `ES_SIRISYS_Mac_Guide_v13.pdf` | Step-by-step setup on a Mac (English, Spanish) |
+| `EN_SIRISYS_Concepts_v13.pdf`, `ES_SIRISYS_Concepts_v13.pdf` | Technical glossary: every concept with its source and how the code implements it, and every counter the views show (English, Spanish) |
 | `LICENSE` | PolyForm Noncommercial 1.0.0 |
 
 -----

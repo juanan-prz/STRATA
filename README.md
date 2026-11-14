@@ -2,7 +2,7 @@
 
 **S**IRISYS · **T**etralemma · **R**ecursive · **A**rchitecture · **T**opology · **A**nalysis
 
-[Español](README_ES.md)
+[Español](ES_README.md)
 
 A software interpretation of the SIRISYS recursive ontological system: a field of constructs that evolves cycle by cycle through concordancy operations, cussive collapse and stratified emergence across four ontological layers, with every event sealed in an irreversible, hash-chained record.
 
@@ -16,9 +16,9 @@ Author: Juan A. Pérez-Gómez.
 
 | Document | English | Español |
 |---|---|---|
-| Technical guide: every file, mode, option and output | [SIRISYS_Guide_v13_EN.md](SIRISYS_Guide_v13_EN.md) | [SIRISYS_Guide_v13_ES.md](SIRISYS_Guide_v13_ES.md) |
-| Mac guide: installation and first experiments, step by step, for first-time users of the Terminal | [SIRISYS_Mac_Guide_v13_EN.pdf](SIRISYS_Mac_Guide_v13_EN.pdf) | [SIRISYS_Mac_Guide_v13_ES.pdf](SIRISYS_Mac_Guide_v13_ES.pdf) |
-| Technical glossary: every concept with its source and how the code implements it, and every counter the views show | [SIRISYS_Concepts_v13_EN.pdf](SIRISYS_Concepts_v13_EN.pdf) | [SIRISYS_Concepts_v13_ES.pdf](SIRISYS_Concepts_v13_ES.pdf) |
+| Technical guide: every file, mode, option and output | [EN_SIRISYS_Guide_v13.md](EN_SIRISYS_Guide_v13.md) | [ES_SIRISYS_Guide_v13.md](ES_SIRISYS_Guide_v13.md) |
+| Mac guide: installation and first experiments, step by step, for first-time users of the Terminal | [EN_SIRISYS_Mac_Guide_v13.pdf](EN_SIRISYS_Mac_Guide_v13.pdf) | [ES_SIRISYS_Mac_Guide_v13.pdf](ES_SIRISYS_Mac_Guide_v13.pdf) |
+| Technical glossary: every concept with its source and how the code implements it, and every counter the views show | [EN_SIRISYS_Concepts_v13.pdf](EN_SIRISYS_Concepts_v13.pdf) | [ES_SIRISYS_Concepts_v13.pdf](ES_SIRISYS_Concepts_v13.pdf) |
 
 The code is the framework (`Sirisys_Framework_v13_6.py`), an experiment server with a live view in the browser, an inspector for saved instances, tools for measured runs, and five test suites. The technical guide describes each file.
 
