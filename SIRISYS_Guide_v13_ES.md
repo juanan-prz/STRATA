@@ -50,10 +50,10 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 Python 3.10 o superior en macOS, Linux o Windows con WSL.
 
 ```bash
-pip3 install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
-Instala `numpy` y `psutil` (el campo y sus perceptos reales: sin `psutil` la máquina no se puede percibir, así que el framework lo dice en lugar de leer valores fijos, y no arrancan el modo experimento con perceptos reales, `live_c2.py` ni `run_report.py --percepts live`), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `pip3 install --break-system-packages -r requirements.txt`, o un entorno virtual.
+Instala `numpy` y `psutil` (el campo y sus perceptos reales: sin `psutil` la máquina no se puede percibir, así que el framework lo dice en lugar de leer valores fijos, y no arrancan el modo experimento con perceptos reales, `live_c2.py` ni `run_report.py --percepts live`), `fastapi`, `uvicorn` y `websockets` (el modo experimento) y `anthropic` (el backend de la API). En un Python gestionado por Homebrew, pip puede negarse con `externally-managed-environment`; en ese caso usa `python3 -m pip install --break-system-packages -r requirements.txt`, o un entorno virtual.
 
 ### Qué hace un modelo
 
@@ -266,6 +266,20 @@ Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o 
 - coste plano del ciclo en sí, sin el tiempo del modelo: final ≤ 1,5 × inicial + 0,5 ms;
 - energía top-3 acotada: tendencia ≤ 1,2.
 
+En una vida de $N$ ciclos, con la respiración de $B = 24$ ciclos (`BREATH_PERIOD`):
+
+$$
+\begin{aligned}
+&\text{duraderos:} && \min_{w} D_w \ge 1 \\
+&\text{parpadeo:} && F \,/\, \max(1, A) \le 0{,}05 \\
+&\text{población:} && \overline{C}_{\text{últimos 1000}} \,/\, \overline{C}_{\text{1000 anteriores}} \le 1{,}2 \\
+&\text{coste:} && \bar t_{\text{últimos } k} \le 1{,}5\,\bar t_{\text{primeros } k} + 0{,}5\ \text{ms}, \qquad k = \min(500, \lfloor N/2 \rfloor) \\
+&\text{energía:} && \overline{E^{(3)}}_{\text{segunda mitad}} \,/\, \overline{E^{(3)}}_{\text{primera mitad}} \le 1{,}2
+\end{aligned}
+$$
+
+$D_w$ son los cristales nacidos en la ventana $w$ de 1000 ciclos que viven al menos $B$ ciclos; $F$, los que concluyen antes de $B$ ciclos, y $A$, todas las cristalizaciones de la vida (con los Zero Points, que nacen cristalizados); $C$, la población de cada ciclo (con menos de 2000 ciclos, la segunda mitad frente a la primera); $t$, el tiempo de un ciclo sin el del modelo; $E^{(3)}$, la energía de los tres constructos más energéticos, muestreada cada 100 ciclos. Con menos de 1000 ciclos no hay veredicto.
+
 **Determinismo.** El framework no usa azar, pero el motor de un modelo puede tenerlo aunque cada petición lleve una semilla derivada de la historia. Desde la v13.5 eso solo cambia las etiquetas, no el ledger. `--determinism` recorre dos veces el flujo 0 con el brazo del modelo y dice si las dos ejecuciones sellaron el mismo ledger y, si no, en qué ciclo se separaron; da además un ejemplo de respuestas distintas, si las hubo. Necesita los perceptos sintéticos y no toca `sirisys_report.json`. Todos los informes imprimen además la cabeza del ledger de cada ejecución.
 
 **Qué contiene el informe.**
@@ -275,7 +289,7 @@ Sin modelo solo corre el control, con un aviso; si se pide `--backend ollama` o 
 - `arms`: para cada brazo, un resumen de sus ejecuciones y cada ejecución completa: los criterios y su veredicto, la cabeza del ledger (también tras cada ciclo), una traza de cada ciclo, la topología (§6), lo percibido, las duraciones de vida, los cristales, todas las etiquetas que dio el modelo, también las de constructos que murieron en su mismo ciclo (`labels`: ciclo, tipo —`name`, `conflict` o `question`—, los dos constructos tal como el modelo los vio, la etiqueta y la respuesta entera del modelo, que la etiqueta recorta a 120 caracteres), la clave y la etiqueta de cada constructo que cristalizó (`crystal_labels`), la telemetría de las reservas, la salud del modelo, la forma de cada respuesta que recibió el campo (tipo y longitud, que el nulo semántico repite) y los errores, si los hay. Los criterios incluyen `flicker_share_after_genesis`, el parpadeo entre los cristales nacidos tras los primeros 100 ciclos: exploratorio, no entra en el veredicto.
 - `aborted`, `determinism` (con `--determinism`) y `console`, todo lo que imprimió la ejecución.
 
-**Códigos de salida.** 0: el informe está escrito; 1: al framework le falta un mecanismo que el informe mide; 3: se pidió un modelo y falta o no responde, o dejó de responder durante la ejecución (el informe queda entonces marcado como `aborted`).
+**Códigos de salida.** 0: el informe está escrito; 1: al framework le falta un mecanismo que el informe mide; 2: se pidieron los perceptos reales y la máquina no se puede percibir (sin `psutil`); 3: se pidió un modelo y falta o no responde, o dejó de responder durante la ejecución (el informe queda entonces marcado como `aborted`).
 
 -----
 

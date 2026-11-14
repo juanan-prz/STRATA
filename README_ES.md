@@ -29,7 +29,7 @@ El código es el framework (`Sirisys_Framework_v13_6.py`), un servidor de experi
 Python 3.10 o superior en macOS, Linux o Windows con WSL.
 
 ```bash
-pip3 install -r requirements.txt
+python3 -m pip install -r requirements.txt
 python3 test_sirisys.py                    # integridad, determinismo, memoria acotada: todas las comprobaciones deben pasar
 python3 Sirisys_Server.py --play           # modo experimento, con los perceptos de esta máquina
 ```
@@ -68,7 +68,7 @@ Proyecto de investigación en desarrollo activo.
 
 - Con perceptos sintéticos y sin modelo, el campo cumple sus criterios de autoajuste: cristales duraderos en cada respiración, poco parpadeo, tamaño acotado, memoria y coste planos. Con los perceptos reales de una máquina se sostuvo durante 10 000 ciclos: la cristalización más baja de las primeras ventanas era la génesis.
 - Con un modelo local (llama3.1, v13.4), el campo cumplió sus criterios, y el sentido de lo que decía el modelo no cambió la dinámica de forma medible. Desde la v13.5 el modelo solo traduce: sus nombres son etiquetas, y el acercamiento al Sombunal es una ley del campo. En un Mac, con la v13.5 y perceptos reales, el campo cumplió sus criterios durante 10 000 ciclos, y una vida con el modelo (363 llamadas), repetida sin él, selló el mismo ledger.
-- Desde la v13.6, un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de comprometerse. Hasta entonces, un constructo que acumulaba intercambios antes de cristalizar podía retener hasta dos y transmitir decenas de veces lo que cualquier otro cristal, solo por el orden de los pasos. En una prueba pre-registrada, con flujos sintéticos nuevos y perceptos reales, el campo mantuvo sus criterios y parpadeó menos, con un 9 % menos de cristales duraderos en vidas largas.
+- Desde la v13.6, un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de comprometerse. Hasta entonces, un constructo que acumulaba intercambios antes de cristalizar podía retener hasta unos dos cuantos de intercambio (24,8, frente a un compromiso de 0,88) y transmitir decenas de veces lo que cualquier otro cristal, solo por el orden de los pasos. En una prueba pre-registrada, con flujos sintéticos nuevos y perceptos reales, el campo mantuvo sus criterios y parpadeó menos, con un 9 % menos de cristales duraderos en vidas largas.
 - Las preguntas abiertas figuran en la cabecera del framework como WALLS: sustrato (digital, no analógico), autosostenimiento, agencia, y relaciones frente a eventos. Cómo debe pesar en el campo el acercamiento al Sombunal (cadencia, estado y peso de su arista) y el papel de los puntos lagrangianos son decisiones de diseño abiertas; los puntos lagrangianos etiquetan constructos y pruebas, pero aún no gobiernan ninguna decisión.
 
 -----

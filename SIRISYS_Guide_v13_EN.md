@@ -50,10 +50,10 @@ Keep every file in one folder, with no subfolders: each program finds the others
 Python 3.10 or higher on macOS, Linux, or Windows with WSL.
 
 ```bash
-pip3 install -r requirements.txt
+python3 -m pip install -r requirements.txt
 ```
 
-This installs `numpy` and `psutil` (the field and its real percepts: without `psutil` the machine cannot be perceived, so the framework says so instead of reading fixed values, and experiment mode with live percepts, `live_c2.py` and `run_report.py --percepts live` refuse to start), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `pip3 install --break-system-packages -r requirements.txt`, or a virtual environment.
+This installs `numpy` and `psutil` (the field and its real percepts: without `psutil` the machine cannot be perceived, so the framework says so instead of reading fixed values, and experiment mode with live percepts, `live_c2.py` and `run_report.py --percepts live` refuse to start), `fastapi`, `uvicorn` and `websockets` (experiment mode) and `anthropic` (the API backend). On a Python managed by Homebrew, pip may refuse with `externally-managed-environment`; then use `python3 -m pip install --break-system-packages -r requirements.txt`, or a virtual environment.
 
 ### What a model does
 
@@ -266,6 +266,20 @@ Without a model only the control runs, with a warning; when `--backend ollama` o
 - flat cost of the cycle itself, model time excluded: late ≤ 1.5 × early + 0.5 ms;
 - bounded top-3 energy: trend ≤ 1.2.
 
+In a life of $N$ cycles, with a breath of $B = 24$ cycles (`BREATH_PERIOD`):
+
+$$
+\begin{aligned}
+&\text{durable:} && \min_{w} D_w \ge 1 \\
+&\text{flicker:} && F \,/\, \max(1, A) \le 0.05 \\
+&\text{population:} && \overline{C}_{\text{last 1000}} \,/\, \overline{C}_{\text{previous 1000}} \le 1.2 \\
+&\text{cost:} && \bar t_{\text{last } k} \le 1.5\,\bar t_{\text{first } k} + 0.5\ \text{ms}, \qquad k = \min(500, \lfloor N/2 \rfloor) \\
+&\text{energy:} && \overline{E^{(3)}}_{\text{second half}} \,/\, \overline{E^{(3)}}_{\text{first half}} \le 1.2
+\end{aligned}
+$$
+
+$D_w$ is the number of crystals born in 1000-cycle window $w$ that live at least $B$ cycles; $F$, those that conclude within $B$ cycles, and $A$, every crystallization of the life (the Zero Points, born crystallized, included); $C$, the population of each cycle (with fewer than 2000 cycles, the second half against the first); $t$, the time of one cycle without the model's; $E^{(3)}$, the energy of the three most energetic constructs, sampled every 100 cycles. Below 1000 cycles there is no verdict.
+
 **Determinism.** The framework has no randomness, but a model runtime may have some even though every request carries a seed derived from the history. Since v13.5 that changes only the labels, not the ledger. `--determinism` runs the model arm on stream 0 twice and says whether both runs sealed the same ledger and, if not, the cycle at which they parted; it also gives an example of different answers, if there were any. It needs the synthetic percepts and leaves `sirisys_report.json` alone. Every report also prints the ledger head of each run.
 
 **What the report holds.**
@@ -275,7 +289,7 @@ Without a model only the control runs, with a warning; when `--backend ollama` o
 - `arms`: for each arm a summary over its runs, and each run in full: the criteria and their verdict, the ledger head (and after every cycle), a trace of every cycle, the topology (§6), what was perceived, lifespans, the crystals, every label the model gave, including those of constructs that died in the cycle they were born in (`labels`: cycle, kind —`name`, `conflict` or `question`—, the two constructs as the model saw them, the label, and the model's whole answer, which the label cuts to 120 characters), the key and label of each construct that crystallized (`crystal_labels`), the pool telemetry, the model's health, the shape of every answer the field received (kind and length, which the semantic null replays) and any errors. The criteria include `flicker_share_after_genesis`, flicker among the crystals born after the first 100 cycles: exploratory, not part of the verdict.
 - `aborted`, `determinism` (with `--determinism`) and `console`, everything the run printed.
 
-**Exit codes.** 0 the report is written; 1 the framework lacks a mechanism the report measures; 3 a model was asked for and is missing or does not answer, or it stopped answering during the run (the report is then marked `aborted`).
+**Exit codes.** 0 the report is written; 1 the framework lacks a mechanism the report measures; 2 live percepts were asked for and the machine cannot be perceived (no `psutil`); 3 a model was asked for and is missing or does not answer, or it stopped answering during the run (the report is then marked `aborted`).
 
 -----
 
