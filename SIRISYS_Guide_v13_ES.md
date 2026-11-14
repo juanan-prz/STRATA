@@ -309,7 +309,8 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 - aristas por estado del tetralema y por par de capas;
 - qué parte del BOTH está en la componente mayor;
 - la profundidad de cada conflicto, que el campo limita en el umbral Adsurdic;
-- la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, acercamientos al Sombunal).
+- la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, acercamientos al Sombunal);
+- la incertidumbre del instante (`instant`): lo que sigue en juego y lo que ya ha aterrizado. Los canales BOTH abiertos, la parte del cuanto de intercambio que llevan acumulada (en cuantos, `in_flight`) y su avance medio hacia el cierre; la parte de los constructos (sin las anclas) que ya son Apparents (`landed`); cómo se reparte el peso de las aristas entre los cuatro estados (`held`, sin las de los Zero Points: NEITHER no es incertidumbre aquí, porque un canal que se cierra pasa a NEITHER), y el estado del I. Sigue las «Probabilistic Antennae» de las publicaciones de Sirisys en X: registrar la incertidumbre total de una suma en un instante, «the difference between when the coin has landed and while it remains flipping». Los criterios de vida la guardan además en cada ciclo, con su media por ventana de 1000 ciclos (`instant_per_1000`) y la parte de la vida que el I pasa en cada estado (`i_am_states`). Es exploratoria: no es un criterio.
 
 La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella, y lo comprueba `test_phase2_guarantee.py`.
 

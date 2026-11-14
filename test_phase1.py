@@ -173,6 +173,40 @@ with FakeModel("counter") as model:
         again = llm.propose_emergent("A", "B", "TRUE", "BOTH")
     sent = [r["messages"] for r in model.requests]
 kept = json.dumps(llm.history)
+# The uncertainty of the instant (read-only, exploratory): open sums in flight, constructs landed,
+# how the weight is held, and the I's state
+import field_topology
+from sirisys_measures import LifeCriteria
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    us = S.new_session(S.LLMIntermediary(backend="none"))
+    life = LifeCriteria(S)
+    for c in range(60):
+        S.run_cycle(us, c, percepts=S.synthetic_percepts(c, 0, False), narrate=False, include_hour=False)
+        life.after_cycle(us, c, 0.0)
+head_before = S.get_ledger().head
+zp = frozenset(S.ZERO_POINTS)
+q = S.TetralemmaEngine.EXCHANGE_QUANTUM
+before = [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges]
+u = field_topology.uncertainty_of_the_instant(us.field, zp, quantum=q)
+live = [e for e in us.field.edges if e.src not in zp and e.tgt not in zp]
+open_ch = [min(1.0, e.weight * e.both_age / q) for e in live if e.state == S.TetraState.BOTH]
+names = [n for n in us.field.constructs if n not in S.ANCHORS]
+res = life.result()
+check("the uncertainty of the instant counts the BOTH channels still open and the exchange they carry toward "
+      "the quantum, the share of constructs that have landed as Apparents, and how the weight is held; it reads "
+      "without touching the field, and the life criteria keep it per 1000-cycle window",
+      u["open"] == len(open_ch) and abs(u["in_flight"] - sum(open_ch)) < 1e-3
+      and abs(u["landed"] - sum(us.field.constructs[n].layer == S.Layer.APPARENT for n in names) / len(names)) < 1e-3
+      and abs(sum(u["held"].values()) - 1) < 1e-3 and u["i_am"] in field_topology.STATES
+      and field_topology.uncertainty_of_the_instant.__defaults__[1] == q
+      and [(e.src, e.tgt, e.weight, e.state, e.both_age) for e in us.field.edges] == before
+      and S.get_ledger().head == head_before
+      and all(len(v) == 1 for v in res["instant_per_1000"].values())
+      and abs(sum(res["i_am_states"].values()) - 1) < 0.01
+      and "instant" in field_topology.field_topology(us.field, cycle=60, zero_points=set(zp)),
+      f"open {u['open']}, in flight {u['in_flight']} quanta, landed {u['landed']}, held {u['held']}, "
+      f"I::Am {u['i_am']}")
 check("a name is the first non-empty line of the model's answer: a note after it is dropped, and the label "
       "is still clipped",
       S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering") == "Umbraic"

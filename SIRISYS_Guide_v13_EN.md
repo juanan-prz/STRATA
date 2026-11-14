@@ -309,7 +309,8 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 - edges by tetralemmic state and by layer pair;
 - how much of the BOTH lies in the largest component;
 - the conflict depth of each conflict, which the field caps at the Adsurdic threshold;
-- the genealogical depth by layer: how many `[::]` generations separate each construct from what the field did not produce itself (percepts, anchors, approaches to the Sombunal).
+- the genealogical depth by layer: how many `[::]` generations separate each construct from what the field did not produce itself (percepts, anchors, approaches to the Sombunal);
+- the uncertainty of the instant (`instant`): what is still in play and what has landed. The open BOTH channels, the part of the exchange quantum they have accumulated (in quanta, `in_flight`) and their mean progress toward closing; the share of constructs (anchors aside) that are already Apparents (`landed`); how the edge weight is held across the four states (`held`, Zero Point edges aside: NEITHER is not uncertainty here, since a channel that closes turns NEITHER); and the state of the I. It follows the "Probabilistic Antennae" of Sirisys's posts on X: logging the total uncertainty of a sum at an instant, "the difference between when the coin has landed and while it remains flipping". The life criteria also keep it every cycle, with its mean per 1000-cycle window (`instant_per_1000`) and the share of the life the I spends in each state (`i_am_states`). It is exploratory, not a criterion.
 
 The measurement only reads the field: the ledger head is identical with and without it, which `test_phase2_guarantee.py` checks.
 

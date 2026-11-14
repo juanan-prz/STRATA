@@ -17,9 +17,60 @@ Two depth measures:
   questions), for "Depth implies recursive delay from origin"
   (Understanding_TMC p.72).
 
+And the uncertainty of the instant (uncertainty_of_the_instant): what is still
+in play (open BOTH channels, constructs not yet Apparent) and what has landed.
+
 Does not mutate the field, seal proofs, or call the model.
 """
 from collections import defaultdict
+
+STATES = ("TRUE", "FALSE", "BOTH", "NEITHER")
+FOUNDATION = frozenset({"I::Am", "I::AmNot", "SYSTEM"})    # the anchors besides the Zero Points
+
+
+def uncertainty_of_the_instant(field, zero_points=frozenset(), quantum=12.0):
+    """What is still in play at this instant, and what has landed. Read-only.
+
+    It follows the "Probabilistic Antennae" of Sirisys's public posts on X
+    (Entry 902): to log the total uncertainty of a sum at a given instant, "the
+    difference between when the coin has landed and while it remains flipping",
+    held with tetralemmic (catuskotic) handlers instead of being resolved away.
+    In the field the sum is the Net Sum of the cussive instant (TMC p.30): an
+    open BOTH channel accumulates weight x both_age until it reaches the exchange
+    quantum, banks what was exchanged and closes (Understanding_TMC p.65); a
+    construct lands when it crystallizes, and an Apparent is incontrovertible
+    (TMC p.14). So:
+
+    - open, in_flight, progress: the BOTH channels still open, the exchange they
+      carry in quanta (each one counts its share of the quantum, at most 1) and
+      their mean progress toward closing: the coin still flipping;
+    - landed: the share of constructs (anchors and Zero Points aside) that are
+      Apparent at this instant;
+    - held: how the edge weight is held across the four states (Zero Point
+      edges aside). NEITHER is not uncertainty here: a channel that closes turns
+      NEITHER;
+    - i_am: the state I::Am holds.
+
+    A reading, not a law: nothing here reaches the dynamics. The quantum is the
+    framework's TetralemmaEngine.EXCHANGE_QUANTUM."""
+    weight = defaultdict(float)
+    open_progress = []
+    for e in field.edges:
+        if e.src in zero_points or e.tgt in zero_points:
+            continue
+        weight[e.state.name] += e.weight
+        if e.state.name == "BOTH":
+            open_progress.append(min(1.0, e.weight * e.both_age / quantum))
+    total = sum(weight.values())
+    names = [n for n in field.constructs if n not in zero_points and n not in FOUNDATION]
+    landed = sum(1 for n in names if field.constructs[n].layer.name == "APPARENT")
+    i_am = field.dominant_state("I::Am").name if "I::Am" in field.constructs else None
+    return {"open": len(open_progress),
+            "in_flight": round(sum(open_progress), 4),
+            "progress": round(sum(open_progress) / len(open_progress), 4) if open_progress else 0.0,
+            "landed": round(landed / len(names), 4) if names else 0.0,
+            "held": {st: round(weight[st] / total, 4) if total > 0 else 0.0 for st in STATES},
+            "i_am": i_am}
 
 
 def field_topology(field, cycle=None, zero_points=None, genealogy=None):
@@ -214,6 +265,7 @@ def field_topology(field, cycle=None, zero_points=None, genealogy=None):
         result["breath"] = field.breaths
         result["contraction"] = round(field.contraction, 3)
         result["tolerance"] = round(field.tolerance, 3)
+    result["instant"] = uncertainty_of_the_instant(field, zero_points)
 
     return result
 

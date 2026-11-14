@@ -28,6 +28,8 @@ import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 
+import field_topology
+
 
 def _processor():
     """The processor's name, best effort: sysctl on macOS, /proc/cpuinfo on Linux."""
@@ -67,6 +69,12 @@ def describe_machine(rec):
 
 
 
+def _window_means(values, window=1000):
+    """Mean of each window of cycles (the last one may be shorter)."""
+    return [round(sum(values[a:a + window]) / len(values[a:a + window]), 4)
+            for a in range(0, len(values), window)]
+
+
 class LifeCriteria:
     """Feed after_cycle() once per cycle; read result() and verdict() at the end."""
 
@@ -78,6 +86,7 @@ class LifeCriteria:
         self.born, self.durable, self.flicker, self.seen = {}, [], 0, 0
         self.apparents_total = 0
         self.late_born, self.late_flicker = 0, 0      # crystals born after the genesis (exploratory)
+        self.instant = []                    # the uncertainty of each instant (exploratory)
 
     def after_cycle(self, ss, cycle, field_seconds):
         """field_seconds: time of the cycle itself, without the model's calls."""
@@ -100,6 +109,8 @@ class LifeCriteria:
             elif cycle - b >= S.BREATH_PERIOD:
                 self.durable.append(b)
                 del self.born[n]
+        self.instant.append(field_topology.uncertainty_of_the_instant(
+            f, frozenset(S.ZERO_POINTS), quantum=S.TetralemmaEngine.EXCHANGE_QUANTUM))
         if cycle % 100 == 99:
             top = sorted(ss.concordancy._energy_map(f).values(), reverse=True)
             self.e3.append(sum(top[:3]))
@@ -136,6 +147,17 @@ class LifeCriteria:
             "top3_energy_final": round(e3[-1], 1) if e3 else None,
             "tolerance_first_last": (round(sum(tol[:k]) / max(1, k), 3),
                                      round(sum(tol[-k:]) / max(1, k), 3)) if k else None,
+            # exploratory, not criteria: the uncertainty of the instant, every cycle
+            # (field_topology.uncertainty_of_the_instant), by 1000-cycle window
+            "instant_per_1000": {
+                "open": _window_means([u["open"] for u in self.instant]),
+                "in_flight": _window_means([u["in_flight"] for u in self.instant]),
+                "landed": _window_means([u["landed"] for u in self.instant]),
+                "held_both": _window_means([u["held"]["BOTH"] for u in self.instant]),
+                "held_neither": _window_means([u["held"]["NEITHER"] for u in self.instant]),
+            },
+            "i_am_states": {st: round(sum(u["i_am"] == st for u in self.instant) / max(1, len(self.instant)), 3)
+                            for st in field_topology.STATES},
         }
 
     # The Phase 3 acceptance rule, criterion by criterion, in the order it is judged: what
