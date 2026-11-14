@@ -1599,6 +1599,13 @@ class LLMIntermediary:
         """A model's answer as a construct label: at most MAX_NODE_NAME characters."""
         return text[:MAX_NODE_NAME].rstrip() + "…" if len(text) > MAX_NODE_NAME else text
 
+    @staticmethod
+    def _name_of(text: str) -> str:
+        """A name the model gave, as a label: its first non-empty line, clipped.
+        Now and then a model adds a note after the name (0.6 % of the names in
+        a 1000-cycle life); the note is not the name."""
+        return LLMIntermediary._clip(next((ln.strip() for ln in text.splitlines() if ln.strip()), ""))
+
     def propose_emergent(self, x: str, y: str, x_state: str, y_state: str) -> str:
         """Label the construct that emerges from [x] :: [y]."""
         result = self._call(
@@ -1608,7 +1615,7 @@ class LLMIntermediary:
             f"Reply with the name alone: no sentence, no preamble, no explanation.",
             temperature=0.92, remember=False
         )
-        return self._clip(result)
+        return self._name_of(result)
 
     def interpret_conflict(self, x: str, y: str) -> str:
         """Label the conflict structure that emerges when [x] :: [y] reverts."""
@@ -1619,7 +1626,7 @@ class LLMIntermediary:
             f"Reply with the name alone: no sentence, no preamble, no explanation.",
             temperature=0.95, remember=False
         )
-        return self._clip(result)
+        return self._name_of(result)
 
     def narrate(self, cycle: int, instability: float,
                 apparent_count: int, both_count: int, last_action: str) -> str:

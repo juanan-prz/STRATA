@@ -173,6 +173,12 @@ with FakeModel("counter") as model:
         again = llm.propose_emergent("A", "B", "TRUE", "BOTH")
     sent = [r["messages"] for r in model.requests]
 kept = json.dumps(llm.history)
+check("a name is the first non-empty line of the model's answer: a note after it is dropped, and the label "
+      "is still clipped",
+      S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering") == "Umbraic"
+      and S.LLMIntermediary._name_of("\n  Discordia Apparens  \n(Explanation: ...)") == "Discordia Apparens"
+      and S.LLMIntermediary._name_of("") == "" and S.LLMIntermediary._name_of("x" * 300).endswith("…"),
+      repr(S.LLMIntermediary._name_of("Umbraic\n\nNote: the Sombunal is whispering")))
 check("a name is asked for without memory: its request carries the prompt alone, it leaves nothing in the "
       "thread, and the same name asked again sends the same request; the question keeps its thread",
       [len(m) - 1 for m in sent] == [1, 1, 1, 3, 1] and sent[0] == sent[4]
