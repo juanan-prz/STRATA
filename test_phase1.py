@@ -773,9 +773,10 @@ check("the inspector's constants are the framework's: the clock, the Vc threshol
 live_tokens, inspector_tokens = tokens(views["live"]), tokens(inspector)
 shared = set(live_tokens) & set(inspector_tokens)
 differ = sorted(t for t in shared if live_tokens[t] != inspector_tokens[t])
-# Written once in each file, alike: the strata, how an edge state and a mode are drawn and written
-SHARED = ("RINGS", "EDGE_STYLE", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
-          "LAGRANGE", "lagrangeText", "ARROW_ZOOM", "QUIET")
+# Written once in each file, alike: the strata, how an edge state and a mode are drawn and written,
+# how a view is fitted
+SHARED = ("RINGS", "EDGE_STYLE", "SUPPORT", "weightAlpha", "STATE_MEANING", "MODE_SIGN", "MODE_MEANING", "modeText",
+          "LAGRANGE", "lagrangeText", "ARROW_ZOOM", "MARK_ZOOM", "QUIET", "FIT_MARGIN", "FIT_MIN_SPAN", "FOLLOW_EASE")
 unlike = [name for name in SHARED if not declared(views["live"], name) or declared(views["live"], name) != declared(inspector, name)]
 if declared(views["live"], "HISTORY_KEPT") != str(server.HISTORY_KEPT):     # the live view merges as the server does
     unlike.append("HISTORY_KEPT (live and server)")
@@ -794,13 +795,14 @@ def function(html, name):
     return html[found.start():at + 1]
 
 
-DRAWN_ALIKE = ("shapeOf", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
+DRAWN_ALIKE = ("mix", "shapeOf", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
+               "fittedView", "setFollow", "steerView",
                "renderBreakdown", "renderLagrangian", "buildFilters", "foldableSections", "foldableLegend")
 unlike += [f"{name}()" for name in DRAWN_ALIKE if not function(views["live"], name)
            or function(views["live"], name) != function(inspector, name)]
 check("the two views agree with each other and the live view with its server: the strata rings, how each edge "
-      "state and mode is drawn and written, the functions they draw and fold with, every colour token both define, "
-      "the history kept", not unlike and len(shared) > 20 and not differ, ", ".join(unlike + differ)
+      "state and mode is drawn and written, the functions they draw, fit and fold with, every colour token both "
+      "define, the history kept", not unlike and len(shared) > 20 and not differ, ", ".join(unlike + differ)
       or f"{len(SHARED)} declarations, {len(DRAWN_ALIKE)} functions and {len(shared)} colour tokens alike")
 
 check.finish()

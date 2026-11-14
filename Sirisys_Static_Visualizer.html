@@ -55,9 +55,9 @@
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
        interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also thicker and the strongest, FALSE dashed, TRUE a little
-       stronger and NEITHER fainter, so that a thin TRUE line stays blue beside it: thin lines are
-       told apart by lightness more than by hue. The accent is never data */
+       neutral. On the canvas BOTH is also the thickest and the strongest, FALSE dashed and TRUE a
+       little stronger; NEITHER is solid and the thinnest, so that its grey stays visible without
+       outweighing a thin TRUE line beside it. The accent is never data */
     --col-TRUE: #5e92ff;
     --col-FALSE: #cb86db;
     --col-BOTH: #f05a0a;
@@ -531,7 +531,7 @@
     <div class="ctrl-group floating">
       <button class="btn" id="btn-proofs" aria-pressed="false" title="Rings (dashed) the constructs whose saved proofs carry the relation chosen in its list (P)">proofs</button>
       <button class="btn" id="btn-anchors" aria-pressed="false" title="The relations of the anchors, often most of the edges: faint, so that the rest of the structure shows (A)">quiet anchors</button>
-      <button class="btn" id="btn-fit" title="Fit the view to the constructs on show (F)">Fit</button>
+      <button class="btn" id="btn-fit" aria-pressed="true" title="Fit the view and keep it fitted from one state to the next: in relations to the constructs on show, in strata to the rings. Panning or zooming lets it go (F)">Fit</button>
     </div>
     <div class="ctrl-group floating">
       <input class="search" id="search" list="names" placeholder="find a construct…" aria-label="find a construct by key or label" autocomplete="off">
@@ -580,8 +580,7 @@
       </div>
       <div class="break"></div>
       <div id="edge-legend" class="items"></div>
-      <div class="item" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks">
-        <svg width="18" height="10" viewBox="0 0 18 10"><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--layer-APPARENT)" stroke-width="4" opacity="0.18"/><line x1="1" y1="5" x2="17" y2="5" style="stroke: var(--col-NEITHER)" stroke-width="1" stroke-opacity="0.55"/></svg>
+      <div class="item" id="support-legend" title="an edge into a crystal, BOTH aside: it ages on breaths, not on ticks; a little thicker, its state's colour drawn toward the crystal's">
         <span>crystal support</span>
       </div>
     </div>
@@ -637,10 +636,17 @@ const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
-// How the canvas draws each edge state, besides its colour: BOTH thicker and the strongest,
-// FALSE dashed, TRUE a little stronger, NEITHER fainter (alpha multiplies the edge's own
-// opacity, up to 1)
-const EDGE_STYLE = { BOTH: { width: 2, alpha: 1.35 }, TRUE: { width: 1, alpha: 1.2 }, FALSE: { width: 1, dash: [4, 3] }, NEITHER: { width: 1, alpha: 0.55 } };
+// How the canvas draws each edge state, besides its colour: BOTH the thickest and the
+// strongest, FALSE dashed, TRUE a little stronger. Their opacity follows the edge's weight
+// (alpha multiplies it, up to 1). NEITHER, most of the edges, is drawn solid and the
+// thinnest: its grey tells it apart without fading it out.
+const EDGE_STYLE = {
+  BOTH: { width: 1.4, alpha: 1.35 }, TRUE: { width: 0.75, alpha: 1.2 },
+  FALSE: { width: 0.75, dash: [4, 3] }, NEITHER: { width: 0.55, solid: true },
+};
+// A crystal's support, an edge into it (BOTH aside): solid, a little thicker than its state's
+// line, and its state's colour drawn a little toward the crystal's
+const SUPPORT = { extra: 0.2, tint: 0.2 };
 // TetralemmaEngine.EXCHANGE_QUANTUM: a BOTH channel closes once weight × both_age reaches it
 const EXCHANGE_QUANTUM = 12;
 
@@ -658,18 +664,30 @@ const CONTINUE_STEPS = 120;       // for the next state of a timeline, which kee
 const HOVER_PX = 6;               // a construct is under the pointer within this many pixels, at any zoom
 const LABEL_ZOOM = 3.5;           // every name is written from this zoom on; a selection's always
 const ARROW_ZOOM = 2;             // each edge's direction drawn from this zoom on; a selection's always
+const ZOOM_MIN = 0.1, ZOOM_MAX = 8;   // the wheel's limits, and a fitted view's
+const FIT_MARGIN = 0.08;          // a fitted view leaves this share of the free area empty on each side
+const FIT_MIN_SPAN = 240;         // and shows at least this much of the field, so a young one is not blown up
+const FOLLOW_EASE = 0.2;          // while the view follows the field, the share of the way it moves per frame
+const MARK_ZOOM = 2;              // the zoom the legend's edge marks are drawn at, a usual one
 const PLAY_MS = 900;              // per state, when the timeline plays
 
 // ═══ Helpers ════════════════════════════════════════════════════════════════
 
 const $ = id => document.getElementById(id);
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// Two '#rrggbb' colours mixed: t of the way from a to b
+function mix(a, b, t) {
+  const rgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  const from = rgb(a), to = rgb(b);
+  return `rgb(${from.map((v, i) => Math.round(v + (to[i] - v) * t)).join(', ')})`;
+}
 const COLOR = {
   layer: Object.fromEntries(LAYERS.map(l => [l, css('--layer-' + l)])),
   state: Object.fromEntries(STATES.map(s => [s, css('--col-' + s)])),
   accent: css('--accent'), dim: css('--text-dim'), muted: css('--text-muted'), bright: css('--text-bright'),
   ground: css('--bg-0'),                          // the field's background
 };
+COLOR.support = Object.fromEntries(STATES.map(s => [s, mix(COLOR.state[s], COLOR.layer.APPARENT, SUPPORT.tint)]));
 const FONT_MONO = css('--font-mono');
 
 function el(tag, className, text) {
@@ -684,16 +702,17 @@ const atT = T => T ? `(${T[0]},${T[1]})` : '—';
 const ticks = n => n == null ? '?' : `${n} tick${n === 1 ? '' : 's'}`;
 // Parts of a row, a space apart: invisible in a flex row, but read aloud and copied as words
 const spaced = parts => parts.flatMap((part, i) => i ? [' ', part] : [part]);
-// An edge state as the canvas draws it, for the legend and the filters
-function edgeMark(state) {
+// An edge state as the canvas draws it at MARK_ZOOM, for the legend, the filters and the
+// inspector; with support, as a crystal's support
+function edgeMark(state, support = false) {
   const NS = 'http://www.w3.org/2000/svg', style = EDGE_STYLE[state];
   const svg = document.createElementNS(NS, 'svg'), stroke = document.createElementNS(NS, 'line');
   svg.setAttribute('class', 'edge-mark');
   svg.setAttribute('width', '18'); svg.setAttribute('height', '8'); svg.setAttribute('viewBox', '0 0 18 8');
-  const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: COLOR.state[state], 'stroke-width': style.width * 1.3 };
+  const width = (style.width + (support ? SUPPORT.extra : 0)) * MARK_ZOOM;
+  const at = { x1: 1, y1: 4, x2: 17, y2: 4, stroke: (support ? COLOR.support : COLOR.state)[state], 'stroke-width': width };
   for (const [k, v] of Object.entries(at)) stroke.setAttribute(k, v);
   if (style.dash) stroke.setAttribute('stroke-dasharray', style.dash.join(' '));
-  if (style.alpha < 1) stroke.setAttribute('stroke-opacity', style.alpha);
   svg.append(stroke);
   return svg;
 }
@@ -958,7 +977,7 @@ function shapeOf(name, layer) {
   return 'circle';
 }
 // The size a construct is drawn at: by layer, a little larger for the pointed shapes
-const SHAPE_GROWTH = { circle: 0, diamond: 2, hexagon: 1, star: 3 };
+const SHAPE_GROWTH = { circle: 0, diamond: 2, hexagon: 0, star: 3 };
 const sizeOf = (name, c) => ([3, 4, 5, 7][c.layer] ?? 3) + SHAPE_GROWTH[shapeOf(name, c.layer)];
 
 function tracePolygon(cx, cy, points) {
@@ -1004,14 +1023,18 @@ function arrowhead(a, b, size, color, alpha) {          // at b's edge, pointing
   ctx.fillStyle = color; ctx.globalAlpha = alpha;
   ctx.fill();
 }
-// An edge as the canvas draws it: its state's colour and line, one tone from end to end,
-// and from ARROW_ZOOM on an arrowhead at its target (src → tgt)
-function drawRelation(a, b, e, alpha, extra, arrowGap) {
-  const { width, dash, alpha: fade = 1 } = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
-  const color = COLOR.state[e.state] || COLOR.dim;
-  alpha = Math.min(1, alpha * fade);
-  line(a, b, color, alpha, width + extra, dash);
-  if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, alpha * 1.15));
+// An edge's opacity, by its weight
+const weightAlpha = e => Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6);
+// An edge as the canvas draws it: its state's colour and line, one tone from end to end, and
+// with arrowGap an arrowhead at its target (src → tgt). Its opacity follows its weight, but
+// for a solid edge (NEITHER, and a crystal's support) or an emphasized one; dim fades any edge.
+function drawRelation(a, b, e, { dim = 1, emphasis = false, support = false, arrowGap = null } = {}) {
+  const style = EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER;
+  const color = (support ? COLOR.support : COLOR.state)[e.state] || COLOR.dim;
+  const strength = support || style.solid ? 1 : emphasis ? 0.95 : Math.min(1, weightAlpha(e) * style.alpha);
+  const width = style.width + (support ? SUPPORT.extra : 0) + (emphasis ? 0.5 : 0);
+  line(a, b, color, strength * dim, width, style.dash);
+  if (arrowGap != null && a !== b) arrowhead(a, b, { gap: arrowGap, len: 5 }, color, Math.min(1, strength * dim * 1.15));
 }
 
 function render() {
@@ -1033,16 +1056,13 @@ function render() {
     const ca = view.constructs.get(e.src), cb = view.constructs.get(e.tgt);
     if (!a || !b || a === b || !ca || !cb || !FILTERS.edgeState[e.state]) return;
     if (!onShow(e.src, ca) || !onShow(e.tgt, cb)) return;
-    const quiet = quietAnchors && !emphasis && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
-    const dim = (near && !emphasis ? 0.25 : ringed ? 0.45 : 1) * quiet;
-    // A crystal's support (an edge into it) ages on breaths, not on ticks: a faint halo, faint
-    // enough that the edge's own colour shows through it.
-    // A BOTH edge faces its fixed floor instead, into a crystal or not.
-    if (cb.layer === APPARENT && e.state !== 'BOTH') {
-      line(a, b, COLOR.layer.APPARENT, 0.08 * dim, (EDGE_STYLE[e.state] || EDGE_STYLE.NEITHER).width + 2);
-    }
-    const alpha = emphasis ? 0.95 : Math.min(0.85, 0.25 + (e.weight || 0.5) * 0.6) * dim;
-    drawRelation(a, b, e, alpha, emphasis ? 0.5 : 0, emphasis || viewK >= ARROW_ZOOM ? sizeOf(e.tgt, cb) + 2 : null);
+    const quiet = quietAnchors && (ANCHORS.has(e.src) || ANCHORS.has(e.tgt)) ? QUIET : 1;
+    const dim = emphasis ? 1 : (near ? 0.25 : ringed ? 0.45 : 1) * quiet;
+    // A crystal's support (an edge into it) ages on breaths, not on ticks; a BOTH edge faces
+    // its fixed floor instead, into a crystal or not
+    const support = cb.layer === APPARENT && e.state !== 'BOTH';
+    drawRelation(a, b, e, { dim, emphasis, support,
+                            arrowGap: emphasis || viewK >= ARROW_ZOOM ? sizeOf(e.tgt, cb) + 2 : null });
   };
   for (const e of view.edges) if (!focus || (e.src !== focus && e.tgt !== focus)) drawEdge(e, false);
   if (focus) for (const e of view.edgesOf.get(focus)) drawEdge(e, true);   // its relations, on top, with their direction
@@ -1135,28 +1155,83 @@ function drawLabels(px, only) {
   }
 }
 
+// One frame: the view, while it follows the field, and the field
 let framePending = false;
 function requestDraw() {
-  if (!framePending) { framePending = true; requestAnimationFrame(() => { framePending = false; render(); }); }
+  if (!framePending) { framePending = true; requestAnimationFrame(frame); }
+}
+function frame() {
+  framePending = false;
+  const steering = follow && steerView();
+  render();
+  if (steering) requestDraw();
 }
 
-// The view fitted to the constructs on show (all of them, when every layer is hidden)
-function fitView() {
-  if (!view) return;
-  const all = Array.from(view.constructs, ([name, c]) => [positions.get(name), c]).filter(([p]) => p);
-  const shown = all.filter(([, c]) => isShown(c));
-  const fit = (shown.length ? shown : all).map(([p]) => p);
-  if (!fit.length) return;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of fit) {
-    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+
+// ═══ The view: fitted, and following the field ══════════════════════════════
+
+// What a fitted view holds, in field units: in relations the constructs on show (all of
+// them, when every layer is hidden), in strata its rings, centred on their centre
+function fieldBounds() {
+  if (!view) return null;
+  const all = Array.from(view.constructs, ([name, c]) => [name, c, positions.get(name)]).filter(([, , p]) => p);
+  if (!all.length) return null;
+  if (layout === 'strata') {
+    let r = 0;
+    for (const [name, c, p] of all) r = Math.max(r, RINGS[stratumOf(name, c)], Math.hypot(p.x, p.y) + sizeOf(name, c));
+    return { x: 0, y: 0, w: 2 * r, h: 2 * r };
   }
-  const W = canvas.width / DPR, H = canvas.height / DPR;
-  viewK = Math.min(W, H) * 0.85 / Math.max(maxX - minX, maxY - minY, 100);
-  viewX = -(minX + maxX) / 2 * viewK;
-  viewY = -(minY + maxY) / 2 * viewK;
-  requestDraw();
+  const shown = all.filter(([, c]) => isShown(c));
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [name, c, p] of shown.length ? shown : all) {
+    const r = sizeOf(name, c);
+    minX = Math.min(minX, p.x - r); maxX = Math.max(maxX, p.x + r);
+    minY = Math.min(minY, p.y - r); maxY = Math.max(maxY, p.y + r);
+  }
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
+}
+
+// The part of the canvas the floating boxes leave free: below the controls, above the
+// legend (folded or not)
+function freeArea() {
+  const rect = canvas.getBoundingClientRect();
+  const boxSides = (selector, side) => Array.from(document.querySelectorAll(selector), box => box.getBoundingClientRect())
+    .filter(r => r.height > 0).map(r => r[side] - rect.top);
+  const top = Math.max(0, ...boxSides('.controls > .floating', 'bottom'));
+  const bottom = Math.min(rect.height, ...boxSides('#legend', 'top'));
+  const roomy = bottom - top > rect.height / 3;    // in a small window the whole canvas, boxes and all
+  return { top: roomy ? top : 0, bottom: roomy ? bottom : rect.height, width: rect.width, height: rect.height };
+}
+
+// The view that fits the field into the free area, with FIT_MARGIN around it
+function fittedView() {
+  const b = fieldBounds();
+  if (!b) return null;
+  const free = freeArea(), room = 1 - 2 * FIT_MARGIN;
+  const k = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX,
+    free.width * room / Math.max(b.w, FIT_MIN_SPAN), (free.bottom - free.top) * room / Math.max(b.h, FIT_MIN_SPAN)));
+  // the canvas draws from its centre: the free area's centre, less the bounds' centre
+  return { k, x: -b.x * k, y: (free.top + free.bottom - free.height) / 2 - b.y * k };
+}
+
+// The view follows the field, refitted from one state of a timeline to the next, until a pan
+// or a zoom lets it go; Fit (F) fits it and makes it follow again. The Fit button shows which.
+let follow = true;
+function setFollow(on) {
+  follow = on;
+  $('btn-fit').setAttribute('aria-pressed', String(on));
+  if (on) requestDraw();
+}
+const fitView = () => setFollow(true);
+// While it follows, each frame takes the view part of the way to the fitted one;
+// true while it still moves
+function steerView() {
+  const aim = fittedView();
+  if (!aim) return false;
+  const near = Math.abs(aim.k - viewK) < aim.k * 1e-3 && Math.abs(aim.x - viewX) < 0.5 && Math.abs(aim.y - viewY) < 0.5;
+  const t = near ? 1 : FOLLOW_EASE;
+  viewK += (aim.k - viewK) * t; viewX += (aim.x - viewX) * t; viewY += (aim.y - viewY) * t;
+  return !near;
 }
 
 // The construct under a point of the screen: the nearest one within its drawn size,
@@ -1188,7 +1263,8 @@ window.addEventListener('mouseup', e => {
 });
 canvas.addEventListener('mousemove', e => {
   if (drag) {
-    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 3) drag.moved = true;
+    if (!drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) <= 3) return;
+    if (!drag.moved) { drag = { ...drag, moved: true, viewX, viewY }; setFollow(false); }
     viewX = drag.viewX + e.clientX - drag.x;
     viewY = drag.viewY + e.clientY - drag.y;
     requestDraw();
@@ -1202,10 +1278,11 @@ canvas.addEventListener('mousemove', e => {
 canvas.addEventListener('mouseleave', () => { hideTooltip(); canvas.classList.remove('over-construct'); });
 canvas.addEventListener('wheel', e => {
   e.preventDefault();
+  setFollow(false);
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left - rect.width / 2, my = e.clientY - rect.top - rect.height / 2;
   const wx = (mx - viewX) / viewK, wy = (my - viewY) / viewK;
-  viewK = Math.max(0.1, Math.min(8, viewK * (e.deltaY > 0 ? 0.9 : 1.1)));
+  viewK = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, viewK * (e.deltaY > 0 ? 0.9 : 1.1)));
   viewX = mx - wx * viewK;
   viewY = my - wy * viewK;
   requestDraw();
@@ -1743,9 +1820,10 @@ search.addEventListener('input', () => {
 });
 search.addEventListener('keydown', e => { if (e.key === 'Enter') find(); });
 
-// F fits, V changes the layout, P shows the proofs, A quiets the anchors' relations, O opens,
-// ← → move in the timeline, Esc clears the selection. The search box keeps its letters and the slider its arrows;
-// a focused button uses only Space and Enter, which are not shortcuts here.
+// F fits the view and follows the field again, V changes the layout, P shows the proofs, A quiets
+// the anchors' relations, O opens, ← → move in the timeline, Esc clears the selection. The search
+// box keeps its letters and the slider its arrows; a focused button uses only Space and Enter,
+// which are not shortcuts here.
 window.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === 'Escape') { if (e.target === search) search.blur(); select(null); return; }
@@ -1797,6 +1875,7 @@ function foldableLegend(key) {
     const unfold = box.classList.contains('folded');
     show(unfold);
     try { localStorage.setItem(key, unfold ? 'open' : 'folded'); } catch (err) { /* private mode */ }
+    requestDraw();                // a view that follows the field refits to the space left free
   };
 }
 
@@ -1807,6 +1886,7 @@ $('edge-legend').replaceChildren(...STATES.map(s => {
   item.append(edgeMark(s), el('span', null, s));
   return item;
 }));
+$('support-legend').prepend(edgeMark('NEITHER', true));
 foldableSections('sirisys.folded.inspector');
 foldableLegend('sirisys.legend.inspector');
 renderInspector();

@@ -127,7 +127,7 @@ Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servid
 |---|---|
 | Espacio | Play / Pause |
 | S | Avanza un ciclo |
-| F | Encuadra la vista en los constructos visibles |
+| F | Encuadra la vista y vuelve a seguir el campo |
 | V | Cambia la disposición: relations ↔ strata |
 | A | Atenúa las anclas (quiet anchors) |
 
@@ -153,9 +153,10 @@ El glosario (sección VIII) define cada contador.
 La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge todo; su título la pliega en una cajita en la esquina, y el navegador lo recuerda.
 
 - **Disposiciones.** *relations*: por sus relaciones. *strata*: los Zero Points en el centro, luego las anclas, NULL_00, UMBRA_0, UNIT_1 y APPARENT hacia fuera, de modo que un constructo que sube de capa se desplaza hacia fuera.
+- **La vista** se encuadra sola en el campo y lo sigue mientras crece (de un estado al siguiente, en el inspector), sin quedar bajo los controles ni la leyenda: en *relations*, los constructos visibles; en *strata*, los anillos, centrados en su centro. Desplazar o hacer zoom la suelta, y el botón *Fit*, iluminado mientras la vista sigue al campo, la recupera (F).
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
 - **Formas.** Un constructo es un punto del color de su capa; un ancla (I::Am, I::AmNot, SYSTEM), un rombo; un cristal que formó el campo, un hexágono abierto, para que destaquen los estratos activos; un Zero Point, una estrella; un conflicto, un punto con anillo. Se dibuja un anillo donde un constructo sube a UNIT_1 y dos donde cristaliza.
-- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y más gruesa, NEITHER gris y más tenue, para que una línea azul fina destaque a su lado. Una arista hacia un cristal, salvo BOTH, se dibuja con un halo tenue, como soporte del cristal: envejece por respiraciones, no por ciclos.
+- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y la más gruesa; su opacidad sigue al peso de la arista. NEITHER, la mayoría, es gris, sólida y la más fina. Una arista hacia un cristal, salvo BOTH, es el soporte del cristal, que envejece por respiraciones, no por ciclos: sólida, algo más gruesa y con el color de su estado llevado hacia el del cristal.
 - **Dirección.** Desde el zoom ×2, cada arista muestra su dirección.
 - **Los modos de existencia** se escriben con su signo, [Ω] y [Ꮠ].
 - **Quiet anchors** (A) atenúa las relaciones de las anclas, a menudo la mayoría de las aristas, para que se vea el resto de la estructura.
@@ -215,7 +216,7 @@ python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_16.json
 |---|---|
 | O | Abre archivos |
 | ← → | Estado anterior / siguiente de la línea de tiempo |
-| F | Encuadra la vista |
+| F | Encuadra la vista y vuelve a seguir el campo |
 | V | Cambia la disposición: relations ↔ strata |
 | P | Rodea los constructos cuyas pruebas guardadas llevan la relación elegida en su lista (con un anillo discontinuo; el de la selección es continuo) |
 | A | Atenúa las anclas (quiet anchors) |

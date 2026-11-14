@@ -127,7 +127,7 @@ Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and
 |---|---|
 | Space | Play / Pause |
 | S | Step one cycle |
-| F | Fit the view to the constructs on show |
+| F | Fit the view, and follow the field again |
 | V | Change the layout: relations ↔ strata |
 | A | Quiet anchors |
 
@@ -153,9 +153,10 @@ The glossary (section VIII) defines every counter.
 The live view and the inspector draw the field alike, and the legend keys all of it; its title folds it to a small box in the corner, and the browser remembers it.
 
 - **Layouts.** *relations*: placed by their relations. *strata*: the Zero Points at the centre, then the anchors, NULL_00, UMBRA_0, UNIT_1 and APPARENT outwards, so that a construct that rises a layer moves out.
+- **The view** fits itself to the field and follows it as it grows (from one state to the next, in the inspector), clear of the controls and the legend: in *relations* the constructs on show, in *strata* the rings, centred on their centre. Panning or zooming lets it go, and the *Fit* button, lit while the view follows, takes it back (F).
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
 - **Shapes.** A construct is a dot in the colour of its layer; an anchor (I::Am, I::AmNot, SYSTEM), a diamond; a crystal the field formed, an open hexagon, so that the active strata stand out; a Zero Point, a star; a conflict, a ringed dot. One ring is drawn where a construct rises to UNIT_1, two where it crystallizes.
-- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and thicker, NEITHER grey and fainter, so that a thin blue line stands out beside it. An edge into a crystal, BOTH aside, is drawn with a faint halo, as crystal support: it ages on breaths, not on cycles.
+- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and the thickest; their opacity follows the edge's weight. NEITHER, most of the edges, is grey, solid and the thinnest. An edge into a crystal, BOTH aside, is the crystal's support, which ages on breaths, not on cycles: solid, a little thicker, its state's colour drawn toward the crystal's.
 - **Direction.** From zoom ×2 each edge shows its direction.
 - **Existence modes** are written with their signs, [Ω] and [Ꮠ].
 - **Quiet anchors** (A) makes the anchors' relations, often most of the edges, faint, so that the rest of the structure shows.
@@ -215,7 +216,7 @@ python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_16.json
 |---|---|
 | O | Open files |
 | ← → | Previous / next state of the timeline |
-| F | Fit the view |
+| F | Fit the view, and follow the field again |
 | V | Change the layout: relations ↔ strata |
 | P | Ring the constructs whose saved proofs carry the relation chosen in its list (a dashed ring; the selection's is solid) |
 | A | Quiet anchors |
