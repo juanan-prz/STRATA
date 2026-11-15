@@ -34,7 +34,7 @@ python3 test_sirisys.py                    # integrity, determinism, bounded mem
 python3 Sirisys_Server.py --play           # experiment mode, with this machine's percepts
 ```
 
-Open `http://127.0.0.1:8000` to watch the field. `Ctrl+C` in the terminal stops the server and saves the instance in `sirisys_runs/`; to examine it afterwards, open its `state.json` in `Sirisys_Static_Visualizer.html`.
+Open `http://127.0.0.1:8000` to watch the field. `Ctrl+C` in the terminal stops the server and saves the instance in `sirisys_runs/`; to examine it afterwards, open its `state.json` in `Sirisys_Static_Visualizer.html`, or watch the whole run again, smoothly, with `python3 Sirisys_Server.py --replay last` at `http://127.0.0.1:8001`.
 
 ```bash
 python3 run_report.py --cycles 20 --seeds 1 --backend none    # a short measured run, without a model

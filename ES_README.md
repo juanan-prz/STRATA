@@ -34,7 +34,7 @@ python3 test_sirisys.py                    # integridad, determinismo, memoria a
 python3 Sirisys_Server.py --play           # modo experimento, con los perceptos de esta máquina
 ```
 
-Abre `http://127.0.0.1:8000` para ver el campo. `Ctrl+C` en la terminal detiene el servidor y guarda la instancia en `sirisys_runs/`; para examinarla después, abre su `state.json` con `Sirisys_Static_Visualizer.html`.
+Abre `http://127.0.0.1:8000` para ver el campo. `Ctrl+C` en la terminal detiene el servidor y guarda la instancia en `sirisys_runs/`; para examinarla después, abre su `state.json` con `Sirisys_Static_Visualizer.html`, o vuelve a ver la ejecución entera, con fluidez, con `python3 Sirisys_Server.py --replay last` en `http://127.0.0.1:8001`.
 
 ```bash
 python3 run_report.py --cycles 20 --seeds 1 --backend none    # una ejecución medida corta, sin modelo

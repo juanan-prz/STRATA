@@ -11,7 +11,10 @@
   the field; under it, the instance's metabolism breath by breath (its history
   from /api/history); beside it, the counters, the Phase 3 criteria and the
   event log. The buttons send play, pause, step, reset and speed. The server's
-  interface is described at the top of Sirisys_Server.py.
+  interface is described at the top of Sirisys_Server.py. A replay of a
+  recorded run (Sirisys_Server.py --replay) is shown the same way: the header
+  says so and counts its cycles, and the log says whether it lived the run's
+  own ledger.
 -->
 <style>
   :root {
@@ -38,6 +41,7 @@
     --accent-soft: rgba(74, 240, 196, 0.12);
     --accent-strong: rgba(74, 240, 196, 0.28);
     --warn: #f0a832;
+    --warn-soft: rgba(240, 168, 50, 0.12);
     --err: #ff5571;
     --err-soft: rgba(255, 85, 113, 0.14);
     --sombunal: #9b87f5;
@@ -496,6 +500,8 @@
   .log-entry.narration { border-left-color: var(--text-dim); color: var(--text-muted); font-style: italic; }
   .log-entry.sombunal { border-left-color: var(--sombunal); background: var(--sombunal-soft); color: var(--sombunal-text); }
   .log-entry.model { border-left-color: var(--err); background: var(--err-soft); color: var(--err); }
+  .log-entry.replay { border-left-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .log-entry.replay.warn { border-left-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
   .log-list.hide-event .log-entry.event, .log-list.hide-cussive .log-entry.cussive,
   .log-list.hide-terminate .log-entry.terminate, .log-list.hide-narration .log-entry.narration,
   .log-list.hide-sombunal .log-entry.sombunal, .log-list.hide-model .log-entry.model { display: none; }
@@ -512,7 +518,7 @@
 <body>
 
 <header class="top-header">
-  <div class="brand">SIRISYS<span class="brand-tag">live</span></div>
+  <div class="brand">SIRISYS<span class="brand-tag" id="brand-tag">live</span></div>
   <div class="header-status">
     <div class="running-indicator" id="header-running"><span class="ind-dot"></span><span id="header-run-text">paused</span></div>
     <span class="stat-inline">cycle<strong id="header-cycle">—</strong></span>
@@ -1249,12 +1255,21 @@ function hideTooltip() { tooltip.classList.remove('visible'); }
 // The header describes the instance on screen: the server's mode and framework version
 // (from the status), and the run folder of the snapshots shown
 let runInfo = [], statusRun = null;
-let model = null;                 // { backend, name, active } from the status
+let model = null;                 // { backend, name, active, recorded? } from the status
+let replay = null;                // a replay's progress (Sirisys_Server.py --replay); null for an experiment
 
 function renderRunInfo() {
   const text = [...runInfo, currentRun || statusRun].filter(Boolean).join(' · ');
   setText('header-run-info', text || '—');
-  $('header-run-info').title = text + '\nserver mode · framework version · run folder in sirisys_runs/';
+  $('header-run-info').title = text + '\nserver mode · framework version · '
+    + (replay ? 'the run folder replayed, in sirisys_runs/ (#2, #3… as it is played again)' : 'run folder in sirisys_runs/');
+}
+
+// A replay: the brand says so, and Reset plays it again from its first cycle
+function renderReplay() {
+  setText('brand-tag', replay ? 'replay' : 'live');
+  $('btn-reset').title = replay ? 'Play the replay again from its first cycle'
+                                : 'Start a new instance (the current run stays in sirisys_runs/)';
 }
 
 function setRunning(running) {
@@ -1273,13 +1288,17 @@ function showLedger(ledger) {
 function renderModel(watch) {
   if (!model) return;
   let text, title, tone = '';
-  if (!model.active) {
+  if (model.recorded === false) {
+    text = 'answers not recorded';
+    title = 'this run kept no record of its model\'s answers: the constructs show the field\'s keys';
+  } else if (!model.active) {
     text = model.backend === 'none' ? 'no model' : 'model unavailable';
     title = 'no labels: the field names what it produces'
       + (model.backend === 'none' ? '' : ` (degraded: the ${model.backend} model was not available at start)`);
   } else {
-    text = 'model ' + model.name;
-    title = model.backend + ' · ' + model.name;
+    text = (model.recorded ? 'recorded ' : 'model ') + model.name;
+    title = model.backend + ' · ' + model.name
+      + (model.recorded ? ': its answers in the run, in order; no model is asked' : '');
     if (watch) {
       const bad = watch.failures + watch.empty;
       title += ` · ${watch.calls} calls: ${watch.failures} failed, ${watch.empty} empty`;
@@ -1432,6 +1451,11 @@ function renderEmptyState() {
     $('empty-state-hint').replaceChildren('This view is served by Sirisys_Server.py: run ', kbd('python3 Sirisys_Server.py'),
                                           ' and open ', kbd('http://127.0.0.1:8000'), '.', el('br'),
                                           'A saved instance opens in Sirisys_Static_Visualizer.html.');
+  } else if (replay && !(lastStatus && lastStatus.running)) {
+    const [title, then] = replay.ended ? ['replay ended', ' to watch them again.']
+      : cycles > 0 ? ['replay paused', ` to go on from cycle ${cycles}.`] : ['replay ready', ' to watch them as they went.'];
+    setText('empty-state-title', title);
+    $('empty-state-hint').replaceChildren(`${replay.cycles} cycles of ${replay.of}. Press `, kbd('Play'), then);
   } else if (lastStatus && lastStatus.running) {
     setText('empty-state-title', 'field is cycling');
     $('empty-state-hint').replaceChildren('It appears here with the next cycle.');
@@ -1686,9 +1710,10 @@ $('log-filters').replaceChildren(...Object.entries(LOG_KINDS).map(([kind, [label
   return chip;
 }));
 
-// An entry of one kind (LOG_KINDS), kept with the latest LOG_KEPT of that kind, so
-// that frequent kinds never push the rare ones out. Text from a language model
-// (names, narration, questions) goes in as text, never as markup.
+// An entry of one kind (LOG_KINDS, or a replay's own notes, which no chip hides), kept
+// with the latest LOG_KEPT of that kind, so that frequent kinds never push the rare ones
+// out. Text from a language model (names, narration, questions) goes in as text, never
+// as markup.
 function log(cycle, content, kind, extra = '') {
   addEntry(el('div', `log-entry ${kind} ${extra}`.trim()), cycle, content, kind);
 }
@@ -1750,9 +1775,34 @@ function logSnapshot(snap, crystallized) {
   const watch = snap.model_watch;
   if (watch && watch.tripped && !watchReported) {
     watchReported = true;
-    log(snap.cycle, `model watch tripped: ${watch.reason}. The server paused; Play goes on, `
-                  + 'the constructs without labels while the model fails.', 'model');
+    log(snap.cycle, snap.replay
+      ? `model watch tripped, as in the run: ${watch.reason}; the constructs without labels while the model failed.`
+      : `model watch tripped: ${watch.reason}. The server paused; Play goes on, `
+        + 'the constructs without labels while the model fails.', 'model');
   }
+  if (snap.replay) logReplay(snap.cycle, snap.replay);
+}
+
+// A replay says once, in the log, what it could not show as the run went, where its ledger
+// departed from the run's, and how it ended
+function logReplay(cycle, r) {
+  const once = (note, text, extra = '') => {
+    if (replayNoted.has(note)) return;
+    replayNoted.add(note);
+    log(cycle, text, 'replay', extra);
+  };
+  if (r.answers === false) once('words', `replay of ${r.of}: the run kept no record of its model's answers, `
+                                + 'so the constructs show the field\'s keys, without labels, narration or questions.');
+  if (r.differs_at != null) once('departs', `the ledger departs from the run's at cycle ${r.differs_at}: `
+                                            + 'from here the replay is not the life the run lived.', 'warn');
+  if (!r.ended) return;
+  const words = r.unanswered || r.unasked
+    ? ` ${r.unanswered} calls found no recorded answer and ${r.unasked} answers were not asked for: the labels drift from the run's.`
+    : '';
+  once('ended', r.same_ledger ? `replay ended: the same ledger as the run, proof by proof.${words}`
+    : r.differs_at != null ? `replay ended: its ledger departed from the run's at cycle ${r.differs_at}.${words}`
+    : `replay ended: the same ledger as the run through cycle ${r.compared_through}; the run's own ledger `
+      + `does not reach further.${words}`, r.same_ledger && !words ? '' : 'warn');
 }
 
 
@@ -1763,6 +1813,7 @@ let currentRun = null;            // the instance on screen: its run folder
 let discardedRun = null;          // the instance just reset: its snapshots still in flight are dropped
 let lastCrystalCycle = null;
 let watchReported = false;        // a tripped model watch, said once in the log
+const replayNoted = new Set();    // what the log has said of this play of a replay (logReplay)
 
 // The BOTH channels the tetralemmic scan closed at the exchange quantum, as the framework
 // reports them ([EVENTUALITY] N). Its `closures` is the net drop in BOTH edges over the
@@ -1778,7 +1829,8 @@ function closedAtQuantum(lines) {
 
 function renderCounters(snap) {
   const field = snap.field, T = `(${snap.T[0]},${snap.T[1]})`;
-  setText('s-cycle', snap.cycle); setText('header-cycle', snap.cycle);
+  setText('s-cycle', snap.cycle);
+  setText('header-cycle', replay ? `${snap.cycle} / ${replay.cycles - 1}` : snap.cycle);
   setText('s-T', T); setText('header-T', T);
   setText('s-constructs', snap.constructs);
   setText('s-edges', snap.edges);
@@ -1823,6 +1875,7 @@ function applySnapshot(snap) {
   if (snap.run && currentRun && snap.run !== currentRun) clearField();     // a new instance, reset from anywhere
   currentRun = snap.run || currentRun;
   lastSnapshot = snap;
+  if (snap.replay) replay = snap.replay;
   syncNodes(snap.field);
   relaxLayout(4);
 
@@ -1859,6 +1912,7 @@ function clearField() {
   nodes.clear(); edges = []; telemetry.length = 0; pulses.length = 0;
   metabolism = freshMetabolism(null); metabHover = null; metabStale = true;
   lastSnapshot = null; currentRun = null; lastCrystalCycle = null; watchReported = false;
+  replayNoted.clear();
   for (const id of ['s-cycle', 's-T', 's-constructs', 's-edges', 's-apparents', 's-concluded', 's-conflicts',
                     's-both', 's-closures', 's-reinc', 's-energy3', 's-instability', 's-crystal-ago',
                     'b-breath', 'b-contraction', 'b-tolerance', 't-pool', 't-exec', 't-ops',
@@ -1985,6 +2039,8 @@ function updateStatus(st) {
   if (!st) return;
   lastStatus = st;
   if (st.mode || st.framework_version) runInfo = [st.mode, st.framework_version && 'v' + st.framework_version];
+  replay = st.mode === 'replay' ? st.replay : null;
+  renderReplay();
   statusRun = st.run || statusRun;
   if (st.run && st.run !== metabolism.run && st.run !== discardedRun && !lastSnapshot) {
     metabolism = freshMetabolism(st.run);       // an instance that already ran: its history before any cycle
@@ -2027,7 +2083,8 @@ const slider = $('speed-slider');
 $('btn-play').onclick = () => send($('btn-play').classList.contains('active') ? 'pause' : 'play');
 $('btn-step').onclick = () => send('step');
 $('btn-reset').onclick = () => {
-  if (confirm('Start a new experiment instance?\n\nNothing is lost: the current run stays in sirisys_runs/.')) {
+  if (confirm(replay ? 'Play the replay again from its first cycle?'
+                     : 'Start a new experiment instance?\n\nNothing is lost: the current run stays in sirisys_runs/.')) {
     discardedRun = currentRun;
     send('reset');
     clearField();

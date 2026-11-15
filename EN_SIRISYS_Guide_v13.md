@@ -27,7 +27,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 |---|---|
 | `Sirisys_Framework_v13_6.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
-| `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view |
+| `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view; it also replays a recorded run (§3.7) |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
 | `Sirisys_Static_Visualizer.html` | The inspector of a saved instance; opens directly in the browser |
 | `run_report.py` | Instrumented runs in four arms; writes `sirisys_report.json` |
@@ -96,9 +96,10 @@ python3 Sirisys_Server.py                       # this machine's percepts, pause
 python3 Sirisys_Server.py --play                # start cycling at once
 python3 Sirisys_Server.py --stream 0 --play     # synthetic stream 0: the same run every time
 python3 Sirisys_Server.py --profile minimal     # no narration and no time-of-day percept
+python3 Sirisys_Server.py --replay last         # the latest run, again (§3.7)
 ```
 
-Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and saves the instance.
+Then open `http://127.0.0.1:8000` (a replay: `http://127.0.0.1:8001`). `Ctrl+C` in the terminal stops the server and saves the instance.
 
 | Option | Effect |
 |---|---|
@@ -106,12 +107,13 @@ Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and
 | `--stream N` | Synthetic percept stream N instead of the machine's (`live`, the default; it needs `psutil`) |
 | `--profile minimal` | No narration and no time-of-day percept: the field perceives only the machine it runs on (`standard` by default) |
 | `--delay-ms N` | Pause between cycles, in milliseconds (default 80; the live view changes it too) |
+| `--replay RUN` | Replays a recorded run: its folder in `sirisys_runs/`, or `last`, the latest (§3.7) |
 | `--host` | Address to listen on (default `127.0.0.1`: this machine only) |
-| `--port` | Web port (default 8000) |
+| `--port` | Web port (default 8000; 8001 for a replay) |
 
 **No seed.** The framework has no pseudo-random generator: every choice derives from the ledger head and the question being decided. With `--stream N` and no model, two runs are identical; with `live`, the machine's own readings make each run unique.
 
-**Run folders.** Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>[_minimal]/`. The ledger (`ledger.jsonl`, §8) is written proof by proof, and what the instance perceived (`percepts.jsonl`) cycle by cycle, so that a life read from the machine can be replayed (§5, *Replay*); `state.json` and the criteria as they stand (`criteria.json`) are written when the instance ends, at Reset or `Ctrl+C`. Nothing is overwritten.
+**Run folders.** Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>[_minimal]/`. The ledger (`ledger.jsonl`, §8) is written proof by proof; what the instance perceived (`percepts.jsonl`) and, with a model, what the model answered (`answers.jsonl`), cycle by cycle, so that the run can be watched again (§3.7) and a life read from the machine can be replayed (§5, *Replay*); `state.json` and the criteria as they stand (`criteria.json`) are written when the instance ends, at Reset or `Ctrl+C`. Nothing is overwritten.
 
 ### 3.1 The live view
 
@@ -186,8 +188,27 @@ What the live view uses, also described at the top of `Sirisys_Server.py`:
 | `GET /api/status` | The instance: cycle, stream, run folder, ledger, model, criteria |
 | `GET /api/snapshot` | The snapshots not yet delivered, as a list |
 | `GET /api/history` | The metabolism, breath by breath |
-| `POST /api/control/<action>` | `play`, `pause`, `step`, `reset` with `{"stream": "live" \| N}`, `speed` with `{"cycle_delay_ms": N}` |
+| `POST /api/control/<action>` | `play`, `pause`, `step`, `reset` with `{"stream": "live" \| N}` (no stream in a replay), `speed` with `{"cycle_delay_ms": N}` |
 | `WS /ws` | The status first, then each snapshot as it is made; `{"action": ...}` messages are answered with an ack |
+
+### 3.7 Replaying a run
+
+A run with a model goes at the model's pace. To watch it again, whole and smoothly:
+
+```bash
+python3 Sirisys_Server.py --replay last                          # the latest run
+python3 Sirisys_Server.py --replay sirisys_runs/<run>            # a given one
+```
+
+and open `http://127.0.0.1:8001`. The server lives the run again from its record: the same percepts (`percepts.jsonl`) and the model's answers as it gave them, in order (`answers.jsonl`), without asking any model. The view shows everything as it went: the field, the labels, the narration, the questions, the event log, the metabolism and the criteria.
+
+- **Beside the live run.** It listens on port 8001, so it can run in a second terminal while the live server stays on 8000, paused or cycling. It replays what was recorded so far and, if the run has gone on when it reaches the end, goes on with it.
+- **Speed.** The `delay` control sets the pause between cycles, from 0 to 500 ms. A replay never gets more than four cycles ahead of what the view has taken, so every cycle reaches it.
+- **Header.** The brand says *replay*, the cycle is counted against the total (`104 / 400`), the model shows as *recorded* and the folder is the run replayed.
+- **Check.** It writes nothing: its ledger lives in memory and, as each cycle ends, is compared with the run's, proof by proof. At the end the event log says *the same ledger as the run, proof by proof*, or the cycle where it departs. On the machine that recorded it, it should be the same; on another platform (a Mac run replayed on Linux, say) the floating-point arithmetic differs and it departs within the first cycles.
+- **At the end.** It stops. Play, or Reset at any point, replays it from its first cycle; each play has its number (`#2`, `#3`…).
+- **Older runs.** One recorded before `answers.jsonl` replays to the same ledger, but without labels, narration or questions, and the view says so. One recorded before `percepts.jsonl` cannot be replayed.
+- **Criteria.** In a replay, the cost criterion measures the replay's own time.
 
 -----
 
@@ -344,7 +365,7 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 | Suite | What it guards |
 |---|---|
 | `test_sirisys.py` | The record and the life of one instance: determinism without a PRNG, time that never goes back, a complete and tamper-evident ledger, resume, torn writes, a single writer, bounded memory, flat cost, a resumed instance that equals an uninterrupted one, and a console that resumes as every program does |
-| `test_phase1.py` | Everything around the field: the experiment engine, the model backends, the profiles, the web layer, the model watch, `run_report.py` and `live_c2.py`, and the names and constants the views share with the framework |
+| `test_phase1.py` | Everything around the field: the experiment engine, the model backends, the profiles, the web layer, the model watch, the replay of a run, `run_report.py` and `live_c2.py`, and the names and constants the views share with the framework |
 | `test_phase2_guarantee.py` | Measuring never changes what is measured, with and without a model; the genealogical depth |
 | `test_phase4.py` | The segmented ledger: tampering across segments, power cuts during a rotation, disk use |
 | `test_ontology.py` | What the field must be, cycle by cycle (below) |

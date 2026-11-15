@@ -20,6 +20,7 @@ from types import SimpleNamespace
 
 import field_topology
 from sirisys_measures import (
+    AnswerRecord,
     LifeCriteria,
     ModelHealth,
     PerceptRecord,
@@ -336,7 +337,7 @@ sys.path.insert(0, {str(stub)!r}); sys.path.insert(0, {str(HERE)!r}); sys.argv =
 import Sirisys_Server as srv, uvicorn, fastapi
 srv.HERE = pathlib.Path({str(stub)!r})
 with contextlib.redirect_stdout(io.StringIO()):
-    srv.serve_experiment(srv.parse_args(['--delay-ms', '0']))
+    srv.serve(srv.parse_args(['--delay-ms', '0']))
 routes = uvicorn.APP.routes
 class Request:
     def __init__(self, body): self.body = body
@@ -458,7 +459,163 @@ check("experiment mode pauses once when the model watch trips, says why in its s
       paused and status["model"]["active"] and "in a row failed" in said and went_on
       and watched.drain()[-1]["model_watch"]["tripped"], f"paused at cycle {paused_at}: {said[:50]}")
 
-check.section("5 · The measures and the experiment tools: run_report.py and live_c2.py")
+check.section("5 · The replay of a run (Sirisys_Server.py --replay)")
+
+
+def every_snapshot(engine, until, press_play=False):
+    """Every snapshot the engine makes until `until()`; with press_play, Play again whenever it pauses itself."""
+    taken = []
+    engine.running = True
+    end = time.time() + 120
+    while not until() and time.time() < end:
+        taken += engine.drain()
+        if press_play and not engine.running:
+            engine.control("play")
+        time.sleep(0.01)
+    engine.running = False
+    time.sleep(0.2)
+    return taken + engine.drain()
+
+
+def files_of(folder):
+    return {f.name: (f.stat().st_size, f.stat().st_mtime_ns) for f in folder.iterdir()}
+
+
+def replayed(folder):
+    """A replay of `folder` played to its end: (the engine, every snapshot it made)."""
+    with quiet():
+        engine = server.ReplayEngine(folder, 0)
+        return engine, every_snapshot(engine, lambda: engine.ended)
+
+
+# A run whose model answers for a while and then fails: answers, failures and a watch that trips
+model.reset("error", after=60)
+server.log.disabled = True
+with quiet(), environment(SIRISYS_LLM_BACKEND="ollama", OLLAMA_HOST=model.url):
+    recorded = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    as_lived = every_snapshot(recorded, lambda: recorded.cycle >= 40, press_play=True)
+    recorded.shutdown()
+calls, folder = model.calls, recorded.run_dir
+header, answered = AnswerRecord.read(folder / AnswerRecord.FILE)
+answers = [a for c in sorted(answered) for a in answered[c]]
+check("the experiment mode keeps every answer its model gave, in order, and every failure, beside the "
+      "percepts: which model, then each cycle's answers as the cycle ends",
+      header == {"backend": "ollama", "model": FakeModel.MODEL, "available": True, "profile": "standard"}
+      and len(answers) == calls and answers[:60] == [f"Name {n}" for n in range(1, 61)]
+      and all(isinstance(a, dict) and "500" in a["error"] for a in answers[60:]) and len(answers) > 60
+      and set(answered) <= set(range(recorded.cycle)),
+      f"{len(answers)} answers kept of {calls} calls, {len(answers) - 60} of them failures")
+
+before, mid_watch = files_of(folder), next((s["cycle"] for s in as_lived if s["model_watch"]["tripped"]), None)
+replay, again = replayed(folder)
+differ = sorted({key for a, b in zip(as_lived, again, strict=False) for key in a
+                 if key not in ("criteria", "replay") and a[key] != b.get(key)})
+state = replay.status()
+check("a replay lives the run again as it went, without asking any model: every snapshot the same (the "
+      "field, the labels, the narration, the questions, the console, the metabolism, the model watch), "
+      "and the same ledger, proof by proof",
+      len(again) == len(as_lived) == recorded.cycle and not differ and model.calls == calls
+      and state["mode"] == "replay" and state["model"]["recorded"] and state["replay"]["ended"]
+      and state["replay"]["same_ledger"] is True and state["replay"]["compared_through"] == recorded.cycle - 1
+      and (state["replay"]["unanswered"], state["replay"]["unasked"]) == (0, 0)
+      and again[-1]["replay"]["ended"] and again[-1]["ledger"] == as_lived[-1]["ledger"],
+      f"{len(again)} of {len(as_lived)} snapshots; differing: {differ or 'nothing'}")
+check("a replay shows the failures as they happened, the watch tripping at the same cycle, without "
+      "stopping for it, and writes nothing in the run's folder",
+      mid_watch is not None and next(s["cycle"] for s in again if s["model_watch"]["tripped"]) == mid_watch
+      and any("[LLM] Call failed" in line for s in again for line in s["log"]) and files_of(folder) == before,
+      f"the watch tripped at cycle {mid_watch} both times")
+
+# Played again: Play at the end, or Reset, start it over as a play of its own; nobody reading, it waits
+replay.control("play")
+waited = wait_for(lambda: replay.cycle == server.REPLAY_AHEAD, 10)
+time.sleep(0.3)
+second = (replay.run_name, replay.cycle, len(replay.drain()))
+replay.control("reset")
+check("Play at the end, and Reset, play it again from its first cycle, each play named apart; with "
+      "nobody reading, a replay waits a few cycles ahead, so every cycle reaches the view",
+      waited and second == (f"{folder.name} #2", server.REPLAY_AHEAD, server.REPLAY_AHEAD)
+      and replay.run_name == f"{folder.name} #3" and replay.cycle == 0
+      and replay.control("step")["ok"] and not replay.ended, str(second))
+replay.shutdown()
+
+# What the replay says when the record does not hold the run: a percept changed, the answers lost
+altered, mute = scratch() / folder.name, scratch() / folder.name
+for copy in (altered, mute):
+    shutil.copytree(folder, copy)
+lines = (altered / PerceptRecord.FILE).read_text(encoding="utf-8").splitlines()
+lines[10] = lines[10].replace("PERCEIVES ", "PERCEIVES altered", 1)
+(altered / PerceptRecord.FILE).write_text("\n".join(lines) + "\n", encoding="utf-8")
+(mute / AnswerRecord.FILE).unlink()
+departed, _ = replayed(altered)
+silent, unlabelled = replayed(mute)
+check("a replay says where its ledger departs from the run's (a percept changed in the record)",
+      departed.status()["replay"]["differs_at"] == 10 and departed.status()["replay"]["same_ledger"] is False
+      and departed.status()["replay"]["compared_through"] == 9, str(departed.status()["replay"]))
+check("a run recorded before its answers were kept replays to the same ledger, without labels, narration "
+      "or questions, and says so",
+      silent.status()["replay"]["same_ledger"] is True and silent.status()["model"]["recorded"] is False
+      and not any(c["label"] for s in unlabelled for c in s["field"]["constructs"])
+      and not any(s["narration"] or s["question"] for s in unlabelled), str(silent.status()["model"]))
+with quiet():                                       # and one that ran without a model, recorded likewise
+    modelless = server.ExperimentEngine(stream=0, delay_ms=0, runs_dir=scratch())
+    every_snapshot(modelless, lambda: modelless.cycle >= 20)
+    modelless.shutdown()
+(modelless.run_dir / AnswerRecord.FILE).unlink()
+bare, _ = replayed(modelless.run_dir)
+check("a run recorded before its answers were kept, whose saved state holds no label, replays as a run "
+      "without a model, and nothing is said missing",
+      bare.status()["replay"]["answers"] and bare.status()["model"]["active"] is False
+      and bare.words == "without a model" and silent.words == "the model's answers not recorded"
+      and bare.status()["replay"]["same_ledger"] is True, bare.words)
+for engine in (departed, silent, bare):
+    engine.shutdown()
+
+runs = scratch()
+for name, keep in (("20260101-000000_live", ("ledger.jsonl",)), ("20260102-000000_live", None),
+                   ("20260103-000000_live", ("ledger.jsonl", PerceptRecord.FILE))):
+    (runs / name).mkdir()
+    for f in keep or ():
+        (runs / name / f).write_text("" if f == PerceptRecord.FILE else "{}\n", encoding="utf-8")
+shutil.copytree(folder, runs / "20260104-000000_live_minimal")
+(runs / "20260105-000000_live").mkdir()
+(runs / "20260105-000000_live" / "ledger.jsonl").write_text("", encoding="utf-8")
+(runs / "20260105-000000_live" / PerceptRecord.FILE).write_text("", encoding="utf-8")     # nothing recorded yet
+refusals = [server.replay_refused(runs / name) or "" for name in
+            ("20260101-000000_live", "20260102-000000_live", "20260103-000000_live")]
+asked_for = server.parse_args(["--replay", "last"])
+check("--replay last finds the latest run that has recorded a cycle; a replay listens on 8001 by default; "
+      "a run from before percepts.jsonl, a folder that is not a run, a run with no cycle yet, and "
+      "--stream or --profile beside --replay are refused, saying why",
+      server.find_run("last", runs) == runs / "20260104-000000_live_minimal"
+      and server.find_run(str(runs / "20260104-000000_live_minimal" / "ledger.jsonl"), runs).name.endswith("_minimal")
+      and asked_for.port is None and server.PORTS["replay"] == 8001
+      and "cannot be replayed" in refusals[0] and "not a run folder" in refusals[1] and "not recorded a cycle" in refusals[2]
+      and raises(lambda: server.make_engine(server.parse_args(["--replay", "last", "--stream", "0"])), SystemExit),
+      " · ".join(r[:40] for r in refusals))
+
+# The record of the answers across a crash, as the percepts': a line cut short skipped, a cycle written twice
+torn = scratch()
+record = AnswerRecord(torn, SimpleNamespace(backend="none", model=None, available=False))
+record._answers = ["one"]
+record.add(0)
+record.close()
+with (torn / AnswerRecord.FILE).open("a", encoding="utf-8") as f:
+    f.write('{"cycle": 1, "answ')
+record = AnswerRecord(torn, SimpleNamespace(backend="none", model=None, available=False))
+for cycle, said_then in ((1, "two"), (2, "three"), (2, "three, again")):
+    record._answers = [said_then]
+    record.add(cycle)
+record.close()
+check("the record of the answers survives a crash: a line cut short is skipped, a cycle run again keeps "
+      "its later line, the model it names is written once",
+      AnswerRecord.read(torn / AnswerRecord.FILE)
+      == ({"backend": "none", "model": None, "available": False, "profile": None},
+          {0: ["one"], 1: ["two"], 2: ["three, again"]}),
+      str(AnswerRecord.read(torn / AnswerRecord.FILE)))
+server.log.disabled = False
+
+check.section("6 · The measures and the experiment tools: run_report.py and live_c2.py")
 check("psutil is installed: the field can perceive this machine (without it, it cannot)",
       S.real_percepts_available())
 # The uncertainty of the instant (read-only, exploratory): open sums in flight, constructs landed,
@@ -754,7 +911,7 @@ check("the questions-only arm asks the model nothing but the Sombunal questions,
 # the framework are written in it; these checks read them from both files and compare
 # them with the framework and with each other. The formulas the inspector mirrors are
 # not compared here: that needs a browser.
-check.section("6 · The visualizers and the framework")
+check.section("7 · The visualizers and the framework")
 
 
 def declared(html, name):

@@ -27,7 +27,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 |---|---|
 | `Sirisys_Framework_v13_6.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
-| `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo |
+| `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo; también repite una ejecución grabada (§3.7) |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
 | `Sirisys_Static_Visualizer.html` | El inspector de una instancia guardada; se abre directamente en el navegador |
 | `run_report.py` | Ejecuciones instrumentadas en cuatro brazos; escribe `sirisys_report.json` |
@@ -96,9 +96,10 @@ python3 Sirisys_Server.py                       # perceptos de esta máquina, en
 python3 Sirisys_Server.py --play                # empieza a ciclar al arrancar
 python3 Sirisys_Server.py --stream 0 --play     # flujo sintético 0: la misma ejecución cada vez
 python3 Sirisys_Server.py --profile minimal     # sin narración ni percepto de la hora del día
+python3 Sirisys_Server.py --replay last         # la última ejecución, otra vez (§3.7)
 ```
 
-Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servidor y guarda la instancia.
+Después abre `http://127.0.0.1:8000` (una repetición, `http://127.0.0.1:8001`). `Ctrl+C` en la terminal detiene el servidor y guarda la instancia.
 
 | Opción | Efecto |
 |---|---|
@@ -106,12 +107,13 @@ Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servid
 | `--stream N` | Flujo sintético de perceptos N en lugar de los de la máquina (`live`, por defecto; necesita `psutil`) |
 | `--profile minimal` | Sin narración ni percepto de la hora del día: el campo solo percibe la máquina en la que corre (`standard` por defecto) |
 | `--delay-ms N` | Pausa entre ciclos, en milisegundos (80 por defecto; también se cambia desde la vista en vivo) |
+| `--replay EJECUCIÓN` | Repite una ejecución grabada: su carpeta en `sirisys_runs/`, o `last`, la última (§3.7) |
 | `--host` | Dirección en la que escucha (por defecto `127.0.0.1`: solo esta máquina) |
-| `--port` | Puerto web (8000 por defecto) |
+| `--port` | Puerto web (8000 por defecto; 8001 para una repetición) |
 
 **No hay semilla.** El framework no tiene generador pseudoaleatorio: cada elección se deriva de la cabeza del ledger y de la cuestión que se decide. Con `--stream N` y sin modelo, dos ejecuciones son idénticas; con `live`, las lecturas de la propia máquina hacen única cada ejecución.
 
-**Carpetas de ejecución.** Cada arranque y cada Reset es una instancia nueva en su propia carpeta, `sirisys_runs/<fecha-hora>_<live|streamN>[_minimal]/`. El ledger (`ledger.jsonl`, §8) se escribe prueba a prueba, y lo que percibió la instancia (`percepts.jsonl`), ciclo a ciclo, para que una vida leída de la máquina se pueda repetir (§5, *Repetición*); `state.json` y los criterios tal como estén (`criteria.json`) se escriben cuando la instancia termina, con Reset o `Ctrl+C`. Nada se sobrescribe.
+**Carpetas de ejecución.** Cada arranque y cada Reset es una instancia nueva en su propia carpeta, `sirisys_runs/<fecha-hora>_<live|streamN>[_minimal]/`. El ledger (`ledger.jsonl`, §8) se escribe prueba a prueba; lo que percibió la instancia (`percepts.jsonl`) y, con modelo, lo que respondió el modelo (`answers.jsonl`), ciclo a ciclo, para que la ejecución se pueda volver a ver (§3.7) y una vida leída de la máquina se pueda repetir (§5, *Repetición*); `state.json` y los criterios tal como estén (`criteria.json`) se escriben cuando la instancia termina, con Reset o `Ctrl+C`. Nada se sobrescribe.
 
 ### 3.1 La vista en vivo
 
@@ -186,8 +188,27 @@ Lo que usa la vista en vivo, descrito también al principio de `Sirisys_Server.p
 | `GET /api/status` | La instancia: ciclo, flujo, carpeta de la ejecución, ledger, modelo, criterios |
 | `GET /api/snapshot` | Las instantáneas aún no entregadas, en una lista |
 | `GET /api/history` | El metabolismo, respiración a respiración |
-| `POST /api/control/<acción>` | `play`, `pause`, `step`, `reset` con `{"stream": "live" \| N}`, `speed` con `{"cycle_delay_ms": N}` |
+| `POST /api/control/<acción>` | `play`, `pause`, `step`, `reset` con `{"stream": "live" \| N}` (sin flujo en una repetición), `speed` con `{"cycle_delay_ms": N}` |
 | `WS /ws` | Primero el estado, después cada instantánea según se produce; los mensajes `{"action": ...}` se responden con un acuse |
+
+### 3.7 Repetición de una ejecución
+
+Una ejecución con modelo va al paso del modelo. Para volver a verla entera, con fluidez:
+
+```bash
+python3 Sirisys_Server.py --replay last                          # la última ejecución
+python3 Sirisys_Server.py --replay sirisys_runs/<ejecución>      # una en concreto
+```
+
+y abre `http://127.0.0.1:8001`. El servidor vuelve a vivir la ejecución desde lo que grabó: los mismos perceptos (`percepts.jsonl`) y las respuestas del modelo tal como las dio y en su orden (`answers.jsonl`), sin preguntar a ningún modelo. La vista muestra todo como fue: el campo, las etiquetas, la narración, las preguntas, el registro de eventos, el metabolismo y los criterios.
+
+- **Junto a la ejecución en vivo.** Escucha en el puerto 8001, así que puede correr en una segunda terminal mientras el servidor en vivo sigue en el 8000, en pausa o ciclando. Repite lo grabado hasta ese momento y, si al llegar al final la ejecución ha seguido, sigue con ella.
+- **Velocidad.** El control `delay` fija la pausa entre ciclos, de 0 a 500 ms. La repetición nunca se adelanta más de cuatro ciclos a lo que ha recogido la vista, así que todos los ciclos llegan a ella.
+- **Cabecera.** La marca dice *replay*, el ciclo se cuenta sobre el total (`104 / 400`), el modelo aparece como *recorded* y la carpeta es la de la ejecución repetida.
+- **Comprobación.** No escribe nada: su ledger vive en memoria y, al terminar cada ciclo, se compara con el de la ejecución, prueba a prueba. Al acabar, el registro de eventos dice *the same ledger as the run, proof by proof* o el ciclo en que se aparta. En la máquina que la grabó debe ser el mismo; en otra plataforma (un run del Mac repetido en Linux, por ejemplo) la aritmética de coma flotante difiere y se aparta en los primeros ciclos.
+- **Al final.** Se detiene. Play, o Reset en cualquier momento, la repite desde su primer ciclo; cada repetición lleva su número (`#2`, `#3`…).
+- **Ejecuciones antiguas.** Una grabada antes de `answers.jsonl` se repite con el mismo ledger, pero sin etiquetas, narración ni preguntas, y la vista lo dice. Una grabada antes de `percepts.jsonl` no se puede repetir.
+- **Criterios.** En una repetición, el criterio de coste mide el tiempo de la propia repetición.
 
 -----
 
@@ -344,7 +365,7 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 | Prueba | Qué protege |
 |---|---|
 | `test_sirisys.py` | El registro y la vida de una instancia: determinismo sin generador aleatorio, un tiempo que nunca retrocede, un ledger completo y a prueba de manipulación, la reanudación, las escrituras cortadas, un solo escritor, memoria acotada, coste plano, una instancia reanudada igual a una no interrumpida, y una consola que reanuda como todos los programas |
-| `test_phase1.py` | Todo lo que rodea al campo: el motor del experimento, los backends del modelo, los perfiles, la capa web, la vigilancia del modelo, `run_report.py` y `live_c2.py`, y los nombres y constantes que las vistas comparten con el framework |
+| `test_phase1.py` | Todo lo que rodea al campo: el motor del experimento, los backends del modelo, los perfiles, la capa web, la vigilancia del modelo, la repetición de una ejecución, `run_report.py` y `live_c2.py`, y los nombres y constantes que las vistas comparten con el framework |
 | `test_phase2_guarantee.py` | Medir nunca cambia lo medido, con modelo y sin él; la profundidad genealógica |
 | `test_phase4.py` | El ledger por segmentos: manipulación entre segmentos, cortes de corriente durante una rotación, uso del disco |
 | `test_ontology.py` | Lo que el campo debe ser, ciclo a ciclo (abajo) |

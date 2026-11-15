@@ -28,6 +28,11 @@ PerceptRecord, percepts_line(), percepts_from_line()
     What a life perceived, cycle by cycle, kept beside its ledger: a life read
     from the machine can be replayed (live_c2.py --replay), the same real
     percepts with or without a model.
+
+AnswerRecord
+    What the model answered, cycle by cycle, beside it: a replay of the life
+    (Sirisys_Server.py --replay) shows its labels, narration and questions as
+    they were, without asking any model.
 """
 import json
 import os
@@ -443,18 +448,14 @@ def percepts_from_line(S, line):
     return events
 
 
-class PerceptRecord:
-    """What a life perceived, kept beside its ledger so that it can be replayed:
-    one JSON line per cycle, {"cycle": N, "percepts": percepts_line(...)},
-    appended and made durable as each cycle ends, as the ledger makes each proof.
-    Recording changes nothing in the field.
-
-    read() gives the percepts of cycles 0, 1, 2… as far as they run unbroken. A
-    line cut short by a crash is skipped, and the next one starts on a line of
-    its own; a cycle written twice (a life resumed after a crash runs again the
+class _LifeRecord:
+    """A record kept beside a life's ledger, one JSON line at a time, each made
+    durable as it is written, as the ledger makes each proof. A line cut short
+    by a crash is skipped when read, and the next one starts on a line of its
+    own; a cycle written twice (a life resumed after a crash runs again the
     cycle it lost) keeps the later line, the one the life went on from."""
 
-    FILE = "percepts.jsonl"
+    FILE: ClassVar[str]
 
     def __init__(self, folder):
         self.path = Path(folder) / self.FILE
@@ -467,8 +468,8 @@ class PerceptRecord:
         if torn:
             self._file.write("\n")
 
-    def add(self, cycle, events):
-        self._file.write(json.dumps({"cycle": cycle, "percepts": percepts_line(events)}) + "\n")
+    def _write(self, entry):
+        self._file.write(json.dumps(entry, ensure_ascii=False) + "\n")
         self._file.flush()
         os.fsync(self._file.fileno())
 
@@ -476,16 +477,90 @@ class PerceptRecord:
         self._file.close()
 
     @staticmethod
-    def read(S, path):
-        """The percepts of cycles 0, 1, 2… as recorded in `path`, up to the first gap."""
-        by_cycle = {}
+    def _entries(path):
+        """Every whole line of the record, read back."""
         for line in Path(path).read_text(encoding="utf-8").splitlines():
             try:
-                entry = json.loads(line)
+                yield json.loads(line)
             except ValueError:
                 continue                    # a line cut short by a crash
-            by_cycle[entry["cycle"]] = entry["percepts"]
+
+
+class PerceptRecord(_LifeRecord):
+    """What a life perceived, so that it can be replayed: one line per cycle,
+    {"cycle": N, "percepts": percepts_line(...)}, as each cycle ends. Recording
+    changes nothing in the field. read() gives the percepts of cycles 0, 1, 2…
+    as far as they run unbroken."""
+
+    FILE = "percepts.jsonl"
+
+    def add(self, cycle, events):
+        self._write({"cycle": cycle, "percepts": percepts_line(events)})
+
+    @staticmethod
+    def read(S, path):
+        """The percepts of cycles 0, 1, 2… as recorded in `path`, up to the first gap."""
+        by_cycle = {entry["cycle"]: entry["percepts"] for entry in _LifeRecord._entries(path)}
         recorded = []
         while len(recorded) in by_cycle:
             recorded.append(percepts_from_line(S, by_cycle[len(recorded)]))
         return recorded
+
+
+class AnswerRecord(_LifeRecord):
+    """What the model answered, so that a replay shows the life as it went: its
+    labels, its narration and its questions. The first line says which model it
+    was: {"backend", "model", "available", "profile"}; then one line for each
+    cycle in which the model was reached, {"cycle": N, "answers": [...]}, every
+    answer as the model gave it, in order, or, for a call that failed,
+    {"error": str, "repr": repr} of what it raised.
+
+    attach() wraps the intermediary's _complete (where every backend's answer
+    comes back, as ModelHealth watches it): every answer passes through
+    unchanged, so recording changes nothing. add() keeps a cycle's answers as
+    the cycle ends; written before its percepts, every cycle the percept record
+    holds has its answers here. read() gives the first line and the answers by
+    cycle."""
+
+    FILE = "answers.jsonl"
+
+    def __init__(self, folder, llm, profile=None):
+        new = not (Path(folder) / self.FILE).exists()
+        super().__init__(folder)
+        if new:
+            self._write({"backend": llm.backend, "model": llm.model, "available": llm.available,
+                         "profile": profile})
+        self._answers = []
+        if llm.available:
+            self.attach(llm)
+
+    def attach(self, llm):
+        inner = llm._complete
+
+        def recorded(temperature):
+            try:
+                answer = inner(temperature)
+            except Exception as ex:                      # the intermediary logs it and returns ""
+                self._answers.append({"error": str(ex), "repr": repr(ex)})
+                raise
+            self._answers.append(answer)
+            return answer
+
+        llm._complete = recorded
+        return llm
+
+    def add(self, cycle):
+        if self._answers:
+            self._write({"cycle": cycle, "answers": self._answers})
+            self._answers = []
+
+    @staticmethod
+    def read(path):
+        """(the first line, {cycle: [answers]}); the first line is None if it was lost."""
+        header, by_cycle = None, {}
+        for entry in _LifeRecord._entries(path):
+            if "cycle" in entry:
+                by_cycle[entry["cycle"]] = entry["answers"]
+            elif header is None and not by_cycle:
+                header = entry
+        return header, by_cycle
