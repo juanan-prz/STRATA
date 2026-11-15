@@ -16,10 +16,20 @@ ModelHealth
     every call during the run and trips when calls keep failing or coming back
     empty.
 
+Translations
+    Every label a model gave, with its whole answer: what the translator read in
+    the field.
+
 machine_record()
     Which machine a run ran on, recorded in every report so that results from
     different machines are never mixed up.
+
+PerceptRecord, percepts_line(), percepts_from_line()
+    What a life perceived, cycle by cycle, kept beside its ledger: a life read
+    from the machine can be replayed (live_c2.py --replay), the same real
+    percepts with or without a model.
 """
+import json
 import os
 import platform
 import subprocess
@@ -414,3 +424,68 @@ class ModelHealth:
         seconds = time.perf_counter() - t
         llm.history[:] = saved
         return seconds if answer.strip() and health.failures == failures else None
+
+
+def percepts_line(events):
+    """One cycle's percepts as one line: events separated by ";", each
+    "REL TARGET WEIGHT STATE", the weight as Python writes it so that it reads
+    back exactly. Targets have no spaces (the machine's states, the hour)."""
+    return ";".join(f"{e['rel']} {e['tgt']} {float(e['weight'])!r} {e['state'].name}" for e in events)
+
+
+def percepts_from_line(S, line):
+    """A recorded line back into the percepts the field received."""
+    events = []
+    for item in line.split(";") if line else []:
+        rel, tgt, weight, state = item.split(" ")
+        events.append({"src": "SYSTEM", "rel": rel, "tgt": tgt, "weight": float(weight),
+                       "state": S.TetraState[state]})
+    return events
+
+
+class PerceptRecord:
+    """What a life perceived, kept beside its ledger so that it can be replayed:
+    one JSON line per cycle, {"cycle": N, "percepts": percepts_line(...)},
+    appended and made durable as each cycle ends, as the ledger makes each proof.
+    Recording changes nothing in the field.
+
+    read() gives the percepts of cycles 0, 1, 2… as far as they run unbroken. A
+    line cut short by a crash is skipped, and the next one starts on a line of
+    its own; a cycle written twice (a life resumed after a crash runs again the
+    cycle it lost) keeps the later line, the one the life went on from."""
+
+    FILE = "percepts.jsonl"
+
+    def __init__(self, folder):
+        self.path = Path(folder) / self.FILE
+        torn = False
+        if self.path.exists() and self.path.stat().st_size:
+            with self.path.open("rb") as f:
+                f.seek(-1, os.SEEK_END)
+                torn = f.read(1) != b"\n"
+        self._file = self.path.open("a", encoding="utf-8")
+        if torn:
+            self._file.write("\n")
+
+    def add(self, cycle, events):
+        self._file.write(json.dumps({"cycle": cycle, "percepts": percepts_line(events)}) + "\n")
+        self._file.flush()
+        os.fsync(self._file.fileno())
+
+    def close(self):
+        self._file.close()
+
+    @staticmethod
+    def read(S, path):
+        """The percepts of cycles 0, 1, 2… as recorded in `path`, up to the first gap."""
+        by_cycle = {}
+        for line in Path(path).read_text(encoding="utf-8").splitlines():
+            try:
+                entry = json.loads(line)
+            except ValueError:
+                continue                    # a line cut short by a crash
+            by_cycle[entry["cycle"]] = entry["percepts"]
+        recorded = []
+        while len(recorded) in by_cycle:
+            recorded.append(percepts_from_line(S, by_cycle[len(recorded)]))
+        return recorded

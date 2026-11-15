@@ -4,8 +4,10 @@ The canonical cycle (run_cycle, in the framework) runs in a worker thread, and
 every cycle becomes a snapshot for Sirisys_Live_Visualizer.html. Every start,
 and every Reset, is a new instance in a run folder of its own; nothing is
 overwritten:
-    sirisys_runs/<date-time>_<live|streamN>[_minimal]/state.json
-    sirisys_runs/<date-time>_<live|streamN>[_minimal]/ledger.jsonl
+    sirisys_runs/<date-time>_<live|streamN>[_minimal]/ledger.jsonl     every proof, as it is sealed
+    sirisys_runs/<date-time>_<live|streamN>[_minimal]/percepts.jsonl   what it perceived, cycle by cycle
+    sirisys_runs/<date-time>_<live|streamN>[_minimal]/state.json       the instance, when it ends
+    sirisys_runs/<date-time>_<live|streamN>[_minimal]/criteria.json    its criteria, when it ends
 
 USAGE
     python3 Sirisys_Server.py                       # this machine's percepts, paused: press Play
@@ -44,9 +46,17 @@ THE CRITERIA
   The engine measures the instance as run_report.py does (sirisys_measures.
   LifeCriteria, the self-adjustment criteria of Phase 3): every CRITERIA_EVERY
   cycles the result, each criterion and the verdict go to the status and to
-  that cycle's snapshot. The verdict needs 1000 cycles. Measuring changes
-  nothing in the field; its record grows with the instance (some 100 bytes a
-  cycle).
+  that cycle's snapshot. The verdict needs 1000 cycles. When the instance
+  ends (Reset, Ctrl+C) the reading as it stands goes to criteria.json in its
+  run folder. Measuring changes nothing in the field; its record grows with the
+  instance (some 100 bytes a cycle).
+
+WHAT IT PERCEIVED
+  Each cycle's percepts go to percepts.jsonl as the cycle ends (sirisys_measures.
+  PerceptRecord): a life read from this machine can be replayed, the same real
+  percepts with or without a model, with
+      python3 live_c2.py <cycles> none <profile> --replay sirisys_runs/<run>/percepts.jsonl
+  Recording changes nothing in the field.
 
 THE MODEL WATCH
   With a model, the engine watches every call as run_report.py does
@@ -58,8 +68,8 @@ THE MODEL WATCH
 REQUIREMENTS
     pip3 install -r requirements.txt     (fastapi, uvicorn and websockets for this server)
     Beside this file: sirisys_loader.py, Sirisys_Framework_vX_Y.py, Sirisys_Live_Visualizer.html,
-    and sirisys_measures.py (the criteria, and the model watch); without it the server runs and says
-    the criteria are not measured
+    and sirisys_measures.py (the criteria, the model watch, the record of the percepts); without it
+    the server runs and says that the criteria are not measured nor the percepts kept
 """
 import argparse
 import asyncio
@@ -154,7 +164,7 @@ class ExperimentEngine:
         self._cycle_lock, self._queue_lock = threading.Lock(), threading.Lock()
         self._queue = deque(maxlen=MAX_PENDING)
         self._listeners = set()                 # (event loop, asyncio.Event) of each open WebSocket
-        self.ledger = None
+        self.ledger = self.percepts = None
         self._new_instance()
         threading.Thread(target=self._run_loop, daemon=True).start()
 
@@ -162,6 +172,8 @@ class ExperimentEngine:
     def _new_instance(self) -> None:
         if self.ledger is not None:
             self.ledger.close()
+        if self.percepts is not None:
+            self.percepts.close()
         tag = ("live" if self.stream is None else f"stream{self.stream}") + \
               ("" if self.profile == "standard" else f"_{self.profile}")
         base = f"{time.strftime('%Y%m%d-%H%M%S')}_{tag}"
@@ -179,11 +191,13 @@ class ExperimentEngine:
         self._terminations_seen = self.ss.field.terminations_total
         self._apparents_seen = self.ss.field.apparents_total
         self.life, self.criteria = None, None   # the criteria, and their last reading (THE CRITERIA)
+        self.percepts = None                    # what the instance perceived (WHAT IT PERCEIVED)
         try:
-            from sirisys_measures import LifeCriteria
+            from sirisys_measures import LifeCriteria, PerceptRecord
             self.life = LifeCriteria(S)
+            self.percepts = PerceptRecord(self.run_dir)
         except ImportError:
-            log.warning("sirisys_measures.py not found: the criteria are not measured")
+            log.warning("sirisys_measures.py not found: the criteria are not measured, nor the percepts kept")
         self._watch_model()
         self._paused_for_model = False
         log.info("Experiment instance %s (framework %s, LLM %s)",
@@ -211,9 +225,13 @@ class ExperimentEngine:
         return asked[-1] if asked else None
 
     def save(self) -> None:
+        """The instance as it stands: its state and, once it has cycled, its criteria."""
         with quiet():
             S.save_state(self.run_dir / "state.json", self.ss.field, self.ss.clock,
                          self.ss.llm, self.cycle, self.ss.concordancy)
+        if self.life and self.cycle:
+            (self.run_dir / "criteria.json").write_text(json.dumps(self._read_criteria(), indent=1),
+                                                        encoding="utf-8")
 
     # ── the worker ───────────────────────────────────────────────────────
     def _run_loop(self) -> None:
@@ -245,6 +263,8 @@ class ExperimentEngine:
                 # the field's own time, without the model's calls, as run_report.py measures it
                 field_seconds = time.perf_counter() - started - (
                     (self.health.model_seconds if self.health else 0.0) - model_before)
+            if self.percepts:
+                self.percepts.add(self.cycle, r["percepts"])
             now = tuple(self.ss.clock.T)
             if now <= self.last_T:
                 raise S.ContinuityError(f"time did not advance: {self.last_T} -> {now}")
@@ -451,6 +471,8 @@ class ExperimentEngine:
         with self._cycle_lock:
             self.save()
             self.ledger.close()
+            if self.percepts:
+                self.percepts.close()
         log.info("Experiment state saved to %s", self.run_dir)
 
 

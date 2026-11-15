@@ -31,7 +31,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
 | `Sirisys_Static_Visualizer.html` | El inspector de una instancia guardada; se abre directamente en el navegador |
 | `run_report.py` | Ejecuciones instrumentadas en cuatro brazos; escribe `sirisys_report.json` |
-| `sirisys_measures.py` | Los criterios de autoajuste y la vigilancia del modelo, compartidos por el servidor y todas las mediciones |
+| `sirisys_measures.py` | Los criterios de autoajuste, la vigilancia del modelo, el registro de las respuestas de un modelo y de lo que percibió una vida, compartidos por el servidor y todas las mediciones |
 | `field_topology.py` | Topología y profundidad del campo, de solo lectura |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Mediciones: los criterios en tres flujos, una vida larga y los perceptos reales de la máquina |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | Las pruebas |
@@ -111,7 +111,7 @@ Después abre `http://127.0.0.1:8000`. `Ctrl+C` en la terminal detiene el servid
 
 **No hay semilla.** El framework no tiene generador pseudoaleatorio: cada elección se deriva de la cabeza del ledger y de la cuestión que se decide. Con `--stream N` y sin modelo, dos ejecuciones son idénticas; con `live`, las lecturas de la propia máquina hacen única cada ejecución.
 
-**Carpetas de ejecución.** Cada arranque y cada Reset es una instancia nueva en su propia carpeta, `sirisys_runs/<fecha-hora>_<live|streamN>[_minimal]/`. El ledger (`ledger.jsonl`, §8) se escribe prueba a prueba; `state.json` se escribe cuando la instancia termina, con Reset o `Ctrl+C`. Nada se sobrescribe.
+**Carpetas de ejecución.** Cada arranque y cada Reset es una instancia nueva en su propia carpeta, `sirisys_runs/<fecha-hora>_<live|streamN>[_minimal]/`. El ledger (`ledger.jsonl`, §8) se escribe prueba a prueba, y lo que percibió la instancia (`percepts.jsonl`), ciclo a ciclo, para que una vida leída de la máquina se pueda repetir (§5, *Repetición*); `state.json` y los criterios tal como estén (`criteria.json`) se escriben cuando la instancia termina, con Reset o `Ctrl+C`. Nada se sobrescribe.
 
 ### 3.1 La vista en vivo
 
@@ -170,7 +170,7 @@ El servidor guarda esa historia de toda la instancia (`GET /api/history`; pasado
 
 ### 3.4 Criterios
 
-La vista en vivo juzga la instancia con los criterios de autoajuste, medidos como `run_report.py` mide una ejecución (§5). El servidor los lee cada 200 ciclos; el panel da cada valor con su umbral, y el veredicto cuando 1000 ciclos permiten darlo. Medir no cambia nada en el campo; su registro crece con la instancia, unos 100 bytes por ciclo.
+La vista en vivo juzga la instancia con los criterios de autoajuste, medidos como `run_report.py` mide una ejecución (§5). El servidor los lee cada 200 ciclos; el panel da cada valor con su umbral, y el veredicto cuando 1000 ciclos permiten darlo. Cuando la instancia termina, la lectura tal como esté va a `criteria.json`, en su carpeta de ejecución. Medir no cambia nada en el campo; su registro crece con la instancia, unos 100 bytes por ciclo.
 
 ### 3.5 Sin navegador
 
@@ -314,7 +314,13 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 
 `live_c2.py` registra los criterios y su veredicto, la topología, lo que percibió el campo (recuentos por cada 1000 ciclos y la secuencia completa, una entrada por ciclo) y las preguntas al Sombunal que formuló el modelo; con modelo, también todas las etiquetas que dio (`labels`) y las de los constructos que cristalizaron (`crystal_labels`). Con modelo, lo prueba y lo vigila como `run_report.py`; si el modelo falla, se detiene con código de salida 3, y el JSON se escribe igualmente, marcado como `aborted`. Registra también el archivo del framework y su sha256[:16], la máquina en la que corrió (como `run_report.py`) y cuándo. Los perceptos reales leen la máquina a través de `psutil`; sin él la máquina no se puede percibir, así que `live_c2.py` no arranca (código de salida 2). No uses la máquina durante una ejecución cuyos resultados vayas a comparar.
 
-**Repetición.** `--replay ARCHIVO` da al campo, ciclo a ciclo, los perceptos que grabó otra ejecución de `live_c2.py`, con toda su precisión, en lugar de leer la máquina; no necesita `psutil`. Sin modelo, una vida repetida sella el mismo ledger que la vida que repite (`ledger_head`, que toda ejecución registra). Con modelo, una vida con el modelo obtiene un control por pares: los mismos perceptos reales, sin el modelo.
+**Repetición.** `--replay ARCHIVO` da al campo, ciclo a ciclo, los perceptos que grabó otra vida, con toda su precisión, en lugar de leer la máquina; no necesita `psutil`. ARCHIVO es un informe de `live_c2.py` o el `percepts.jsonl` de una carpeta de ejecución del modo experimento (la cabeza del ledger con la que comparar sale del `state.json` de al lado). Sin modelo, una vida repetida sella el mismo ledger que la vida que repite (`ledger_head`, que toda ejecución registra), y lo dice cuando la repite entera. Con modelo, una vida con el modelo obtiene un control por pares: los mismos perceptos reales, sin el modelo.
+
+```bash
+python3 live_c2.py 100000 none standard --replay sirisys_runs/<ejecución>/percepts.jsonl > replay.json
+```
+
+El perfil no cambia una repetición: los perceptos grabados ya llevan la hora, cuando la vida la percibió.
 
 **Topología.** `run_report.py` y `live_c2.py` escriben un `topology_trace`: dos veces por respiración, en expansión y en contracción, la forma del campo. Los Zero Points quedan fuera, y cada muestra lleva su ciclo, su respiración, su contracción y su tolerancia.
 

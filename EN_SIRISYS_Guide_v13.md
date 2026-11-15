@@ -31,7 +31,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
 | `Sirisys_Static_Visualizer.html` | The inspector of a saved instance; opens directly in the browser |
 | `run_report.py` | Instrumented runs in four arms; writes `sirisys_report.json` |
-| `sirisys_measures.py` | The self-adjustment criteria and the model-health watch, shared by the server and every measurement |
+| `sirisys_measures.py` | The self-adjustment criteria, the model-health watch, the record of a model's answers and of what a life perceived, shared by the server and every measurement |
 | `field_topology.py` | Read-only topology and depth of the field |
 | `measure_phase3.py`, `soak.py`, `live_c2.py` | Measurements: the criteria on three streams, a long life, the machine's real percepts |
 | `test_sirisys.py`, `test_phase1.py`, `test_phase2_guarantee.py`, `test_phase4.py`, `test_ontology.py` | The test suites |
@@ -111,7 +111,7 @@ Then open `http://127.0.0.1:8000`. `Ctrl+C` in the terminal stops the server and
 
 **No seed.** The framework has no pseudo-random generator: every choice derives from the ledger head and the question being decided. With `--stream N` and no model, two runs are identical; with `live`, the machine's own readings make each run unique.
 
-**Run folders.** Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>[_minimal]/`. The ledger (`ledger.jsonl`, §8) is written proof by proof; `state.json` is written when the instance ends, at Reset or `Ctrl+C`. Nothing is overwritten.
+**Run folders.** Every start and every Reset is a new instance in its own folder, `sirisys_runs/<date-time>_<live|streamN>[_minimal]/`. The ledger (`ledger.jsonl`, §8) is written proof by proof, and what the instance perceived (`percepts.jsonl`) cycle by cycle, so that a life read from the machine can be replayed (§5, *Replay*); `state.json` and the criteria as they stand (`criteria.json`) are written when the instance ends, at Reset or `Ctrl+C`. Nothing is overwritten.
 
 ### 3.1 The live view
 
@@ -170,7 +170,7 @@ The server keeps this history for the whole instance (`GET /api/history`; past 2
 
 ### 3.4 Criteria
 
-The live view judges the instance by the self-adjustment criteria, measured as `run_report.py` measures a run (§5). Every 200 cycles the server reads them; the panel gives each value with its threshold, and the verdict once 1000 cycles allow one. Measuring changes nothing in the field; its record grows with the instance, some 100 bytes a cycle.
+The live view judges the instance by the self-adjustment criteria, measured as `run_report.py` measures a run (§5). Every 200 cycles the server reads them; the panel gives each value with its threshold, and the verdict once 1000 cycles allow one. When the instance ends, the reading as it stands goes to `criteria.json` in its run folder. Measuring changes nothing in the field; its record grows with the instance, some 100 bytes a cycle.
 
 ### 3.5 Without a browser
 
@@ -314,7 +314,13 @@ python3 live_c2.py 3000 none minimal --replay live_ollama.json > live_replay.jso
 
 `live_c2.py` records the criteria and their verdict, the topology, what the field perceived (counts per 1000 cycles and the whole sequence, one entry per cycle) and the Sombunal questions the model worded; with a model, also every label it gave (`labels`) and those of the constructs that crystallized (`crystal_labels`). With a model it probes and watches it as `run_report.py` does; when the model fails, it stops with exit code 3, the JSON still written and marked `aborted`. It also records the framework file and its sha256[:16], the machine it ran on (as `run_report.py` does) and when. Real percepts read the machine through `psutil`; without it the machine cannot be perceived, so `live_c2.py` does not start (exit code 2). Leave the machine idle during a run whose results you intend to compare.
 
-**Replay.** `--replay FILE` feeds the field, cycle by cycle, the percepts another `live_c2.py` run recorded, at full precision, instead of reading the machine; it needs no `psutil`. Without a model, a replayed life seals the same ledger as the life it replays (`ledger_head`, which every run records). With it, a life with the model gets a paired control: the same real percepts, without the model.
+**Replay.** `--replay FILE` feeds the field, cycle by cycle, the percepts another life recorded, at full precision, instead of reading the machine; it needs no `psutil`. FILE is a `live_c2.py` report, or the `percepts.jsonl` of a run folder of the experiment mode (the ledger head to compare with comes from the `state.json` beside it). Without a model, a replayed life seals the same ledger as the life it replays (`ledger_head`, which every run records), and says so when it replays the whole of it. With it, a life with the model gets a paired control: the same real percepts, without the model.
+
+```bash
+python3 live_c2.py 100000 none standard --replay sirisys_runs/<run>/percepts.jsonl > replay.json
+```
+
+The profile does not change a replay: the recorded percepts already carry the hour, when the life perceived it.
 
 **Topology.** `run_report.py` and `live_c2.py` write a `topology_trace`: twice per breath, at expansion and at contraction, the shape of the field. Zero Points are left out, and each sample carries its cycle, breath, contraction and tolerance.
 

@@ -3,12 +3,15 @@ Usage: python3 live_c2.py [cycles] [backend: none|ollama|anthropic] [profile: st
        python3 live_c2.py [cycles] [backend] [profile] --replay FILE
 Defaults: 3000 cycles, no model, standard profile.
 
---replay FILE feeds the field, cycle by cycle, the percepts a previous live_c2.py
-run recorded (its percept_sequence) instead of reading this machine: the same
-real percepts, with or without a model. Replaying a run without a model, with
-no model, seals the same ledger (ledger_head). Since v13.5 a model never reaches
-the dynamics, so a run with the model, replayed without it, seals the same
-ledger too: the replay says whether it did ("same ledger as the replayed run").
+--replay FILE feeds the field, cycle by cycle, the percepts a previous life
+recorded instead of reading this machine: the same real percepts, with or
+without a model. FILE is a live_c2.py report (its percept_sequence) or the
+percepts.jsonl a run folder keeps (Sirisys_Server.py's sirisys_runs/<run>/; the
+ledger head to compare with is read from the state.json beside it). Replaying a
+life without a model, with no model, seals the same ledger (ledger_head). Since
+v13.5 a model never reaches the dynamics, so a life with the model, replayed
+without it, seals the same ledger too: the replay says whether it did ("same
+ledger as the replayed run"), when it replays the whole of it.
 
 Writes one JSON document to standard output (redirect it to a file):
 - the Phase 3 criteria (sirisys_measures.LifeCriteria) and their verdict;
@@ -40,8 +43,11 @@ from sirisys_loader import load_framework, quiet  # noqa: E402
 from sirisys_measures import (  # noqa: E402
     LifeCriteria,
     ModelHealth,
+    PerceptRecord,
     Translations,
     machine_record,
+    percepts_from_line,
+    percepts_line,
 )
 
 S = load_framework(HERE)
@@ -64,14 +70,16 @@ def parse_args(argv):
     return cycles, backend, profile, replay
 
 
-def parse_percepts(line):
-    """One cycle of a recorded percept_sequence back into the percepts the field received."""
-    events = []
-    for item in line.split(";") if line else []:
-        rel, tgt, weight, state = item.split(" ")
-        events.append({"src": "SYSTEM", "rel": rel, "tgt": tgt, "weight": float(weight),
-                       "state": S.TetraState[state]})
-    return events
+def recorded_life(path):
+    """(the percepts of each cycle, what is known of the life that recorded them): from a
+    live_c2.py report, or from a run folder's percepts.jsonl and the state.json beside it."""
+    if path.suffix == ".jsonl":
+        state = path.with_name("state.json")
+        saved = json.loads(state.read_text(encoding="utf-8")) if state.exists() else {}
+        return PerceptRecord.read(S, path), {"cycles": saved.get("cycle"),
+                                             "ledger_head": saved.get("ledger", {}).get("head")}
+    source = json.loads(path.read_text(encoding="utf-8"))
+    return [percepts_from_line(S, line) for line in source["percept_sequence"]], source
 
 
 def stop(out, code, why):
@@ -88,8 +96,7 @@ def main(argv):
     framework = HERE / S.__sirisys_file__
     recorded, source = None, {}
     if replay:
-        source = json.loads(replay.read_text(encoding="utf-8"))
-        recorded = [parse_percepts(line) for line in source["percept_sequence"]]
+        recorded, source = recorded_life(replay)
         cycles = min(cycles, len(recorded))
     out = {"cycles": cycles, "backend": backend, "profile": profile,
            "percepts": f"replay of {replay.name}" if replay else "live (psutil)",
@@ -142,8 +149,7 @@ def main(argv):
                 questions.append(0)
             for e in r["percepts"]:
                 per_1000[-1][e["tgt"]] += 1
-            sequence.append(";".join(f"{e['rel']} {e['tgt']} {float(e['weight'])!r} {e['state'].name}"
-                                     for e in r["percepts"]))
+            sequence.append(percepts_line(r["percepts"]))
             questions[-1] += bool(r["question"])
             crystal_labels.extend([c, n, f.constructs[n].label] for n in f.apparents_since(apparents_before)
                                   if n in f.constructs and f.constructs[n].label)

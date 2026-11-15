@@ -19,7 +19,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import field_topology
-from sirisys_measures import LifeCriteria, ModelHealth, Translations
+from sirisys_measures import (
+    LifeCriteria,
+    ModelHealth,
+    PerceptRecord,
+    Translations,
+    percepts_line,
+)
 from sirisys_testkit import (
     HERE,
     Checks,
@@ -110,8 +116,12 @@ with quiet():
     session = bare.new_session()
     for n in range(cycles_run):
         bare.run_cycle(session, n, percepts=bare.synthetic_percepts(n, 0, True), **server.PROFILES["standard"])
-check("serving the field changes nothing in it: the same ledger head as the bare cycle",
-      bare.get_ledger().head == head_then, f"{cycles_run} cycles, head {head_then[:12]}…")
+kept = [percepts_line(events) for events in PerceptRecord.read(S, first_run / PerceptRecord.FILE)]
+check("serving the field changes nothing in it: the same ledger head as the bare cycle; "
+      "it keeps, cycle by cycle, the percepts it gave the field",
+      bare.get_ledger().head == head_then
+      and kept[:cycles_run] == [percepts_line(bare.synthetic_percepts(n, 0, True)) for n in range(cycles_run)],
+      f"{cycles_run} cycles, head {head_then[:12]}…; {len(kept)} cycles of percepts kept")
 with quiet():                                       # the visualizer's buttons
     engine.control("pause")
     time.sleep(0.1)
@@ -133,10 +143,15 @@ check("controls: pause holds, step advances one cycle and pauses, play, speed; a
       f"held {held}, one cycle {one}, paused after step {stopped}, {unknown.get('error')}")
 with quiet():
     reset = engine.control("reset", stream="live")
-check("reset opens a new run folder, old one kept, and starts its history again",
-      reset["ok"] and first_run.exists() and (first_run / "state.json").exists()
-      and engine.run_dir != first_run and engine.history() == {"run": engine.run_dir.name, "through_cycle": -1, "records": []},
-      f"{first_run.name} → {engine.run_dir.name}")
+ended = json.loads((first_run / "state.json").read_text(encoding="utf-8"))
+criteria_saved = json.loads((first_run / "criteria.json").read_text(encoding="utf-8"))
+check("reset opens a new run folder, old one kept (its state, its criteria and its percepts, through its "
+      "last cycle), and starts its history again",
+      reset["ok"] and engine.run_dir != first_run
+      and criteria_saved["cycles"] == ended["cycle"] == len(PerceptRecord.read(S, first_run / PerceptRecord.FILE))
+      and set(LifeCriteria.RULE) <= set(criteria_saved["checks"])
+      and engine.history() == {"run": engine.run_dir.name, "through_cycle": -1, "records": []},
+      f"{first_run.name} → {engine.run_dir.name}; {ended['cycle']} cycles kept")
 check("old run's ledger verifies", S.verify_ledger(first_run / "ledger.jsonl")["ok"])
 check("live-percept reset recorded", engine.stream is None and engine.run_dir.name.endswith("_live"))
 with quiet():
@@ -521,6 +536,34 @@ check("a live life with a model, replayed without it, seals the same ledger, and
       with_model.get("model_active") and with_model.get("llm_calls", 0) > 0 and with_model.get("labels")
       and paired.get("same_ledger_as_replayed") is True and "same ledger as the replayed run: YES" in p.stderr,
       f"{with_model.get('llm_calls')} model calls; same ledger: {paired.get('same_ledger_as_replayed')}")
+
+with quiet():                                       # a life read from this machine, in the experiment mode
+    lived = server.ExperimentEngine(stream=None, delay_ms=0, runs_dir=scratch())
+    lived.running = True
+    wait_for(lambda: lived.cycle >= 40)
+    lived.shutdown()
+p = run(["live_c2.py", "100000", "none", "standard", "--replay", str(lived.run_dir / PerceptRecord.FILE)], tools, 300)
+from_server = json.loads(p.stdout) if p.returncode == 0 else {}
+# The record across a crash: a line cut short is skipped, and a cycle run again keeps its later line
+torn, seen = scratch(), [S.synthetic_percepts(n, 0, True) for n in range(5)]
+record = PerceptRecord(torn)
+record.add(0, seen[0])
+record.add(1, seen[1])
+record.close()
+with (torn / PerceptRecord.FILE).open("a", encoding="utf-8") as f:
+    f.write('{"cycle": 2, "perc')
+record = PerceptRecord(torn)
+record.add(2, seen[2])
+record.add(3, seen[3])
+record.add(3, seen[4])                              # cycle 3 run again after a crash, on other percepts
+record.close()
+check("a life the experiment mode read from this machine replays from its run folder (percepts.jsonl) "
+      "to the same ledger; the record survives a crash",
+      from_server.get("cycles") == lived.cycle and from_server.get("same_ledger_as_replayed") is True
+      and "same ledger as the replayed run: YES" in p.stderr
+      and [percepts_line(e) for e in PerceptRecord.read(S, torn / PerceptRecord.FILE)]
+      == [percepts_line(e) for e in (seen[0], seen[1], seen[2], seen[4])],
+      f"{from_server.get('cycles')} cycles; same ledger: {from_server.get('same_ledger_as_replayed')}")
 
 bare = scratch()                                    # the same tools on a machine without psutil
 for f in TOOL_FILES:
