@@ -38,7 +38,8 @@ def uncertainty_of_the_instant(field, zero_points=frozenset(), quantum=12.0):
     held with tetralemmic (catuskotic) handlers instead of being resolved away.
     In the field the sum is the Net Sum of the cussive instant (TMC p.30): an
     open BOTH channel accumulates weight x both_age until it reaches the exchange
-    quantum, banks what was exchanged and closes (Understanding_TMC p.65); a
+    quantum and closes, and each end then banks one [Ꮙ], half a unit (Half to
+    Each, TMC pp.110, 114; Understanding_TMC p.65); a
     construct lands when it crystallizes, and an Apparent is incontrovertible
     (TMC p.14). So:
 
