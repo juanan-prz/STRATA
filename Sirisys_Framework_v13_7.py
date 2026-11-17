@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.6 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.7 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -42,6 +42,10 @@
 #     tension it holds to its products (sympatic exchange, TMC p.24), and
 #     holds at most the tension of its own commitment, whenever it banked it:
 #     once collapsed it is no "free modulator" (Understanding_TMC p.81).
+#   Half to Each (TMC pp.110, 114). A cussive event carries one unit of
+#     orientation, [Ꮠ] (TMC p.24), and "[Ꮠ] = [2Ꮙ]" (TMC p.26): a BOTH channel
+#     that closes exchanges that unit, one [Ꮙ] to each end. That reading, and
+#     the scale of a [Ꮙ] in units of tension, are Level 3.
 #   Existence. "all [Apparents] must be [Existents]" (TMC p.22): nothing
 #     crystallizes that prune would orphan (edge_holds is the single test).
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
@@ -112,7 +116,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.6"                  # the one place the version is written; the file name agrees
+__version__ = "13.7"                  # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -965,10 +969,10 @@ class ConcordancyField:
             # what it banked before committing: once collapsed it "cannot
             # re-participate in the symbolic field as a free modulator"
             # (Understanding_TMC p.81). Without this, a construct that banked
-            # exchanges before crystallizing held up to two of them (~24) and
-            # relayed tens of times what any other crystal can, by the order of
-            # the steps alone. The excess is held by no one, like the share an
-            # anchor or a full crystal cannot hold (Level 3).
+            # exchanges before crystallizing would keep more than its
+            # commitment and relay more than any other crystal can, by the
+            # order of the steps alone. The excess is held by no one, like the
+            # share an anchor or a full crystal cannot hold (Level 3).
             c.recursion_exchanged = min(THRESHOLD_APPARENT, c.recursion_exchanged)
             # The tetralemmic state it crystallized in is fixed with it: an
             # Apparent is incontrovertible (TMC p.14), so its own exchanges
@@ -2223,9 +2227,20 @@ class TetralemmaEngine:
     # Understanding_TMC p.65: "Once sufficient recursion is exchanged, structural
     # commitment occurs." TMC p.24: "the escapement generates pulses against a
     # tensated oscillator" — the rate is endogenous. A BOTH channel closes
-    # once weight x both_age reaches this quantum. q=12 was calibrated: the
-    # response is non-monotone (q=40 effectively disables promotion by exchange).
+    # once weight x both_age reaches this quantum. q=12 was calibrated while
+    # each end banked weight x both_age itself: the response was non-monotone
+    # (q=40 effectively disabled promotion by exchange).
     EXCHANGE_QUANTUM  = 12.0
+
+    # HALF TO EACH (TMC pp.110, 114: ∝ "Half to Each"). The quantum says WHEN a
+    # channel closes; WHAT it exchanges is the unit of the event. "Directional
+    # Orientation of Cussive Events are [1∞] = [1 Unit Lemniscate]", [Ꮠ] (TMC
+    # p.24), and "[Ꮠ] = [2Ꮙ]" (TMC p.26): two unit tensates, as the tensives,
+    # Tensin and Tensout, "only exist in a pair" (TMC p.26).
+    # Level 3: reading "Half to Each" as one [Ꮙ] to each end of the channel;
+    # and the scale, "1 = 1∞", "[1 Unit ∞] = [1 So]" (TMC p.26): the event is
+    # the unit, so a [Ꮙ] is half a unit of tension.
+    QUO = 0.5
 
     def scan(self, field: ConcordancyField) -> int:
         """
@@ -2244,12 +2259,11 @@ class TetralemmaEngine:
             if e.state != TetraState.BOTH:
                 continue
             e.both_age += 1
-            exchanged = e.weight * e.both_age
-            if exchanged < self.EXCHANGE_QUANTUM:
+            if e.weight * e.both_age < self.EXCHANGE_QUANTUM:
                 continue
             # ── eventuality enforcement ──
             # Sufficient recursion has passed through this channel: it can
-            # no longer remain open. Bank what was exchanged, then shut it.
+            # no longer remain open. Each end banks one [Ꮙ], then it shuts.
             for endpoint in (e.src, e.tgt):
                 c = field.constructs.get(endpoint)
                 if c is None or endpoint in ANCHORS:
@@ -2264,9 +2278,9 @@ class TetralemmaEngine:
                     # (sympatic transfer). Without this cap the stock on a few
                     # crystals grew linearly without bound.
                     c.recursion_exchanged = min(THRESHOLD_APPARENT,
-                                                c.recursion_exchanged + exchanged)
+                                                c.recursion_exchanged + self.QUO)
                 else:
-                    c.recursion_exchanged += exchanged
+                    c.recursion_exchanged += self.QUO
             e.state    = TetraState.NEITHER
             e.both_age = 0
             matured   += 1

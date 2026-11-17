@@ -1534,9 +1534,9 @@ function renderInspector() {
   parts.push(el('h3', null, 'Measures'),
     kv('energy', fixed(view.energy.get(name), 3), 'what [::] selection weighs: incident weight × tension, plus banked and umbragiac'),
     kv('umbragiac', fixed(c.umbragiac_score, 3), 'contradiction stress, accumulated by the UCO'),
-    kv('banked', fixed(c.recursion_exchanged, 2), 'tension banked toward crystallization: what its BOTH channels exchanged '
-                                                  + 'when they closed, what dissolved channels backed up (the halo), what '
-                                                  + 'crystals passed on in exchange'),
+    kv('banked', fixed(c.recursion_exchanged, 2), 'tension banked toward crystallization: half a unit from each BOTH channel '
+                                                  + 'that closed on it (Half to Each), what dissolved channels backed up (the '
+                                                  + 'halo), what crystals passed on in exchange'),
     kv('Vc', vc.toFixed(4), 'anchoring weight: Vc = (τ · σth · αm)^(1/3) (Understanding DeOS p.65)'),
     bar,
     kv('τ · σth · αm', `${tau.toFixed(2)} · ${sigma.toFixed(2)} · ${alpha.toFixed(2)}`,
@@ -1590,8 +1590,8 @@ function renderInspector() {
     const dir = el('span', 'dir', out ? '→' : '←');
     const meta = el('div', 'meta', `${e.rel} · `);
     meta.append(edgeMark(e.state), ` ${e.state} · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}`
-      + (e.state === 'BOTH' && e.both_age != null       // what the channel has exchanged, of the quantum it closes at
-        ? ` · exchanged ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM}` : ''));
+      + (e.state === 'BOTH' && e.both_age != null       // how far the channel has gone toward the quantum it closes at
+        ? ` · ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM} to close` : ''));
     body.append(nameRef(out ? e.tgt : e.src), meta);
     row.append(dir, body);
     parts.push(row);

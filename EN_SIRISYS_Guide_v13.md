@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.6 — Technical guide
+# STRATA · SIRISYS v13.7 — Technical guide
 
 [Español](ES_SIRISYS_Guide_v13.md)
 
@@ -25,7 +25,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 
 | File | Purpose |
 |---|---|
-| `Sirisys_Framework_v13_6.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
+| `Sirisys_Framework_v13_7.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view; it also replays a recorded run (§3.7) |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
@@ -220,15 +220,15 @@ Its left panel folds section by section, as in the live view.
 
 **Opening.** *Open state.json…* (or O), or drop the files anywhere on the page. A run folder's `state.json` is the usual file; the framework's own `sirisys_v13_state.json` (§8) opens too.
 
-**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first construct whose key or label contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how much it has exchanged of the quantum it closes at (12). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
+**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first construct whose key or label contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how far it has gone toward the quantum it closes at (12, its weight times its cycles in BOTH). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
 
 **Several files of one instance** make a timeline: a slider, ◀ ▶ (or ← →) and Play, about one state per second. Stepping forward, a ring marks each construct the previous state did not hold, and *Since the previous file* gives the cycles, born, concluded, crystallized and the population, from the two files' own totals. Files of different runs are shown, with a warning and no counts between them.
 
 In experiment mode an instance writes one `state.json`, when it ends. For a timeline, copy the state as it grows; for example, with the console demonstration, which resumes the same instance on every run:
 
 ```bash
-python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_7.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_7.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Keys.**
@@ -376,6 +376,7 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 - the older operand leads and hands its chirality on;
 - a crystal is never demoted or altered;
 - a crystal holds at most the tension of its own commitment, also what it banked before crystallizing;
+- a BOTH channel that closes gives each end one [Ꮙ], half a unit, whatever its weight and age (Half to Each, TMC pp.110 and 114);
 - nothing leaves the field without a termination proof;
 - no crystal concludes in the cycle it forms;
 - conflicts respect the Stop Chasm and the Adsurdic depth (TMC p.41);
@@ -403,13 +404,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 It answers `ok` and the number of proofs or, for a damaged record, the position of the first proof that does not belong and why.
 
-**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_6_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
+**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_7_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_7.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_6.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed. It resumes as every program does: it keeps the previous record (`.prev`) and a high-water mark (`.hwm`) beside the state, falls back to the previous record when the newest is damaged, and refuses to start a fresh field over a ledger whose state is gone.
+**The framework on its own.** `python3 Sirisys_Framework_v13_7.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed. It resumes as every program does: it keeps the previous record (`.prev`) and a high-water mark (`.hwm`) beside the state, falls back to the previous record when the newest is damaged, and refuses to start a fresh field over a ledger whose state is gone.
 
 **Files created while running.**
 

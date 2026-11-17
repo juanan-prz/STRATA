@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.6 — Guía técnica
+# STRATA · SIRISYS v13.7 — Guía técnica
 
 [English](EN_SIRISYS_Guide_v13.md)
 
@@ -25,7 +25,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 
 | Archivo | Para qué |
 |---|---|
-| `Sirisys_Framework_v13_6.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
+| `Sirisys_Framework_v13_7.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo; también repite una ejecución grabada (§3.7) |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
@@ -220,15 +220,15 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 
 **Abrir.** *Open state.json…* (u O), o suelta los archivos en cualquier punto de la página. Lo habitual es el `state.json` de una carpeta de ejecución; también se abre el `sirisys_v13_state.json` del propio framework (§8).
 
-**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer constructo cuya clave o etiqueta contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones; una relación BOTH dice además cuánto ha intercambiado del cuanto al que se cierra (12). Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
+**Un archivo.** Selecciona un constructo, en el lienzo o con el buscador (*find a construct…*; Intro toma el primer constructo cuya clave o etiqueta contenga el texto), para examinar sus pruebas, su génesis (sus operandos, dibujados en el lienzo) y sus relaciones; una relación BOTH dice además cuánto ha avanzado hacia el cuanto al que se cierra (12, su peso por sus ciclos en BOTH). Los valores que el framework deriva al ejecutarse y no guarda (modo de existencia, Vc, energía de selección, estado dominante, inestabilidad) se calculan exactamente como los calcula el framework.
 
 **Varios archivos de una misma instancia** forman una línea de tiempo: un deslizador, ◀ ▶ (o ← →) y Play, a un estado por segundo aproximadamente. Al avanzar, un anillo marca cada constructo que el estado anterior no tenía, y *Since the previous file* da los ciclos, nacidos, concluidos, cristalizados y la población, a partir de los totales de los dos archivos. Los archivos de ejecuciones distintas se muestran, con un aviso y sin cuentas entre ellos.
 
 En el modo experimento, una instancia escribe un solo `state.json`, al terminar. Para una línea de tiempo, copia el estado según crece; por ejemplo, con la demostración en consola, que reanuda la misma instancia en cada ejecución:
 
 ```bash
-python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_6.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_7.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_7.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Teclas.**
@@ -376,6 +376,7 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 - el operando mayor lidera y transmite su quiralidad;
 - un cristal nunca se degrada ni se altera;
 - un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de cristalizar;
+- un canal BOTH que se cierra da a cada extremo un [Ꮙ], media unidad, sea cual sea su peso o su edad (Half to Each, TMC pp.110 y 114);
 - nada sale del campo sin prueba de terminación;
 - ningún cristal concluye en el ciclo en que se forma;
 - los conflictos respetan la Stop Chasm y la profundidad Adsurdic (TMC p.41);
@@ -403,13 +404,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 Responde `ok` y el número de pruebas o, si el registro está dañado, la posición de la primera prueba que no encaja y por qué.
 
-**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_6_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
+**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_7_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_6.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_7.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_6.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_7.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
 
 **Archivos que se crean al ejecutar.**
 

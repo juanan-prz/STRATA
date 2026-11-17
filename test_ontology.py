@@ -9,6 +9,8 @@ one guards what the field must be, from the primary source:
     crystal state never changes and its identity never shifts (TMC p.14).
   - A crystal holds at most the tension of its own commitment, whenever it
     banked it: once collapsed it is no "free modulator" (Understanding_TMC p.81).
+  - Half to Each (TMC pp.110, 114): a BOTH channel that closes exchanges one
+    [Ꮠ], one [Ꮙ] to each end (TMC pp.24, 26), whatever its weight and age.
   - Nothing vanishes silently: every construct that leaves the field leaves a
     TERMINATE proof (Compiler Guide pp.203-204).
   - The Stop Chasm and the Adsurdic threshold (TMC p.41): never more than
@@ -126,6 +128,34 @@ check("a crystal holds at most the tension of its own commitment, also what it b
       "(Understanding_TMC p.81): locked with twice the quantum banked it keeps THRESHOLD_APPARENT, and no "
       "crystal ever holds more", probe.field.constructs["CAP::banked"].recursion_exchanged == S.THRESHOLD_APPARENT
       and not broken["crystal_over_cap"], f"{len(broken['crystal_over_cap'])} crystal-cycles over the cap")
+# Half to Each (TMC pp.110, 114): a closing BOTH channel exchanges one [Ꮠ], one [Ꮙ] to each end (TMC pp.24, 26),
+# whatever its weight and its age; an anchor banks nothing and a crystal holds at most its commitment
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    h2e = S.new_session(S.LLMIntermediary(backend="none"))
+q, quo = S.TetralemmaEngine.EXCHANGE_QUANTUM, S.TetralemmaEngine.QUO
+for name in ("H2E::a", "H2E::b", "H2E::c"):
+    h2e.field.add_construct(name, S.Layer.UNIT_1)
+h2e.field.add_construct("H2E::crystal", S.Layer.UNIT_1)
+h2e.field.lock_apparent("H2E::crystal")
+h2e.field.constructs["H2E::crystal"].recursion_exchanged = S.THRESHOLD_APPARENT - quo / 2
+closing = []
+for src, tgt, w in (("H2E::a", "H2E::b", 0.6), ("I::Am", "H2E::c", 0.9), ("H2E::a", "H2E::crystal", 0.75)):
+    e = h2e.field.add_edge(src, "::", tgt, weight=w, state=S.TetraState.BOTH)
+    e.both_age = -(-q // w) - 1                         # the next scan brings it to the quantum
+    closing.append(e)
+ends = ("H2E::a", "H2E::b", "H2E::c", "H2E::crystal", "I::Am")
+held = {n: h2e.field.constructs[n].recursion_exchanged for n in ends}
+with quiet():
+    S.TetralemmaEngine().scan(h2e.field)
+gain = {n: round(h2e.field.constructs[n].recursion_exchanged - held[n], 9) for n in ends}
+check("Half to Each: a BOTH channel that reaches the quantum gives each end one [Ꮙ], whatever it weighed and "
+      "however long it stood (the end of two closing channels gets two); an anchor banks nothing; a crystal "
+      "fills up to its commitment, no more; the channel's exchange starts afresh",
+      gain["H2E::b"] == quo and gain["H2E::c"] == quo and gain["H2E::a"] == 2 * quo and gain["I::Am"] == 0
+      and h2e.field.constructs["H2E::crystal"].recursion_exchanged == S.THRESHOLD_APPARENT
+      and all(e.both_age == 0 for e in closing),
+      f"[Ꮙ] = {quo}, gains {gain}")
 check("nothing leaves the field without a TERMINATE proof", not broken["vanished_silently"])
 check("at most MAX_CONFLICTS_PER_CYCLE conflicts in a cycle (Stop Chasm, TMC p.41)", not broken["stop_chasm"])
 check("conflict recursion never passes MAX_CF_DEPTH (Adsurdic threshold, TMC p.41)", not broken["adsurdic"])
