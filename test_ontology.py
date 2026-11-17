@@ -28,6 +28,7 @@ one guards what the field must be, from the primary source:
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
 Usage: python3 test_ontology.py [cycles per stream]        (default 400)"""
+import json
 import sys
 
 from sirisys_loader import load_framework
@@ -207,12 +208,19 @@ hf._back_up_halo([from_crystal, from_open])
 after = strength(aging)
 share = S.HALO_FRACTION * from_crystal.weight / 2       # two sides: the aging support and the BOTH one
 hf._press_toward_center("HALO::crystal", 10.0)          # far more than any support can take
+saved = json.loads(json.dumps(aging.to_dict()))         # what a save keeps of the repair
+older = {k: v for k, v in saved.items() if k != "repaired"}                 # a state written before v13.9
+resumed = S.ConcordancyField.from_dict(json.loads(json.dumps(hf.to_dict())), hf.clock)
 check("the Halo toward the Apparent: a crystal's dissolved exchange presses on its support from all sides and "
       "repairs what ages, up to its strength at birth and no further (TMC pp.47, 55, 14); a BOTH support takes "
-      "nothing; the birth is not rewritten; an open construct's dissolved exchange is still banked",
+      "nothing; the birth is not rewritten; an open construct's dissolved exchange is still banked; the repair "
+      "survives a save and a resume, and a state from before v13.9 resumes with none",
       abs(after - (before + share)) < 1e-9 and abs(strength(aging) - aging.weight) < 1e-9
       and held_both.repaired == 0 and aging.born_breath == born
-      and abs(hf.constructs["HALO::open"].recursion_exchanged - banked - S.HALO_FRACTION * from_open.weight) < 1e-12,
+      and abs(hf.constructs["HALO::open"].recursion_exchanged - banked - S.HALO_FRACTION * from_open.weight) < 1e-12
+      and S.ConcordancyEdge.from_dict(saved).repaired == aging.repaired > 0
+      and S.ConcordancyEdge.from_dict(older).repaired == 0
+      and resumed.halo_repaired == hf.halo_repaired > 0,
       f"strength {before:.4f} -> {after:.4f} -> {strength(aging):.4f} of {aging.weight}; repaired {aging.repaired:.3f} breaths")
 check("nothing leaves the field without a TERMINATE proof", not broken["vanished_silently"])
 check("at most MAX_CONFLICTS_PER_CYCLE conflicts in a cycle (Stop Chasm, TMC p.41)", not broken["stop_chasm"])

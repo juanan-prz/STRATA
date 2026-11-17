@@ -158,7 +158,7 @@ The live view and the inspector draw the field alike, and the legend keys all of
 - **The view** fits itself to the field and follows it as it grows (from one state to the next, in the inspector), clear of the controls and the legend: in *relations* the constructs on show, in *strata* the rings, centred on their centre. Panning or zooming lets it go, and the *Fit* button, lit while the view follows, takes it back (F).
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
 - **Shapes.** A construct is a dot in the colour of its layer; an anchor (I::Am, I::AmNot, SYSTEM), a diamond; a crystal the field formed, an open hexagon, so that the active strata stand out; a Zero Point, a star; a conflict, a ringed dot. One ring is drawn where a construct rises to UNIT_1, two where it crystallizes.
-- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and the thickest; their opacity follows the edge's weight. NEITHER, most of the edges, is grey, solid and the thinnest. An edge into a crystal, BOTH aside, is the crystal's support, which ages on breaths, not on cycles: solid, a little thicker, its state's colour drawn toward the crystal's.
+- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and the thickest; their opacity follows the edge's weight. NEITHER, most of the edges, is grey, solid and the thinnest. An edge into a crystal, BOTH aside, is the crystal's support, which ages on breaths, not on cycles, and which the Halo repairs when the crystal's own exchanges dissolve: solid, a little thicker, its state's colour drawn toward the crystal's.
 - **Direction.** From zoom ×2 each edge shows its direction.
 - **Existence modes** are written with their signs, [Ω] and [Ꮠ].
 - **Quiet anchors** (A) makes the anchors' relations, often most of the edges, faint, so that the rest of the structure shows.
@@ -379,7 +379,7 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 - a crystal holds at most the tension of its own commitment, also what it banked before crystallizing;
 - a BOTH channel that closes gives each end one [Ꮙ], half a unit, whatever its weight and age (Half to Each, TMC pp.110 and 114);
 - a crystal is admitted only if its support would still hold one breath later (TMC pp.14, 22, 45);
-- what dissolves of a crystal's exchanges repairs its support, never past its strength at birth, and a BOTH support takes nothing (TMC pp.47, 55, 14);
+- what dissolves of a crystal's exchanges repairs its support, never past its strength at birth, and a BOTH support takes nothing (TMC pp.47, 55, 14); the repair survives a save and a resume;
 - nothing leaves the field without a termination proof;
 - no crystal concludes in the cycle it forms;
 - conflicts respect the Stop Chasm and the Adsurdic depth (TMC p.41);

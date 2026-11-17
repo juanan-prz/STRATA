@@ -59,8 +59,8 @@
 #     per breath the field adjusts its own tolerance so that crystals formed
 #     track crystals concluded (CONF).
 #   Halo of Umbrage (TMC p.47): tensate "backing up" around where it cannot
-#     flow drives "ONLY toward the [00] Marenth Apparent". The weight of a
-#     dissolved channel backs up into its upstream construct, toward
+#     flow drives "ONLY toward the [00] Marenth Apparent". A share of a
+#     dissolved channel's weight backs up into its upstream construct, toward
 #     apparency; when that construct is a crystal, it presses on it "from all
 #     sides towards their EXACT center" (TMC p.55) and repairs its support,
 #     never past its strength at birth (TMC p.14). Reading p.55's force as the
@@ -157,7 +157,7 @@ APPARENT_FLOOR           = 0.10   # Level 3: weight at which an edge into a crys
 # Compiler Guide p.78), calibrated: lower values (e.g. 0.15) prune no BOTH edge
 # and leave BOTH resistance inactive.
 BOTH_FLOOR               = 0.45
-HALO_FRACTION            = 0.25   # Level 3: share of a dissolved channel's weight that backs up
+HALO_FRACTION            = 0.25   # Level 3: share of a dissolved channel's weight that backs up (banked, or pressing on a crystal)
 SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exchangeable apparent passes per exchange
 
 # ── breathing and tolerance ──────────────────────────────────────────────────
@@ -1097,15 +1097,17 @@ class ConcordancyField:
 
         CRYSTAL SUPPORT — Incontrovertibility (TMC p.14; Understanding_TMC
         pp.79-81). An Apparent can never be demoted or restored, but it is not
-        immortal: it concludes when its support no longer holds. Its SUPPORT
-        (edges into it) ages on the slow clock of breaths (TMC p.45), against
-        APPARENT_FLOOR; its exchanges (edges out of it) age like any relation.
+        immortal: it concludes when nothing holds it. Its SUPPORT (edges into
+        it) ages on the slow clock of breaths (TMC p.45), against
+        APPARENT_FLOOR, and the Halo can repair it (_press_toward_center); its
+        exchanges (edges out of it) age like any relation, so once its support
+        is gone they hold it only until they too dissolve.
 
         BOTH RESISTANCE. A BOTH edge faces an absolute floor with no temporal
         decay: harder to remove than an ordinary edge, still subject to the
         existence test. Exempting it entirely would make any construct holding
-        one immortal; the corpus grants immunity to the Apparent alone
-        (Understanding_TMC pp.80-81).
+        one immortal; the corpus makes only the Apparent "immune to reversal"
+        (Understanding_TMC pp.80-82), which is not immunity to concluding.
 
         `min_references` implements Understanding_DeOS pp.84, 118: persistence is earned
         by redundancy of witnessing, not by relation type. Default 1: a single
@@ -1113,15 +1115,16 @@ class ConcordancyField:
 
         Pruning rules (one definition: edge_holds, which collapse also uses):
           - BOTH edges:              kept iff weight ≥ both_floor (no decay)
-          - edge INTO an APPARENT:   kept iff weight × e^(−DECAY·breaths) ≥ APPARENT_FLOOR
+          - edge INTO an APPARENT:   kept iff weight × e^(−DECAY·age) ≥ APPARENT_FLOOR, with age
+                                     the breaths it has lived minus those the Halo repaired
           - all other edges:         kept iff weight × tension(born_at) ≥ min_weight
         """
         kept, dissolved = [], []
         for e in self.edges:
-            # Only a crystal's SUPPORT (edges into it) is sealed against
-            # temporal decay. Its exchanges (edges out of it) are ordinary
-            # exchanges and age like any other: a crystal persists while it is
-            # supported, not because it once exchanged.
+            # Only a crystal's SUPPORT (edges into it) ages on the slow clock.
+            # Its exchanges (edges out of it) are ordinary exchanges and age
+            # like any other: a crystal persists while it is supported, not
+            # because it once exchanged.
             tgt = self.constructs.get(e.tgt)
             into_crystal = tgt is not None and tgt.layer == Layer.APPARENT
             holds = self.edge_holds(e, into_crystal, min_weight, apparent_floor, both_floor)

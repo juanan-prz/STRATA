@@ -5,6 +5,7 @@ USAGE
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --seeds 3   # the experiment
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --determinism
   python3 run_report.py --backend none --profile minimal --cycles 1000 --seeds 3     # the control alone
+  python3 run_report.py --backend none --profile minimal --cycles 10000 --seeds 3    # the long control
   python3 run_report.py --backend ollama --profile minimal --cycles 1000 --first-seed 3 --seeds 5
                                                     # a confirmation batch on five new streams
 

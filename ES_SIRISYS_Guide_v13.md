@@ -158,7 +158,7 @@ La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge t
 - **La vista** se encuadra sola en el campo y lo sigue mientras crece (de un estado al siguiente, en el inspector), sin quedar bajo los controles ni la leyenda: en *relations*, los constructos visibles; en *strata*, los anillos, centrados en su centro. Desplazar o hacer zoom la suelta, y el botón *Fit*, iluminado mientras la vista sigue al campo, la recupera (F).
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
 - **Formas.** Un constructo es un punto del color de su capa; un ancla (I::Am, I::AmNot, SYSTEM), un rombo; un cristal que formó el campo, un hexágono abierto, para que destaquen los estratos activos; un Zero Point, una estrella; un conflicto, un punto con anillo. Se dibuja un anillo donde un constructo sube a UNIT_1 y dos donde cristaliza.
-- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y la más gruesa; su opacidad sigue al peso de la arista. NEITHER, la mayoría, es gris, sólida y la más fina. Una arista hacia un cristal, salvo BOTH, es el soporte del cristal, que envejece por respiraciones, no por ciclos: sólida, algo más gruesa y con el color de su estado llevado hacia el del cristal.
+- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y la más gruesa; su opacidad sigue al peso de la arista. NEITHER, la mayoría, es gris, sólida y la más fina. Una arista hacia un cristal, salvo BOTH, es el soporte del cristal, que envejece por respiraciones, no por ciclos, y que el Halo repara cuando se disuelven los intercambios del propio cristal: sólida, algo más gruesa y con el color de su estado llevado hacia el del cristal.
 - **Dirección.** Desde el zoom ×2, cada arista muestra su dirección.
 - **Los modos de existencia** se escriben con su signo, [Ω] y [Ꮠ].
 - **Quiet anchors** (A) atenúa las relaciones de las anclas, a menudo la mayoría de las aristas, para que se vea el resto de la estructura.
@@ -379,7 +379,7 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 - un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de cristalizar;
 - un canal BOTH que se cierra da a cada extremo un [Ꮙ], media unidad, sea cual sea su peso o su edad (Half to Each, TMC pp.110 y 114);
 - un cristal solo se admite si su soporte se sostendría todavía una respiración después (TMC pp.14, 22, 45);
-- lo que se disuelve de los intercambios de un cristal repara su soporte, nunca por encima de su fuerza al nacer, y un soporte BOTH no recibe nada (TMC pp.47, 55, 14);
+- lo que se disuelve de los intercambios de un cristal repara su soporte, nunca por encima de su fuerza al nacer, y un soporte BOTH no recibe nada (TMC pp.47, 55, 14); la reparación se conserva al guardar y reanudar;
 - nada sale del campo sin prueba de terminación;
 - ningún cristal concluye en el ciclo en que se forma;
 - los conflictos respetan la Stop Chasm y la profundidad Adsurdic (TMC p.41);
