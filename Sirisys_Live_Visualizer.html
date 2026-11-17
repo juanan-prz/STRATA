@@ -624,6 +624,7 @@
     <div class="tt-row"><span class="k">mode</span><span class="v" id="tt-mode"></span></div>
     <div class="tt-row"><span class="k">chirality</span><span class="v" id="tt-chirality"></span></div>
     <div class="tt-row"><span class="k">crystallized as</span><span class="v" id="tt-crystal"></span></div>
+    <div class="tt-row" id="tt-support-row" hidden title="how long the edges into it hold it: a BOTH edge does not age; any other ages on breaths, less what the Halo repaired"><span class="k">support</span><span class="v" id="tt-support"></span></div>
     <div class="tt-row"><span class="k">lagrange</span><span class="v" id="tt-lagrange"></span></div>
     <div class="tt-row"><span class="k">proofs</span><span class="v" id="tt-proofs"></span></div>
     <div class="tt-row"><span class="k">born at T</span><span class="v" id="tt-born"></span></div>
@@ -727,6 +728,16 @@ const MODE_MEANING = {
   NEUTRAL: 'balanced, or no proofs yet',
 };
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
+// A crystal's support, as text (ConcordancyField.edge_holds): a BOTH edge holds it without
+// ageing, or its strongest ageing support has some breaths left; and what the Halo repaired
+function supportText(s) {
+  if (!s) return '—';
+  if (!s.edges) return 'none: its last exchanges hold it until they dissolve';
+  const halo = s.repaired > 0 ? ` · the Halo repaired ${s.repaired.toFixed(1)} breaths` : '';
+  if (s.both_from) return `a BOTH edge${ANCHORS.has(s.both_from) ? ' from ' + s.both_from : ''}: it does not age` + halo;
+  if (s.breaths_left == null) return '—';
+  return `≈ ${Math.max(0, Math.floor(s.breaths_left))} breaths left` + halo;
+}
 // How the canvas draws each edge state, besides its colour: BOTH the thickest and the
 // strongest, FALSE dashed, TRUE a little stronger. Their opacity follows the edge's weight
 // (alpha multiplies it, up to 1). NEITHER, most of the edges, is drawn solid and the
@@ -1234,6 +1245,8 @@ function showTooltip(name, c, mx, my) {
   setText('tt-mode', modeText(c.mode));
   setText('tt-chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—');      // ±1, never mistaken for '—'
   setText('tt-crystal', c.crystal || '—');
+  $('tt-support-row').hidden = !c.support;                    // a crystal that can conclude
+  setText('tt-support', supportText(c.support));
   setText('tt-lagrange', lagrangeText(c.lagrange));
   setText('tt-proofs', c.proof_chain);
   setText('tt-born', c.born_at ? `(${c.born_at[0]},${c.born_at[1]})` : '—');

@@ -101,6 +101,7 @@ import contextlib
 import io
 import json
 import logging
+import math
 import sys
 import threading
 import time
@@ -144,6 +145,24 @@ def _stream_arg(value):
         return parse_stream(value)
     except ValueError:
         raise argparse.ArgumentTypeError(f"'live' or an integer, not {value!r}") from None
+
+
+def _support(edges, breaths):
+    """How a crystal's support (`edges`, the edges into it) holds, as ConcordancyField.edge_holds
+    tests it: a BOTH edge does not age and holds while its weight reaches BOTH_FLOOR; any other
+    ages on breaths, less what the Halo repaired, and holds while weight x e^(-DECAY x age)
+    reaches APPARENT_FLOOR. Returns the edges, whether a BOTH edge holds it (and from where),
+    the breaths the strongest ageing support has left, and the breaths the Halo has repaired."""
+    both = next((e.src for e in edges if e.state == S.TetraState.BOTH and e.weight >= S.BOTH_FLOOR), None)
+    left = None
+    for e in edges:
+        if e.state != S.TetraState.BOTH and e.weight > 0:
+            strength = e.weight * math.exp(-S.InternalClock.DECAY * (breaths - e.born_breath - e.repaired))
+            k = math.log(strength / S.APPARENT_FLOOR) / S.InternalClock.DECAY
+            left = k if left is None else max(left, k)
+    return {"edges": len(edges), "both_from": both,
+            "breaths_left": None if left is None else round(left, 2),
+            "repaired": round(sum(e.repaired for e in edges), 2)}
 
 
 def _conclusion(meta):
@@ -363,7 +382,9 @@ class ExperimentEngine:
         energy = self.ss.concordancy._energy_map(f)            # what [::] selection weighs
         modes = dict.fromkeys(("OMEGA", "LEMNISCATE", "NEUTRAL"), 0)
         layers = dict.fromkeys(LAYER_NAMES, 0)
-        constructs = []
+        constructs, into = [], {}
+        for e in f.edges:
+            into.setdefault(e.tgt, []).append(e)
         for c in f.constructs.values():
             mode = f.compute_existence_mode(c)
             modes[mode] += 1
@@ -380,6 +401,9 @@ class ExperimentEngine:
                 "banked": round(c.recursion_exchanged, 3),
                 "chirality": c.chirality,
                 "crystal": c.crystal_state.name if c.crystal_state else None,
+                # a crystal's support: how long it holds (anchors never conclude)
+                "support": (_support(into.get(c.name, []), f.breaths)
+                            if c.layer == S.Layer.APPARENT and c.name not in S.ANCHORS else None),
             })
         # both_age: the cycles a BOTH channel has stayed open; weight × both_age is how far it has
         # gone toward TetralemmaEngine.EXCHANGE_QUANTUM, where it closes and each end that is not

@@ -632,6 +632,16 @@ const MODE_MEANING = {
   NEUTRAL: 'balanced, or no proofs yet',
 };
 const modeText = mode => mode in MODE_SIGN && mode !== 'NEUTRAL' ? `[${MODE_SIGN[mode]}] ${mode}` : mode || '—';
+// A crystal's support, as text (ConcordancyField.edge_holds): a BOTH edge holds it without
+// ageing, or its strongest ageing support has some breaths left; and what the Halo repaired
+function supportText(s) {
+  if (!s) return '—';
+  if (!s.edges) return 'none: its last exchanges hold it until they dissolve';
+  const halo = s.repaired > 0 ? ` · the Halo repaired ${s.repaired.toFixed(1)} breaths` : '';
+  if (s.both_from) return `a BOTH edge${ANCHORS.has(s.both_from) ? ' from ' + s.both_from : ''}: it does not age` + halo;
+  if (s.breaths_left == null) return '—';
+  return `≈ ${Math.max(0, Math.floor(s.breaths_left))} breaths left` + halo;
+}
 // The relations a construct's proofs can carry, each with the sign of the mode it counts toward
 const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
@@ -653,7 +663,9 @@ const EXCHANGE_QUANTUM = 12;
 // ═══ The framework's constants, and settings ════════════════════════════════
 
 const ERA_CAPACITY = 10000;       // InternalClock.ERA_CAPACITY: offsets in one era
-const DECAY = 0.08;               // InternalClock.DECAY: relational decay per tick
+const DECAY = 0.08;               // InternalClock.DECAY: relational decay per tick (a crystal's support: per breath)
+const APPARENT_FLOOR = 0.10;      // APPARENT_FLOOR: a crystal's ageing support holds while its strength reaches it
+const BOTH_FLOOR = 0.45;          // BOTH_FLOOR: a BOTH edge does not age and holds while its weight reaches it
 const VC_UNSTABLE = 0.25;         // Sombunal.global_instability: below it, no ontological gravity
 // Strata: the distance from the centre of each stratum, after the ladder of being, inwards
 // to outwards (Understanding TMC pp.49–50: an interpretation, not TMC's own text); the
@@ -724,6 +736,31 @@ function edgeMark(state, support = false) {
 const ageSince = (clock, born) => Math.max(0, (clock.era - born[0]) * ERA_CAPACITY + (clock.offset - born[1]));
 // InternalClock.tension
 const tension = (clock, born) => Math.exp(-DECAY * ageSince(clock, born));
+
+// ConcordancyField.edge_holds, for the edges into a crystal (its support): a BOTH edge does not
+// age and holds while its weight reaches BOTH_FLOOR; any other ages on breaths, less the breaths
+// the Halo repaired, and holds while weight × e^(−DECAY·age) reaches APPARENT_FLOOR, so for
+// ln(strength / APPARENT_FLOOR) / DECAY breaths more. A state written before v13.9 has no repair
+// (none happened); one without born_breath cannot say how long.
+function supportBreathsLeft(e, breaths) {
+  if (e.state === 'BOTH' || !(e.weight > 0) || e.born_breath == null || breaths == null) return null;
+  const strength = e.weight * Math.exp(-DECAY * (breaths - e.born_breath - (e.repaired || 0)));
+  return Math.log(strength / APPARENT_FLOOR) / DECAY;
+}
+// One edge of a crystal's support, as the inspector lists it
+function supportEdgeText(e, breaths) {
+  const left = supportBreathsLeft(e, breaths);
+  return (e.state === 'BOTH' ? (e.weight >= BOTH_FLOOR ? ' · support: does not age' : '')
+    : left == null ? '' : ` · support: ≈ ${Math.max(0, Math.floor(left))} breaths left`)
+    + ((e.repaired || 0) > 0 ? ` · Halo ${e.repaired.toFixed(1)} breaths repaired` : '');
+}
+function supportOf(edges, breaths) {
+  const both = edges.find(e => e.state === 'BOTH' && e.weight >= BOTH_FLOOR);
+  const lefts = edges.map(e => supportBreathsLeft(e, breaths)).filter(k => k != null);
+  return { edges: edges.length, both_from: both ? both.src : null,
+           breaths_left: lefts.length ? Math.max(...lefts) : null,
+           repaired: edges.reduce((sum, e) => sum + (e.repaired || 0), 0) };
+}
 
 // ConcordancyField.compute_existence_mode: the last five proofs
 function existenceMode(name, c) {
@@ -829,6 +866,7 @@ function deriveView(state, file) {
   const view = {
     state, file, constructs: new Map(), edges: field.edges, edgesOf: new Map(),
     mode: new Map(), vc: new Map(), dominant: new Map(), approached: new Set(), percepts: new Set(),
+    support: new Map(),                            // crystal → how its support holds (anchors never conclude)
     ops: new Map(),                                 // product name → the [::] that made it
     carriers: new Map(PROOF_RELATIONS.map(r => [r, new Set()])),   // relation → whose saved proofs carry it
   };
@@ -846,6 +884,8 @@ function deriveView(state, file) {
     view.vc.set(name, anchoringWeight(name, c, clock));
     view.dominant.set(name, dominantState(name, c, view.edgesOf.get(name)));
     for (const p of c.proof_chain || []) view.carriers.get(p.relation)?.add(name);
+    if (c.layer === APPARENT && !ANCHORS.has(name))
+      view.support.set(name, supportOf(view.edgesOf.get(name).filter(e => e.tgt === name), field.breaths));
   }
   view.instability = globalInstability(view);
   view.violations = invariantViolations(field);
@@ -1518,6 +1558,9 @@ function renderInspector() {
     kv('born at T', `${atT(c.born_at)} · ${ticks(ageSince(clock, c.born_at))} ago`),
     kv('chirality', c.chirality === 1 ? '+1' : c.chirality === -1 ? '−1' : '—', 'born with it, handed on to its products when it leads'),
     kv('crystallized as', c.crystal_state || '—', 'the tetralemmic state it crystallized in: fixed for good'),
+    ...(view.support.has(name) ? [kv('support', supportText(view.support.get(name)),
+      'how long the edges into it hold it: a BOTH edge does not age; any other ages on breaths, less what '
+      + 'the Halo repaired when its own exchanges dissolved. It concludes when nothing holds it')] : []),
     kv('lagrange', lagrangeText(c.lagrange), c.lagrange in LAGRANGE ? `the trade-off it names: ${LAGRANGE[c.lagrange][1]}` : ''));
 
   const history = (c.lineage || []).slice(-5).reverse(), total = c.version ?? history.length;
@@ -1591,7 +1634,8 @@ function renderInspector() {
     const meta = el('div', 'meta', `${e.rel} · `);
     meta.append(edgeMark(e.state), ` ${e.state} · w ${fixed(e.weight, 2)} · born ${atT(e.born_at)}`
       + (e.state === 'BOTH' && e.both_age != null       // how far the channel has gone toward the quantum it closes at
-        ? ` · ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM} to close` : ''));
+        ? ` · ${(e.weight * e.both_age).toFixed(1)} of ${EXCHANGE_QUANTUM} to close` : '')
+      + (!out && view.support.has(name) ? supportEdgeText(e, view.state.field.breaths) : ''));
     body.append(nameRef(out ? e.tgt : e.src), meta);
     row.append(dir, body);
     parts.push(row);

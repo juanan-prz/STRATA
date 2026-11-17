@@ -148,7 +148,7 @@ The glossary (section VIII) defines every counter.
 
 **Event Log** (right). Products of `[::]` (unfolded, each by its key and, with a model, its label), cussive collapses, conclusions, narration, the questions in which the model words the approaches to the Sombunal (a question longer than a label shows its label and opens, by its arrow ▸, to the whole of it), and model notices. A click on a kind's chip hides or shows it; the latest 150 entries of each kind are kept.
 
-**Pointing at a construct** shows its kind, layer, witness, energy, umbragiac score, banked exchange, Vc, existence mode, chirality, what it crystallized as, Lagrangian tag, proofs and the T it was born at.
+**Pointing at a construct** shows its kind, layer, witness, energy, umbragiac score, banked exchange, Vc, existence mode, chirality, what it crystallized as, how its support holds (a crystal that can conclude: held by a BOTH edge, which does not age, or the breaths its strongest support has left, with what the Halo repaired), Lagrangian tag, proofs and the T it was born at.
 
 ### 3.2 How the field is drawn
 
@@ -220,7 +220,7 @@ Its left panel folds section by section, as in the live view.
 
 **Opening.** *Open state.json…* (or O), or drop the files anywhere on the page. A run folder's `state.json` is the usual file; the framework's own `sirisys_v13_state.json` (§8) opens too.
 
-**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first construct whose key or label contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how far it has gone toward the quantum it closes at (12, its weight times its cycles in BOTH). Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
+**One file.** Select a construct, on the canvas or with the search box (*find a construct…*; Enter takes the first construct whose key or label contains the text), to examine its proofs, its genesis (its operands, drawn on the canvas) and its relations; a BOTH relation also says how far it has gone toward the quantum it closes at (12, its weight times its cycles in BOTH). For a crystal, *support* says how it holds, and each edge into it how many breaths it has left (a BOTH edge does not age) and how many the Halo has repaired, as the framework's existence test reads them. Values the framework derives at run time and does not store (existence mode, Vc, selection energy, dominant state, instability) are computed exactly as the framework computes them.
 
 **Several files of one instance** make a timeline: a slider, ◀ ▶ (or ← →) and Play, about one state per second. Stepping forward, a ring marks each construct the previous state did not hold, and *Since the previous file* gives the cycles, born, concluded, crystallized and the population, from the two files' own totals. Files of different runs are shown, with a warning and no counts between them.
 

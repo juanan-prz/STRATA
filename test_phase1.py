@@ -8,6 +8,7 @@ Usage: python3 test_phase1.py"""
 import hashlib
 import inspect
 import json
+import math
 import os
 import re
 import shutil
@@ -87,8 +88,37 @@ cycles_run, head_then = engine.cycle, engine.ledger.head
 expected = {"run", "cycle", "T", "constructs", "edges", "apparents", "terminations", "concluded", "field",
             "ledger", "instability", "modes", "layers", "action", "breath", "crystallized", "model_watch",
             "metabolism"}
-check("cycles stream as snapshots", len(snapshots) >= 30 and expected <= snapshots[-1].keys()
-      and all("energy" in c for c in snapshots[-1]["field"]["constructs"]), f"{len(snapshots)} snapshots")
+
+
+def support_reads_as_it_holds(field, constructs):
+    """Each crystal's support in a snapshot, as ConcordancyField.edge_holds tests it: held by a BOTH
+    edge exactly when one holds, and the strongest ageing support still holding as many breaths
+    ahead as the snapshot says, and not one more. Anchors and open constructs carry none."""
+    for c in constructs:
+        layer, s = S.Layer(c["layer"]), c.get("support")
+        if layer != S.Layer.APPARENT or c["name"] in S.ANCHORS:
+            if s is not None:
+                return False
+            continue
+        into = [e for e in field.edges if e.tgt == c["name"]]
+        ageing = [e for e in into if e.state != S.TetraState.BOTH]
+        both = any(e.state == S.TetraState.BOTH and field.edge_holds(e, into_crystal=True) for e in into)
+        if s is None or s["edges"] != len(into) or (s["both_from"] is not None) != both:
+            return False
+        left = s["breaths_left"]
+        if left is not None and not (any(field.edge_holds(e, True, ahead=math.floor(left - 0.01)) for e in ageing)
+                                     and not any(field.edge_holds(e, True, ahead=math.ceil(left + 0.01)) for e in ageing)):
+            return False
+    return True
+
+
+crystal_cards = sum(1 for c in snapshots[-1]["field"]["constructs"] if c.get("support"))
+check("cycles stream as snapshots, and each crystal's support in them reads as the framework's existence test "
+      "holds it (a BOTH edge, or the breaths its strongest ageing support has left)",
+      len(snapshots) >= 30 and expected <= snapshots[-1].keys()
+      and all("energy" in c for c in snapshots[-1]["field"]["constructs"])
+      and crystal_cards > 0 and support_reads_as_it_holds(engine.ss.field, snapshots[-1]["field"]["constructs"]),
+      f"{len(snapshots)} snapshots; {crystal_cards} crystals with their support")
 check("snapshot is JSON-serializable", bool(json.dumps(snapshots[-1])))
 crystallized = sum(len(s["crystallized"]) for s in snapshots)
 check("a snapshot says which of the cycle's promotions crystallized, from the field's own record",
@@ -973,6 +1003,8 @@ constants = {
     "DECAY": S.InternalClock.DECAY,
     "VC_UNSTABLE": float(re.search(r"Vc_THRESHOLD\s*=\s*([\d.]+)", inspect.getsource(S.Sombunal.global_instability)).group(1)),
     "EXCHANGE_QUANTUM": S.TetralemmaEngine.EXCHANGE_QUANTUM,
+    "APPARENT_FLOOR": S.APPARENT_FLOOR,
+    "BOTH_FLOOR": S.BOTH_FLOOR,
 }
 drift = [name for name, value in constants.items() if float(declared(inspector, name) or "nan") != value]
 for kind in ("omega", "lemniscate"):
@@ -980,7 +1012,7 @@ for kind in ("omega", "lemniscate"):
         drift.append(f"{kind.upper()}_RELATIONS")
 if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY:
     drift.append("PROOF_RELATIONS")
-check("the inspector's constants are the framework's: the clock, the Vc threshold, the exchange quantum, "
+check("the inspector's constants are the framework's: the clock, the Vc threshold, the exchange quantum, the support floors, "
       "the relations of each existence mode, the relations a construct's proofs can carry",
       not drift, ", ".join(drift) or f"{len(constants) + 3} constants agree")
 
@@ -1009,7 +1041,7 @@ def function(html, name):
     return html[found.start():at + 1]
 
 
-DRAWN_ALIKE = ("mix", "shapeOf", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
+DRAWN_ALIKE = ("mix", "shapeOf", "supportText", "tracePolygon", "traceShape", "line", "ring", "arrowhead", "drawRelation", "edgeMark",
                "fittedView", "setFollow", "steerView",
                "renderBreakdown", "renderLagrangian", "buildFilters", "foldableSections", "foldableLegend")
 unlike += [f"{name}()" for name in DRAWN_ALIKE if not function(views["live"], name)
