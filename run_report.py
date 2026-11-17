@@ -149,6 +149,8 @@ def integrity_checks():
         "self-adjusting tolerance": "def _adjust_tolerance" in src,
         "names are labels (keys from the field)": "z.label" in src and "cf.label" in src,
         "Sombunal approach as a field law": "SOMBUNAL_APPROACH_EVERY" in src,
+        "admission over one breath": "edge_holds(e, into_crystal=True, ahead=1)" in src,
+        "Halo toward the Apparent": "def _press_toward_center" in src,
     }
     return checks, hashlib.sha256(src.encode()).hexdigest()[:16]
 

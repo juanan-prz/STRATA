@@ -11,6 +11,9 @@ one guards what the field must be, from the primary source:
     banked it: once collapsed it is no "free modulator" (Understanding_TMC p.81).
   - Half to Each (TMC pp.110, 114): a BOTH channel that closes exchanges one
     [Ꮠ], one [Ꮙ] to each end (TMC pp.24, 26), whatever its weight and age.
+  - The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a
+    crystal's exchanges presses on its support from all sides and repairs it,
+    never past its strength at birth (TMC p.14).
   - Nothing vanishes silently: every construct that leaves the field leaves a
     TERMINATE proof (Compiler Guide pp.203-204).
   - The Stop Chasm and the Adsurdic threshold (TMC p.41): never more than
@@ -19,7 +22,8 @@ one guards what the field must be, from the primary source:
   - The anchors (Zero Points, I::Am, I::AmNot, SYSTEM) never conclude.
   - The field's own tolerance stays between its floor and 1.
   - "all [Apparents] must be [Existents]" (TMC p.22): no crystal concludes in
-    the cycle it forms.
+    the cycle it forms, and none is admitted with a support that would not
+    hold one breath later (TMC pp.14, 45).
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -156,6 +160,60 @@ check("Half to Each: a BOTH channel that reaches the quantum gives each end one 
       and h2e.field.constructs["H2E::crystal"].recursion_exchanged == S.THRESHOLD_APPARENT
       and all(e.both_age == 0 for e in closing),
       f"[Ꮙ] = {quo}, gains {gain}")
+# The admission over one breath (TMC pp.14, 22, 45): a support that holds now but not one breath later
+# does not admit a crystal; one that holds a breath later does
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    adm = S.new_session(S.LLMIntermediary(backend="none"))
+af = adm.field
+edge_of = {}
+for name, w in (("ADM::edge", 0.105), ("ADM::held", 0.12)):
+    af.add_construct(name, S.Layer.UNIT_1)
+    edge_of[name] = af.add_edge(f"{name}::source", "::", name, weight=w)
+    af.constructs[name].recursion_exchanged = 5.0
+for _ in range(8):
+    af.clock.tick()
+with quiet():
+    S.CussiveCollapseEngine().collapse(af, af.clock)
+check("the admission over one breath: a support that holds now but not one breath later (TMC p.45) admits no "
+      "crystal; one that still holds then does (TMC pp.14, 22)",
+      af.edge_holds(edge_of["ADM::edge"], into_crystal=True)
+      and not af.edge_holds(edge_of["ADM::edge"], into_crystal=True, ahead=1)
+      and af.constructs["ADM::edge"].layer == S.Layer.UNIT_1
+      and af.constructs["ADM::held"].layer == S.Layer.APPARENT,
+      f"weight 0.105: {af.constructs['ADM::edge'].layer.name}; weight 0.12: {af.constructs['ADM::held'].layer.name}")
+# The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a crystal's exchanges presses on its
+# support from all sides and repairs it, never past its strength at birth (TMC p.14)
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    hal = S.new_session(S.LLMIntermediary(backend="none"))
+hf, lam = hal.field, S.InternalClock.DECAY
+hf.add_construct("HALO::crystal", S.Layer.UNIT_1)
+hf.lock_apparent("HALO::crystal")
+hf.add_construct("HALO::open", S.Layer.UNIT_1)
+aging = hf.add_edge("HALO::a", "::", "HALO::crystal", weight=0.6)
+held_both = hf.add_edge("HALO::b", "::", "HALO::crystal", weight=0.5, state=S.TetraState.BOTH)
+from_crystal = hf.add_edge("HALO::crystal", "::", "HALO::x", weight=0.8)
+from_open = hf.add_edge("HALO::open", "::", "HALO::y", weight=0.8)
+hf.breaths, born = aging.born_breath + 10, aging.born_breath
+
+
+def strength(e):
+    return e.weight * S.np.exp(-lam * (hf.breaths - e.born_breath - e.repaired))
+
+
+before, banked = strength(aging), hf.constructs["HALO::open"].recursion_exchanged
+hf._back_up_halo([from_crystal, from_open])
+after = strength(aging)
+share = S.HALO_FRACTION * from_crystal.weight / 2       # two sides: the aging support and the BOTH one
+hf._press_toward_center("HALO::crystal", 10.0)          # far more than any support can take
+check("the Halo toward the Apparent: a crystal's dissolved exchange presses on its support from all sides and "
+      "repairs what ages, up to its strength at birth and no further (TMC pp.47, 55, 14); a BOTH support takes "
+      "nothing; the birth is not rewritten; an open construct's dissolved exchange is still banked",
+      abs(after - (before + share)) < 1e-9 and abs(strength(aging) - aging.weight) < 1e-9
+      and held_both.repaired == 0 and aging.born_breath == born
+      and abs(hf.constructs["HALO::open"].recursion_exchanged - banked - S.HALO_FRACTION * from_open.weight) < 1e-12,
+      f"strength {before:.4f} -> {after:.4f} -> {strength(aging):.4f} of {aging.weight}; repaired {aging.repaired:.3f} breaths")
 check("nothing leaves the field without a TERMINATE proof", not broken["vanished_silently"])
 check("at most MAX_CONFLICTS_PER_CYCLE conflicts in a cycle (Stop Chasm, TMC p.41)", not broken["stop_chasm"])
 check("conflict recursion never passes MAX_CF_DEPTH (Adsurdic threshold, TMC p.41)", not broken["adsurdic"])

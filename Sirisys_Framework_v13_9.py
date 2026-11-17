@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.7 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.9 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -47,7 +47,10 @@
 #     that closes exchanges that unit, one [Ꮙ] to each end. That reading, and
 #     the scale of a [Ꮙ] in units of tension, are Level 3.
 #   Existence. "all [Apparents] must be [Existents]" (TMC p.22): nothing
-#     crystallizes that prune would orphan (edge_holds is the single test).
+#     crystallizes that prune would orphan (edge_holds is the single test),
+#     now or one breath later: an Apparent is "Nonreversible" (TMC p.14), so
+#     its support must outlast one pulse of the clock it ages on (TMC p.45).
+#     The span of one breath is Level 3.
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
 #     the carrier pulsation "from which the linear local times are resolved"
 #     (TMC p.45). Crystals are durable, not immortal.
@@ -55,8 +58,13 @@
 #     contraction favours crystallization, expansion favours generation. Once
 #     per breath the field adjusts its own tolerance so that crystals formed
 #     track crystals concluded (CONF).
-#   Halo of Umbrage (TMC p.47): the weight of a dissolved channel backs up
-#     into its upstream construct, toward apparency.
+#   Halo of Umbrage (TMC p.47): tensate "backing up" around where it cannot
+#     flow drives "ONLY toward the [00] Marenth Apparent". The weight of a
+#     dissolved channel backs up into its upstream construct, toward
+#     apparency; when that construct is a crystal, it presses on it "from all
+#     sides towards their EXACT center" (TMC p.55) and repairs its support,
+#     never past its strength at birth (TMC p.14). Reading p.55's force as the
+#     Halo is Level 3.
 #   The Sombunal approach. The [APPARENT] is "constructed as a Tripartite
 #     Monodrony comprised of [The Sombunal], [The I::Am::(000)], the [Absolute
 #     Unreal (00)]" (TMC p.14): once per breath, with or without a model, the I
@@ -116,7 +124,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.7"                  # the one place the version is written; the file name agrees
+__version__ = "13.9"                  # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -812,6 +820,7 @@ class ConcordancyEdge:
         self.both_age          = 0
         self._reversion_count  = 0
         self.born_breath       = 0      # the field's breath count at creation
+        self.repaired          = 0.0    # breaths of support age the Halo has repaired (birth unchanged)
 
     def to_dict(self) -> dict:
         return {
@@ -820,7 +829,7 @@ class ConcordancyEdge:
             "state": self.state.value, "concordancy_depth": self.concordancy_depth,
             "lagrange": self.lagrange.value if self.lagrange else None,
             "both_age": self.both_age, "reversion_count": self._reversion_count,
-            "born_breath": self.born_breath,
+            "born_breath": self.born_breath, "repaired": self.repaired,
         }
 
     @classmethod
@@ -832,6 +841,7 @@ class ConcordancyEdge:
                 LagrangianPoint(lagrange_val) if lagrange_val else None)
         e.both_age         = d["both_age"]
         e.born_breath      = d["born_breath"]
+        e.repaired         = d.get("repaired", 0.0)   # states saved before v13.9 carry none
         e._reversion_count = d["reversion_count"]
         return e
 
@@ -892,6 +902,7 @@ class ConcordancyField:
         self.reincarnations: int = 0
         self.terminations_total: int = 0
         self.halo_total: float = 0.0                  # tension backed up by the Halo (lifetime)
+        self.halo_repaired: float = 0.0               # support strength the Halo repaired on crystals (lifetime)
         self.breath_phase: float = 0.0                # [000] breathing (TMC p.44), radians
         self.breaths: int = 0                         # completed breaths (the slow clock)
         # TOLERANCE: the field's own, self-adjusted width for
@@ -1041,9 +1052,12 @@ class ConcordancyField:
 
     # ── existence ────────────────────────────────────────────────────────
     def edge_holds(self, e: ConcordancyEdge, into_crystal: bool, min_weight: float = EDGE_FLOOR,
-                   apparent_floor: float = APPARENT_FLOOR, both_floor: float = BOTH_FLOOR) -> bool:
+                   apparent_floor: float = APPARENT_FLOOR, both_floor: float = BOTH_FLOOR,
+                   ahead: int = 0) -> bool:
         """The single existence test for an edge (prune uses it; collapse asks
-        it in advance so that nothing crystallizes that prune would orphan)."""
+        it in advance so that nothing crystallizes that prune would orphan).
+        `ahead`: how many breaths later the support of a crystal is asked to
+        hold; prune asks now (0), collapse one breath ahead (1)."""
         if e.state == TetraState.BOTH:
             return e.weight >= both_floor
         if into_crystal:
@@ -1052,7 +1066,9 @@ class ConcordancyField:
             # (TMC p.45) — with the same decay law as ordinary relations on the
             # fast clock of ticks. Crystals are durable, not immortal: a field
             # that keeps forming them stays bounded only if they can conclude.
-            age = self.breaths - e.born_breath
+            # The Halo can repair a support (_press_toward_center): its age
+            # counts the breaths it has lived minus the breaths repaired.
+            age = self.breaths - e.born_breath - e.repaired + ahead
             return e.weight * np.exp(-InternalClock.DECAY * age) >= apparent_floor
         return e.weight * self.clock.tension(e.born_at) >= min_weight
 
@@ -1165,20 +1181,57 @@ class ConcordancyField:
         del self.constructs[name]
 
     def _back_up_halo(self, dissolved: list[ConcordancyEdge]):
-        """HALO OF UMBRAGE [002] (TMC p.47): tensate "backing up around where
-        it cannot flow". The weight of every dissolved channel is not lost: a
-        fraction HALO_FRACTION backs up into the surviving upstream construct
-        (the edge's source) as banked tension, which cussive collapse reads.
-        Apparent-anchored edges are sealed and carry nothing back; anchors and
-        Apparent constructs receive nothing (they cannot be promoted)."""
+        """HALO OF UMBRAGE [002] (TMC p.47): it "drives tensile (tensate) ONLY
+        toward the [00] Marenth Apparent by virtue of tensate 'backing up'
+        around where it cannot flow". The weight of every dissolved channel is
+        not lost: a fraction HALO_FRACTION backs up into the surviving upstream
+        construct (the edge's source).
+          - Not yet Apparent: as banked tension, which cussive collapse reads
+            (toward apparency; Understanding_TMC p.74: "accumulating without
+            immediate cussive collapse").
+          - A crystal: read as the [00] Marenth Apparent, which "does not permit
+            the tensatives to flow through it" (TMC p.45), it is pressed from
+            all sides (_press_toward_center). Level 3.
+        Edges into a crystal are sealed and carry nothing back to a source that
+        is not a crystal; anchors receive nothing."""
         for e in dissolved:
             up = self.constructs.get(e.src)
-            if (up is None or e.src in ANCHORS or up.layer == Layer.APPARENT
-                    or (e.tgt in self.constructs and self.constructs[e.tgt].layer == Layer.APPARENT)):
+            if up is None or e.src in ANCHORS:
+                continue
+            if up.layer == Layer.APPARENT:
+                self._press_toward_center(e.src, HALO_FRACTION * e.weight)
+                continue
+            if e.tgt in self.constructs and self.constructs[e.tgt].layer == Layer.APPARENT:
                 continue
             backed = HALO_FRACTION * e.weight
             up.recursion_exchanged += backed
             self.halo_total += backed
+
+    def _press_toward_center(self, name: str, amount: float):
+        """The central pressure on a crystal: "an UNSEEN (non-apparent
+        apparent) force presses on them from all sides towards their EXACT
+        center" (TMC p.55). `amount` is shared equally among the edges into the
+        crystal (its support). Each one that ages is repaired, up to its
+        strength at birth, its weight: "You may repair that broken window to a
+        flawless state. You may not restore it to its previous state" (TMC
+        p.14). Its birth is not rewritten, since "time cannot be reversed at
+        the [000] or [00] levels" (TMC p.45): the repair is a separate term,
+        `repaired`, in breaths. A BOTH edge does not age and takes nothing;
+        what no side can take is not kept. Level 3: the currency (repairing
+        the support), the equal shares, and reading p.55's force as the Halo."""
+        support = [s for s in self.edges if s.tgt == name]
+        if not support:
+            return
+        share = amount / len(support)
+        for s in support:
+            if s.state == TetraState.BOTH or s.weight <= 0:
+                continue
+            age = self.breaths - s.born_breath - s.repaired
+            now = s.weight * float(np.exp(-InternalClock.DECAY * age))
+            new = min(s.weight, now + share)
+            if new > now:
+                s.repaired += float(np.log(new / now)) / InternalClock.DECAY
+                self.halo_repaired += new - now
 
     # ── readings: anchoring weight and existence mode ────────────────────
     def compute_anchoring_weight(self, c: Construct) -> float:
@@ -1296,6 +1349,7 @@ class ConcordancyField:
             "reincarnations":       self.reincarnations,
             "terminations_total":   self.terminations_total,
             "halo_total":           self.halo_total,
+            "halo_repaired":        self.halo_repaired,
             "breath_phase":         self.breath_phase,
             "breaths":              self.breaths,
             "tolerance":            self.tolerance,
@@ -1319,6 +1373,7 @@ class ConcordancyField:
         F.reincarnations       = d["reincarnations"]
         F.terminations_total   = d["terminations_total"]
         F.halo_total           = d["halo_total"]
+        F.halo_repaired        = d.get("halo_repaired", 0.0)
         F.breath_phase         = d["breath_phase"]
         F.breaths              = d["breaths"]
         F.tolerance            = d["tolerance"]
@@ -2368,7 +2423,10 @@ class CussiveCollapseEngine:
         supported: set = set()          # constructs that WOULD be held as crystals
         for e in field.edges:
             tension[e.tgt] += e.weight * clock.tension(e.born_at)
-            if e.src in field.constructs and field.edge_holds(e, into_crystal=True):
+            # One breath ahead: a support that holds now but not at the next
+            # pulse of its clock would leave a crystal that concludes before it
+            # is durable (TMC pp.14, 22, 45; see the existence test in prune).
+            if e.src in field.constructs and field.edge_holds(e, into_crystal=True, ahead=1):
                 supported.add(e.tgt)
         # Understanding_TMC p.65: "Once sufficient recursion is exchanged, structural
         # commitment occurs." Banked exchange does not decay: it is what the
@@ -2393,8 +2451,9 @@ class CussiveCollapseEngine:
             if t < required:
                 continue
             # TMC p.22: "all [Apparents] must be [Existents]". A crystal needs
-            # support that prune will hold (edge_holds, as a crystal); otherwise
-            # the "crystal" would be pruned as an orphan in the same cycle.
+            # support that prune will hold (edge_holds, as a crystal), now and
+            # one breath later; otherwise the "crystal" would be pruned as an
+            # orphan in the same cycle, or before it lived one breath.
             if c.layer == Layer.UNIT_1 and name not in supported:
                 continue
             old_layer = c.layer
