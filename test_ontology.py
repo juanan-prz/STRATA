@@ -11,6 +11,9 @@ one guards what the field must be, from the primary source:
     banked it: once collapsed it is no "free modulator" (Understanding_TMC p.81).
   - Half to Each (TMC pp.110, 114): a BOTH channel that closes exchanges one
     [Ꮠ], one [Ꮙ] to each end (TMC pp.24, 26), whatever its weight and age.
+  - The escapement (TMC p.24): each BOTH channel beats on its own. A channel
+    that closes re-arms wherever it stands, and a sibling still in BOTH keeps
+    the exchange it has accumulated (TMC p.59: no leftovers).
   - The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a
     crystal's exchanges presses on its support from all sides and repairs it,
     never past its strength at birth (TMC p.14).
@@ -161,6 +164,32 @@ check("Half to Each: a BOTH channel that reaches the quantum gives each end one 
       and h2e.field.constructs["H2E::crystal"].recursion_exchanged == S.THRESHOLD_APPARENT
       and all(e.both_age == 0 for e in closing),
       f"[Ꮙ] = {quo}, gains {gain}")
+# The escapement (TMC p.24): each BOTH channel beats on its own. Three channels from one source: when the
+# oldest closes, the younger ones keep their age; when the youngest closes, it re-arms although the older
+# ones are still in BOTH
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    esc = S.new_session(S.LLMIntermediary(backend="none"))
+ef, eng = esc.field, S.TetralemmaEngine()
+ef.add_construct("ESC::src", S.Layer.UNIT_1)
+chan = {}
+for tgt, w in (("ESC::a", 0.9), ("ESC::b", 0.8), ("ESC::c", 0.7)):
+    ef.add_construct(tgt, S.Layer.UNIT_1)
+    chan[tgt] = ef.add_edge("ESC::src", "::", tgt, weight=w, state=S.TetraState.BOTH)
+chan["ESC::a"].both_age = -(-q // 0.9) - 1                 # the next scan brings the oldest to the quantum
+chan["ESC::b"].both_age, chan["ESC::c"].both_age = 5, 7
+with quiet():
+    eng.scan(ef)
+first = {t: (e.state.name, e.both_age) for t, e in chan.items()}
+chan["ESC::c"].both_age = -(-q // 0.7) - 1                 # now the youngest reaches the quantum
+with quiet():
+    eng.scan(ef)
+second = {t: (e.state.name, e.both_age) for t, e in chan.items()}
+check("the escapement (TMC p.24): a channel that closes re-arms and starts afresh, wherever it stands; its "
+      "siblings in BOTH keep the exchange they carry (TMC p.59)",
+      first == {"ESC::a": ("BOTH", 0), "ESC::b": ("BOTH", 6), "ESC::c": ("BOTH", 8)}
+      and second == {"ESC::a": ("BOTH", 1), "ESC::b": ("BOTH", 7), "ESC::c": ("BOTH", 0)},
+      f"oldest closes: {first}; youngest closes: {second}")
 # The admission over one breath (TMC pp.14, 22, 45): a support that holds now but not one breath later
 # does not admit a crystal; one that holds a breath later does
 with quiet():

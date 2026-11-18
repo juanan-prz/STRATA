@@ -46,6 +46,11 @@
 #     orientation, [Ꮠ] (TMC p.24), and "[Ꮠ] = [2Ꮙ]" (TMC p.26): a BOTH channel
 #     that closes exchanges that unit, one [Ꮙ] to each end. That reading, and
 #     the scale of a [Ꮙ] in units of tension, are Level 3.
+#   The escapement (TMC p.24: "the escapement generates pulses against a
+#     tensated oscillator"). Each BOTH channel beats on its own: it closes when
+#     its own exchange reaches the quantum, and a channel that re-arms never
+#     resets a sibling still in BOTH, whose exchange would be lost unaccounted
+#     ("There can be no leftovers not accounted for", TMC p.59).
 #   Existence. "all [Apparents] must be [Existents]" (TMC p.22): nothing
 #     crystallizes that prune would orphan (edge_holds is the single test),
 #     now or one breath later: an Apparent is "Nonreversible" (TMC p.14), so
@@ -54,6 +59,12 @@
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
 #     the carrier pulsation "from which the linear local times are resolved"
 #     (TMC p.45). Crystals are durable, not immortal.
+#   Orders of Apparents. "The higher the replicability of an apparent, the
+#     higher the order of that apparent" (TMC p.70). A crystal a BOTH channel
+#     holds is replicated at each beat of that channel: it is of a higher order
+#     and lasts as long as it is replicated. The UCO spares the anchors' edges,
+#     so the crystals the anchors hold are the field's most lasting; every
+#     other crystal lives on its exchanges.
 #   Breathing and tolerance. One field-wide breath (TMC p.44; CONF):
 #     contraction favours crystallization, expansion favours generation. Once
 #     per breath the field adjusts its own tolerance so that crystals formed
@@ -124,7 +135,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.9"                  # the one place the version is written; the file name agrees
+__version__ = "13.10"                 # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -1059,6 +1070,12 @@ class ConcordancyField:
         `ahead`: how many breaths later the support of a crystal is asked to
         hold; prune asks now (0), collapse one breath ahead (1)."""
         if e.state == TetraState.BOTH:
+            # A BOTH channel does not age: it beats on its own escapement
+            # (TMC p.24; TetralemmaEngine.scan), and each beat replicates the
+            # crystal it holds. "The higher the replicability of an apparent,
+            # the higher the order of that apparent" (TMC p.70): a crystal held
+            # this way lasts as long as it is replicated, while the channel
+            # re-arms.
             return e.weight >= both_floor
         if into_crystal:
             # A crystal's support ages on the SLOW clock — breaths, the carrier
@@ -2304,7 +2321,8 @@ class TetralemmaEngine:
         """
         Age BOTH edges each cycle. Detect new BOTH conditions from divergent
         edges sharing a source. Dissolve weak edges toward NEITHER.
-        both_age resets to 0 on any state transition — maturity must be earned fresh.
+        both_age resets to 0 on any state transition — maturity must be earned
+        fresh — and only then: an edge that stays in BOTH keeps its age.
         """
         grouped: dict[tuple, list[ConcordancyEdge]] = defaultdict(list)
         for e in field.edges:
@@ -2353,10 +2371,19 @@ class TetralemmaEngine:
                     if e1.tgt == e2.tgt:
                         continue
                     if e1.weight > self.BOTH_THRESHOLD and e2.weight > self.BOTH_THRESHOLD:
-                        if e1.state != TetraState.BOTH:
-                            e1.state = e2.state = TetraState.BOTH
-                            e1.both_age = e2.both_age = 0
-                            updates += 1
+                        # Each channel beats on its own escapement (TMC p.24): only
+                        # an edge that enters BOTH starts its age afresh, wherever
+                        # it stands in the list. A sibling already in BOTH keeps
+                        # the recursion it has exchanged ("There can be no
+                        # leftovers not accounted for", TMC p.59). The pair that
+                        # exchanges is one channel's two ends, Tensin and Tensout
+                        # (TMC p.26), as Half to Each reads it (Level 3), not two
+                        # sibling channels.
+                        armed = False
+                        for ex in (e1, e2):
+                            if ex.state != TetraState.BOTH:
+                                ex.state, ex.both_age, armed = TetraState.BOTH, 0, True
+                        updates += int(armed)
                     elif e1.weight < self.NEITHER_THRESHOLD and e1.state not in (
                             TetraState.NEITHER, TetraState.FALSE):
                         e1.state    = TetraState.NEITHER

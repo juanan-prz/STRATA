@@ -152,6 +152,7 @@ def integrity_checks():
         "Sombunal approach as a field law": "SOMBUNAL_APPROACH_EVERY" in src,
         "admission over one breath": "edge_holds(e, into_crystal=True, ahead=1)" in src,
         "Halo toward the Apparent": "def _press_toward_center" in src,
+        "each channel's own escapement": "ex.state, ex.both_age, armed = TetraState.BOTH, 0, True" in src,
     }
     return checks, hashlib.sha256(src.encode()).hexdigest()[:16]
 
