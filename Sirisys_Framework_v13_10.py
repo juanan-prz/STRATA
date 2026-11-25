@@ -81,6 +81,16 @@
 #     Unreal (00)]" (TMC p.14): once per breath, with or without a model, the I
 #     approaches what it cannot reach (TMC p.27: "[Sombunal] :: [I] ::
 #     [Absolute]"). Cadence, edge state and weight are Level 3.
+#   What the approach leaves. The attempt to trace meets "The percussive
+#     recussion paramountic [I am that I am]::[Impudence]::[I] < [a]::[apposite]
+#     ([A]::(:ADD:Property)", which "manifests in the apparent as a 'Null
+#     Recursion Apparent Limit'" (TMC p.14). While the approach lives, its edge
+#     counts in the I's mean weight and, lighter than the I's other edges,
+#     lowers it: the I's products are born weaker, and the lineage of what the
+#     field produces stays shallower. The residue is a limit on the recursion
+#     depth of what the field produces, not a count of crystals. Reading the
+#     limit so is Level 3, and so is reading the formula as an I the attempt
+#     leaves lesser.
 #   The intermediary translates (CONF). A model labels what the field produced
 #     and words the approach; nothing it says reaches the dynamics. The keys are
 #     the field's own, so a life with a model is the life without one, and
@@ -102,8 +112,10 @@
 #   D  Termination: resolved (identities conclude and are recorded).
 #   E  Relations vs. events: concordancy is a local event modulated by the field.
 #   The Sombunal acts as an identity-shifting rule on every [::] and, once per
-#   breath, as the I's approach to it; how the approach should weigh on the
-#   field (cadence, edge state, weight) is open.
+#   breath, as the I's approach to it. What the approach leaves is its limit on
+#   recursion depth (above); its cadence, edge state and weight are Level 3.
+#   Below the I's mean weight, the weight sets how far the limit reaches; above
+#   it the limit remains, by a route not yet identified.
 #
 # The experiment mode (live visualizer) lives in Sirisys_Server.py.
 #
@@ -174,7 +186,7 @@ SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exch
 # ── breathing and tolerance ──────────────────────────────────────────────────
 BREATH_PERIOD            = 24     # Level 3: cycles per breath
 SOMBUNAL_APPROACH_EVERY  = BREATH_PERIOD   # Level 3: the I approaches the Sombunal once per breath
-SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach
+SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach; below the I's mean weight, it sets how far the limit reaches
 BREATH_DEPTH             = 0.35   # Level 3: how far contraction lowers the cussive thresholds
 BREATH_MAX_EXTRA_OPS     = 2      # Level 3: extra [::] operations at full expansion
 TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
@@ -2979,6 +2991,17 @@ def _approach_sombunal(ss: Session, cycle: int, instability: float,
     label, never its key (CONF). The approach never enters [::] as an operand
     (Understanding_TMC p.70: the Sombunal "Cannot be bound by Concordancy"); it
     relates to the I by an edge.
+
+    What it leaves (TMC p.14): what the attempt meets "manifests in the
+    apparent as a 'Null Recursion Apparent Limit'", and "The non-existent
+    point manifests into the fluid apparency as a cussive percussion comprised
+    of de-resolving conceptual layers". The approach's edge, of weight w,
+    counts in the I's mean weight (_mean_weight): with n other edges of mean
+    m, the mean becomes (n*m + w) / (n + 1), lower by (m - w) / (n + 1) when
+    w < m, and each product of the I is born with CONCORD_PROPORTION times the
+    half-sum of that mean and its partner's. So while the approach lives, the
+    I's products are born weaker and their lineage shallower; nothing else is
+    done for it, and no residue crystallizes.
 
     Level 3: the cadence (SOMBUNAL_APPROACH_EVERY), the phase (the cycle a
     breath begins), the edge's state (NEITHER: what the gauge cannot reach) and
