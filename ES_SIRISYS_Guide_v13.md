@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.10 — Guía técnica
+# STRATA · SIRISYS v13.11 — Guía técnica
 
 [English](EN_SIRISYS_Guide_v13.md)
 
@@ -25,7 +25,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 
 | Archivo | Para qué |
 |---|---|
-| `Sirisys_Framework_v13_10.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
+| `Sirisys_Framework_v13_11.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo; también repite una ejecución grabada (§3.7) |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
@@ -158,7 +158,7 @@ La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge t
 - **La vista** se encuadra sola en el campo y lo sigue mientras crece (de un estado al siguiente, en el inspector), sin quedar bajo los controles ni la leyenda: en *relations*, los constructos visibles; en *strata*, los anillos, centrados en su centro. Desplazar o hacer zoom la suelta, y el botón *Fit*, iluminado mientras la vista sigue al campo, la recupera (F).
 - **Capas** en una sola rampa cálida, de la sombra (NULL_00) a la luz (APPARENT).
 - **Formas.** Un constructo es un punto del color de su capa; un ancla (I::Am, I::AmNot, SYSTEM), un rombo; un cristal que formó el campo, un hexágono abierto, para que destaquen los estratos activos; un Zero Point, una estrella; un conflicto, un punto con anillo. Se dibuja un anillo donde un constructo sube a UNIT_1 y dos donde cristaliza.
-- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, FALSE orquídea y discontinua, BOTH bermellón y la más gruesa; su opacidad sigue al peso de la arista. NEITHER, la mayoría, es gris, sólida y la más fina. Una arista hacia un cristal, salvo BOTH, es el soporte del cristal, que envejece por respiraciones, no por ciclos, y que el Halo repara cuando se disuelven los intercambios del propio cristal: sólida, algo más gruesa y con el color de su estado llevado hacia el del cristal.
+- **Aristas** del color de su estado del tetralema, distinguibles con cualquier visión del color: TRUE azul, la mayoría desde la v13.11; FALSE orquídea y discontinua; BOTH bermellón y la más gruesa; su opacidad sigue al peso de la arista. NEITHER es gris, sólida y la más fina. Una arista hacia un cristal, salvo BOTH, es el soporte del cristal, que envejece por respiraciones, no por ciclos, y que el Halo repara cuando se disuelven los intercambios del propio cristal: sólida, algo más gruesa y con el color de su estado llevado hacia el del cristal.
 - **Dirección.** Desde el zoom ×2, cada arista muestra su dirección.
 - **Los modos de existencia** se escriben con su signo, [Ω] y [Ꮠ].
 - **Quiet anchors** (A) atenúa las relaciones de las anclas, a menudo la mayoría de las aristas, para que se vea el resto de la estructura.
@@ -227,8 +227,8 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 En el modo experimento, una instancia escribe un solo `state.json`, al terminar. Para una línea de tiempo, copia el estado según crece; por ejemplo, con la demostración en consola, que reanuda la misma instancia en cada ejecución:
 
 ```bash
-python3 Sirisys_Framework_v13_10.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_10.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_11.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_11.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Teclas.**
@@ -353,7 +353,7 @@ El perfil no cambia una repetición: los perceptos grabados ya llevan la hora, c
 - qué parte del BOTH está en la componente mayor;
 - la profundidad de cada conflicto, que el campo limita en el umbral Adsurdic;
 - la profundidad genealógica por capa: cuántas generaciones de `[::]` separan a cada constructo de lo que el campo no produjo él mismo (perceptos, anclas, acercamientos al Sombunal);
-- la incertidumbre del instante (`instant`): lo que sigue en juego y lo que ya ha aterrizado. Los canales BOTH abiertos, la parte del cuanto de intercambio que llevan acumulada (en cuantos, `in_flight`) y su avance medio hacia el cierre; la parte de los constructos (sin las anclas) que ya son Apparents (`landed`); cómo se reparte el peso de las aristas entre los cuatro estados (`held`, sin las de los Zero Points: NEITHER no es incertidumbre aquí, porque un canal que se cierra pasa a NEITHER), y el estado del I. Sigue las «Probabilistic Antennae» de las publicaciones de Sirisys en X: registrar la incertidumbre total de una suma en un instante, «the difference between when the coin has landed and while it remains flipping». Los criterios de vida la guardan además en cada ciclo, con su media por ventana de 1000 ciclos (`instant_per_1000`) y la parte de la vida que el I pasa en cada estado (`i_am_states`). Es exploratoria: no es un criterio.
+- la incertidumbre del instante (`instant`): lo que sigue en juego y lo que ya ha aterrizado. Los canales BOTH abiertos, la parte del cuanto de intercambio que llevan acumulada (en cuantos, `in_flight`) y su avance medio hacia el cierre; la parte de los constructos (sin las anclas) que ya son Apparents (`landed`); cómo se reparte el peso de las aristas entre los cuatro estados (`held`, sin las de los Zero Points: NEITHER no es incertidumbre aquí: es suspensión, lo que deja una arista débil o la erosión de la UCO; un canal que se cierra pasa a TRUE), y el estado del I. Sigue las «Probabilistic Antennae» de las publicaciones de Sirisys en X: registrar la incertidumbre total de una suma en un instante, «the difference between when the coin has landed and while it remains flipping». Los criterios de vida la guardan además en cada ciclo, con su media por ventana de 1000 ciclos (`instant_per_1000`) y la parte de la vida que el I pasa en cada estado (`i_am_states`). Es exploratoria: no es un criterio.
 
 La medición solo lee el campo: la cabeza del ledger es idéntica con ella y sin ella, y lo comprueba `test_phase2_guarantee.py`.
 
@@ -379,6 +379,8 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 - un cristal retiene como mucho la tensión de su propio compromiso, también la que acumuló antes de cristalizar;
 - un canal BOTH que se cierra da a cada extremo un [Ꮙ], media unidad, sea cual sea su peso o su edad (Half to Each, TMC pp.110 y 114);
 - cada canal BOTH late con su propio escape: un canal que se cierra se rearma esté donde esté, y un hermano que sigue en BOTH conserva lo que lleva intercambiado (TMC pp.24, 59);
+- un canal BOTH que completa su intercambio queda en TRUE, existente (TMC p.25);
+- una unidad solo cristaliza en un estado existente, TRUE o BOTH, nunca en NEITHER (TMC p.22);
 - un cristal solo se admite si su soporte se sostendría todavía una respiración después (TMC pp.14, 22, 45);
 - lo que se disuelve de los intercambios de un cristal repara su soporte, nunca por encima de su fuerza al nacer, y un soporte BOTH no recibe nada (TMC pp.47, 55, 14); la reparación se conserva al guardar y reanudar;
 - nada sale del campo sin prueba de terminación;
@@ -408,13 +410,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 Responde `ok` y el número de pruebas o, si el registro está dañado, la posición de la primera prueba que no encaja y por qué.
 
-**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_10 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_7_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
+**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_11 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_7_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_10.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_11.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_10.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_11.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
 
 **Archivos que se crean al ejecutar.**
 

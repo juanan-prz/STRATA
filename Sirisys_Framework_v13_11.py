@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.10 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.11 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -51,11 +51,24 @@
 #     its own exchange reaches the quantum, and a channel that re-arms never
 #     resets a sibling still in BOTH, whose exchange would be lost unaccounted
 #     ("There can be no leftovers not accounted for", TMC p.59).
-#   Existence. "all [Apparents] must be [Existents]" (TMC p.22): nothing
-#     crystallizes that prune would orphan (edge_holds is the single test),
-#     now or one breath later: an Apparent is "Nonreversible" (TMC p.14), so
-#     its support must outlast one pulse of the clock it ages on (TMC p.45).
-#     The span of one breath is Level 3.
+#   Existence. "By setting the truth table in this way, 'The non-existent [00]
+#     or Absolute Unreal cannot be an apparent' ... This means, all [Apparents]
+#     must be [Existents]" (TMC p.22). The tetralemma is written with two
+#     symbols, A and its negation (TMC p.17, image), a "binary quadratic"
+#     (p.18) in which [y] becomes "the 'Non-Existent' operator" (p.20): a state
+#     is the pair (is, is-not). What holds its "is", TRUE or BOTH, is existent;
+#     NEITHER is the [00]. So two tests, both asked of a unit about to
+#     crystallize: its dominant state is existent, and prune would not orphan
+#     it (edge_holds is the single support test), now or one breath later: an
+#     Apparent is "Nonreversible" (TMC p.14), so its support must outlast one
+#     pulse of the clock it ages on (TMC p.45). Counting BOTH among the
+#     existent (the "Existent Non-Existent" that "MUST exist", TMC p.54) and
+#     the span of one breath are Level 3.
+#   The exchange makes existent. Tensin "becomes existent (apparent) at the
+#     [cussive] instantiation event where [Tensin] converts to [Tensout]"
+#     (TMC p.25): a BOTH channel that completes its exchange at the quantum
+#     stays TRUE, the existent state that ends the contradiction. That it is
+#     TRUE (BOTH would re-open it; FALSE is not existent) is Level 3.
 #   Two clocks. Relations age on ticks; a crystal's support ages on breaths,
 #     the carrier pulsation "from which the linear local times are resolved"
 #     (TMC p.45). Crystals are durable, not immortal.
@@ -153,7 +166,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.10"                 # the one place the version is written; the file name agrees
+__version__ = "13.11"                 # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -222,10 +235,17 @@ class Layer(Enum):
 # =============================================================================
 
 class TetraState(Enum):
-    TRUE    = "TRUE"    # orientation confirmed
-    FALSE   = "FALSE"   # orientation negated
-    BOTH    = "BOTH"    # sustained contradiction — generative tension
-    NEITHER = "NEITHER" # pre-ontological suspension — approaching [00]
+    # As the pair (is, is-not) of TMC p.17 (image), pp.18, 20:
+    TRUE    = "TRUE"    # orientation confirmed                         (1, 0)  existent
+    FALSE   = "FALSE"   # orientation negated                           (0, 1)
+    BOTH    = "BOTH"    # sustained contradiction — generative tension  (1, 1)  existent
+    NEITHER = "NEITHER" # pre-ontological suspension: the [00]          (0, 0)
+
+
+# The existent states: those that hold their "is" (TMC p.17, image; pp.18, 20, 22).
+# Only an existent unit crystallizes: "The non-existent [00] or Absolute Unreal
+# cannot be an apparent" (TMC p.22).
+EXISTENT_STATES = frozenset({TetraState.TRUE, TetraState.BOTH})
 
 
 # =============================================================================
@@ -2357,8 +2377,9 @@ class TetralemmaEngine:
 
     def scan(self, field: ConcordancyField) -> int:
         """
-        Age BOTH edges each cycle. Detect new BOTH conditions from divergent
-        edges sharing a source. Dissolve weak edges toward NEITHER.
+        Age BOTH edges each cycle; close those that reach the exchange quantum,
+        TRUE (TMC p.25). Detect new BOTH conditions from divergent edges sharing
+        a source. Dissolve weak edges toward NEITHER.
         both_age resets to 0 on any state transition — maturity must be earned
         fresh — and only then: an edge that stays in BOTH keeps its age.
         """
@@ -2377,7 +2398,12 @@ class TetralemmaEngine:
                 continue
             # ── eventuality enforcement ──
             # Sufficient recursion has passed through this channel: it can
-            # no longer remain open. Each end banks one [Ꮙ], then it shuts.
+            # no longer remain open. Each end banks one [Ꮙ], then it shuts,
+            # existent: Tensin "becomes existent (apparent) at the [cussive]
+            # instantiation event where [Tensin] converts to [Tensout]"
+            # (TMC p.25). The edge stays TRUE, the existent state that ends the
+            # contradiction (Level 3: BOTH would re-open it, and FALSE is not
+            # existent). If its pair still diverges, it re-arms below.
             for endpoint in (e.src, e.tgt):
                 c = field.constructs.get(endpoint)
                 if c is None or endpoint in ANCHORS:
@@ -2395,7 +2421,7 @@ class TetralemmaEngine:
                                                 c.recursion_exchanged + self.QUO)
                 else:
                     c.recursion_exchanged += self.QUO
-            e.state    = TetraState.NEITHER
+            e.state    = TetraState.TRUE
             e.both_age = 0
             matured   += 1
             updates   += 1
@@ -2489,6 +2515,11 @@ class CussiveCollapseEngine:
         returns the names promoted."""
         tension: dict[str, float] = defaultdict(float)
         supported: set = set()          # constructs that WOULD be held as crystals
+        # TMC p.22: "The non-existent [00] or Absolute Unreal cannot be an
+        # apparent". Only a unit whose dominant state holds its "is" (TRUE or
+        # BOTH) may crystallize; read before any promotion of this pass.
+        existent = {n for n, c in field.constructs.items()
+                    if c.layer == Layer.UNIT_1 and field.dominant_state(n) in EXISTENT_STATES}
         for e in field.edges:
             tension[e.tgt] += e.weight * clock.tension(e.born_at)
             # One breath ahead: a support that holds now but not at the next
@@ -2518,11 +2549,12 @@ class CussiveCollapseEngine:
                         * (1 - BREATH_DEPTH * field.contraction))
             if t < required:
                 continue
-            # TMC p.22: "all [Apparents] must be [Existents]". A crystal needs
-            # support that prune will hold (edge_holds, as a crystal), now and
-            # one breath later; otherwise the "crystal" would be pruned as an
-            # orphan in the same cycle, or before it lived one breath.
-            if c.layer == Layer.UNIT_1 and name not in supported:
+            # TMC p.22: "all [Apparents] must be [Existents]". A crystal is
+            # existent in its state (above), and it needs support that prune
+            # will hold (edge_holds, as a crystal), now and one breath later;
+            # otherwise the "crystal" would be pruned as an orphan in the same
+            # cycle, or before it lived one breath.
+            if c.layer == Layer.UNIT_1 and (name not in existent or name not in supported):
                 continue
             old_layer = c.layer
             c.layer   = Layer(min(c.layer.value + 1, Layer.APPARENT.value))

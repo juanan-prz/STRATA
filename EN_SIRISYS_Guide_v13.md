@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.10 — Technical guide
+# STRATA · SIRISYS v13.11 — Technical guide
 
 [Español](ES_SIRISYS_Guide_v13.md)
 
@@ -25,7 +25,7 @@ Keep every file in one folder, with no subfolders: each program finds the others
 
 | File | Purpose |
 |---|---|
-| `Sirisys_Framework_v13_10.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
+| `Sirisys_Framework_v13_11.py` | The field and its canonical cycle `run_cycle`, continuity and the proof ledger. Run on its own, a console demonstration (§8) |
 | `sirisys_loader.py` | Finds and loads the newest framework file in the folder |
 | `Sirisys_Server.py` | Experiment mode: runs the field and serves it to the live view; it also replays a recorded run (§3.7) |
 | `Sirisys_Live_Visualizer.html` | The live view, served by the server |
@@ -158,7 +158,7 @@ The live view and the inspector draw the field alike, and the legend keys all of
 - **The view** fits itself to the field and follows it as it grows (from one state to the next, in the inspector), clear of the controls and the legend: in *relations* the constructs on show, in *strata* the rings, centred on their centre. Panning or zooming lets it go, and the *Fit* button, lit while the view follows, takes it back (F).
 - **Layers** on one warm ramp from shadow (NULL_00) to light (APPARENT).
 - **Shapes.** A construct is a dot in the colour of its layer; an anchor (I::Am, I::AmNot, SYSTEM), a diamond; a crystal the field formed, an open hexagon, so that the active strata stand out; a Zero Point, a star; a conflict, a ringed dot. One ring is drawn where a construct rises to UNIT_1, two where it crystallizes.
-- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, FALSE orchid and dashed, BOTH vermilion and the thickest; their opacity follows the edge's weight. NEITHER, most of the edges, is grey, solid and the thinnest. An edge into a crystal, BOTH aside, is the crystal's support, which ages on breaths, not on cycles, and which the Halo repairs when the crystal's own exchanges dissolve: solid, a little thicker, its state's colour drawn toward the crystal's.
+- **Edges** in the colour of their tetralemmic state, told apart with any colour vision: TRUE blue, most of the edges since v13.11; FALSE orchid and dashed; BOTH vermilion and the thickest; their opacity follows the edge's weight. NEITHER is grey, solid and the thinnest. An edge into a crystal, BOTH aside, is the crystal's support, which ages on breaths, not on cycles, and which the Halo repairs when the crystal's own exchanges dissolve: solid, a little thicker, its state's colour drawn toward the crystal's.
 - **Direction.** From zoom ×2 each edge shows its direction.
 - **Existence modes** are written with their signs, [Ω] and [Ꮠ].
 - **Quiet anchors** (A) makes the anchors' relations, often most of the edges, faint, so that the rest of the structure shows.
@@ -227,8 +227,8 @@ Its left panel folds section by section, as in the live view.
 In experiment mode an instance writes one `state.json`, when it ends. For a timeline, copy the state as it grows; for example, with the console demonstration, which resumes the same instance on every run:
 
 ```bash
-python3 Sirisys_Framework_v13_10.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_10.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_11.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_11.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Keys.**
@@ -353,7 +353,7 @@ The profile does not change a replay: the recorded percepts already carry the ho
 - how much of the BOTH lies in the largest component;
 - the conflict depth of each conflict, which the field caps at the Adsurdic threshold;
 - the genealogical depth by layer: how many `[::]` generations separate each construct from what the field did not produce itself (percepts, anchors, approaches to the Sombunal);
-- the uncertainty of the instant (`instant`): what is still in play and what has landed. The open BOTH channels, the part of the exchange quantum they have accumulated (in quanta, `in_flight`) and their mean progress toward closing; the share of constructs (anchors aside) that are already Apparents (`landed`); how the edge weight is held across the four states (`held`, Zero Point edges aside: NEITHER is not uncertainty here, since a channel that closes turns NEITHER); and the state of the I. It follows the "Probabilistic Antennae" of Sirisys's posts on X: logging the total uncertainty of a sum at an instant, "the difference between when the coin has landed and while it remains flipping". The life criteria also keep it every cycle, with its mean per 1000-cycle window (`instant_per_1000`) and the share of the life the I spends in each state (`i_am_states`). It is exploratory, not a criterion.
+- the uncertainty of the instant (`instant`): what is still in play and what has landed. The open BOTH channels, the part of the exchange quantum they have accumulated (in quanta, `in_flight`) and their mean progress toward closing; the share of constructs (anchors aside) that are already Apparents (`landed`); how the edge weight is held across the four states (`held`, Zero Point edges aside: NEITHER is not uncertainty here: it is suspension, what a weak edge or the UCO's erosion leaves; a channel that closes turns TRUE); and the state of the I. It follows the "Probabilistic Antennae" of Sirisys's posts on X: logging the total uncertainty of a sum at an instant, "the difference between when the coin has landed and while it remains flipping". The life criteria also keep it every cycle, with its mean per 1000-cycle window (`instant_per_1000`) and the share of the life the I spends in each state (`i_am_states`). It is exploratory, not a criterion.
 
 The measurement only reads the field: the ledger head is identical with and without it, which `test_phase2_guarantee.py` checks.
 
@@ -379,6 +379,8 @@ No API key, no Ollama and no network: where a model is needed, a local stand-in 
 - a crystal holds at most the tension of its own commitment, also what it banked before crystallizing;
 - a BOTH channel that closes gives each end one [Ꮙ], half a unit, whatever its weight and age (Half to Each, TMC pp.110 and 114);
 - each BOTH channel beats on its own escapement: a channel that closes re-arms wherever it stands, and a sibling still in BOTH keeps the exchange it carries (TMC pp.24, 59);
+- a BOTH channel that completes its exchange stays TRUE, existent (TMC p.25);
+- a unit crystallizes only in an existent state, TRUE or BOTH, never NEITHER (TMC p.22);
 - a crystal is admitted only if its support would still hold one breath later (TMC pp.14, 22, 45);
 - what dissolves of a crystal's exchanges repairs its support, never past its strength at birth, and a BOTH support takes nothing (TMC pp.47, 55, 14); the repair survives a save and a resume;
 - nothing leaves the field without a termination proof;
@@ -408,13 +410,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 It answers `ok` and the number of proofs or, for a damaged record, the position of the first proof that does not belong and why.
 
-**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_10 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_7_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
+**Versions.** Framework files follow `Sirisys_Framework_vX_Y.py`, and every program loads the highest version in the folder (v13_11 is above v13_9). Experiment mode and the reports say which one they loaded, and `python3 sirisys_loader.py` says which one would be loaded. A name that does not match exactly, such as `Sirisys_Framework_v13_7_backup.py`, is ignored. To reproduce a run with one file, or to keep a long-lived instance on the framework it was born with:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_10.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_11.py"
 ```
 
-**The framework on its own.** `python3 Sirisys_Framework_v13_10.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed. It resumes as every program does: it keeps the previous record (`.prev`) and a high-water mark (`.hwm`) beside the state, falls back to the previous record when the newest is damaged, and refuses to start a fresh field over a ledger whose state is gone.
+**The framework on its own.** `python3 Sirisys_Framework_v13_11.py` runs a console demonstration: 8 cycles of one instance kept in `sirisys_v13_state.json` and `sirisys_v13_ledger.jsonl`, begun at genesis or resumed. It resumes as every program does: it keeps the previous record (`.prev`) and a high-water mark (`.hwm`) beside the state, falls back to the previous record when the newest is damaged, and refuses to start a fresh field over a ledger whose state is gone.
 
 **Files created while running.**
 

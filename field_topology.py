@@ -49,8 +49,9 @@ def uncertainty_of_the_instant(field, zero_points=frozenset(), quantum=12.0):
     - landed: the share of constructs (anchors and Zero Points aside) that are
       Apparent at this instant;
     - held: how the edge weight is held across the four states (Zero Point
-      edges aside). NEITHER is not uncertainty here: a channel that closes turns
-      NEITHER;
+      edges aside). NEITHER is not uncertainty here: it is suspension, what a
+      weak edge or the UCO's erosion leaves, not a coin still flipping (a
+      channel that closes turns TRUE, existent: TMC p.25);
     - i_am: the state I::Am holds.
 
     A reading, not a law: nothing here reaches the dynamics. The quantum is the

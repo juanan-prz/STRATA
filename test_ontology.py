@@ -26,7 +26,11 @@ one guards what the field must be, from the primary source:
   - The field's own tolerance stays between its floor and 1.
   - "all [Apparents] must be [Existents]" (TMC p.22): no crystal concludes in
     the cycle it forms, and none is admitted with a support that would not
-    hold one breath later (TMC pp.14, 45).
+    hold one breath later (TMC pp.14, 45). "The non-existent [00] ... cannot
+    be an apparent" (TMC p.22): a unit crystallizes only in an existent state,
+    TRUE or BOTH, never NEITHER.
+  - The exchange makes existent (TMC p.25): a BOTH channel that completes its
+    exchange at the quantum stays TRUE.
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -212,6 +216,44 @@ check("the admission over one breath: a support that holds now but not one breat
       and af.constructs["ADM::edge"].layer == S.Layer.UNIT_1
       and af.constructs["ADM::held"].layer == S.Layer.APPARENT,
       f"weight 0.105: {af.constructs['ADM::edge'].layer.name}; weight 0.12: {af.constructs['ADM::held'].layer.name}")
+# The exchange makes existent (TMC p.25): a BOTH channel with no diverging sibling that reaches the quantum
+# closes TRUE and starts afresh
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    ex = S.new_session(S.LLMIntermediary(backend="none"))
+xf = ex.field
+xf.add_construct("EX::src", S.Layer.UNIT_1)
+xf.add_construct("EX::tgt", S.Layer.UNIT_1)
+lone = xf.add_edge("EX::src", "::", "EX::tgt", weight=0.8, state=S.TetraState.BOTH)
+lone.both_age = -(-q // 0.8) - 1                           # the next scan brings it to the quantum
+with quiet():
+    S.TetralemmaEngine().scan(xf)
+check("the exchange makes existent (TMC p.25): a BOTH channel that completes its exchange at the quantum "
+      "stays TRUE, not NEITHER, and starts afresh",
+      lone.state == S.TetraState.TRUE and lone.both_age == 0
+      and xf.constructs["EX::tgt"].recursion_exchanged == S.TetralemmaEngine.QUO,
+      f"{lone.state.name}, age {lone.both_age}, banked {xf.constructs['EX::tgt'].recursion_exchanged}")
+# Only the existent crystallizes (TMC p.22): three units with tension and support enough to crystallize,
+# whose states are TRUE, BOTH and NEITHER; the NEITHER one stays a unit
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    ext = S.new_session(S.LLMIntermediary(backend="none"))
+tf = ext.field
+for name, state in (("EXI::true", S.TetraState.TRUE), ("EXI::both", S.TetraState.BOTH),
+                    ("EXI::neither", S.TetraState.NEITHER)):
+    tf.add_construct(name, S.Layer.UNIT_1)
+    tf.add_edge(f"{name}::source", "::", name, weight=0.6, state=state)
+    tf.constructs[name].recursion_exchanged = 5.0
+for _ in range(8):
+    tf.clock.tick()
+with quiet():
+    S.CussiveCollapseEngine().collapse(tf, tf.clock)
+layers = {n: tf.constructs[n].layer.name for n in ("EXI::true", "EXI::both", "EXI::neither")}
+check("only the existent crystallizes (TMC p.22): units in TRUE and BOTH become Apparent; one in NEITHER, "
+      "the [00], stays a unit with the same tension and support",
+      layers == {"EXI::true": "APPARENT", "EXI::both": "APPARENT", "EXI::neither": "UNIT_1"}
+      and tf.constructs["EXI::both"].crystal_state == S.TetraState.BOTH,
+      f"{layers}")
 # The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a crystal's exchanges presses on its
 # support from all sides and repairs it, never past its strength at birth (TMC p.14); what no construct can
 # hold goes to the null, accounted (TMC pp.45, 59)
