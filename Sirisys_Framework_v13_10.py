@@ -91,10 +91,13 @@
 #     Recursion Apparent Limit'" (TMC p.14). While the approach lives, its edge
 #     counts in the I's mean weight and, lighter than the I's other edges,
 #     lowers it: the I's products are born weaker, and the lineage of what the
-#     field produces stays shallower. The residue is a limit on the recursion
-#     depth of what the field produces, not a count of crystals. Reading the
-#     limit so is Level 3, and so is reading the formula as an I the attempt
-#     leaves lesser.
+#     field produces stays shallower. It does so where the lineage is born: at
+#     the rare moments the I holds few, strong edges, the approach's edge
+#     weighs most in that mean and lowers it, at 0.70 as at 0.35; an edge as
+#     heavy as the I is then leaves no limit. The residue is a limit on the
+#     recursion depth of what the field produces, not a count of crystals.
+#     Reading the limit so is Level 3, and so is reading the formula as an I
+#     the attempt leaves lesser.
 #   The intermediary translates (CONF). A model labels what the field produced
 #     and words the approach; nothing it says reaches the dynamics. The keys are
 #     the field's own, so a life with a model is the life without one, and
@@ -189,7 +192,7 @@ SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exch
 # ── breathing and tolerance ──────────────────────────────────────────────────
 BREATH_PERIOD            = 24     # Level 3: cycles per breath
 SOMBUNAL_APPROACH_EVERY  = BREATH_PERIOD   # Level 3: the I approaches the Sombunal once per breath
-SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach; it sets how far the limit reaches
+SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach; the lighter it is than the I at its strongest, the further the limit reaches
 BREATH_DEPTH             = 0.35   # Level 3: how far contraction lowers the cussive thresholds
 BREATH_MAX_EXTRA_OPS     = 2      # Level 3: extra [::] operations at full expansion
 TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
@@ -3021,7 +3024,11 @@ def _approach_sombunal(ss: Session, cycle: int, instability: float,
     w < m, and each product of the I is born with CONCORD_PROPORTION times the
     half-sum of that mean and its partner's. So while the approach lives, the
     I's products are born weaker and their lineage shallower; nothing else is
-    done for it, and no residue crystallizes.
+    done for it, and no residue crystallizes. The limit acts where
+    (m - w) / (n + 1) is largest: at the rare moments the I holds few, strong
+    edges, which is when the products that carry its lineage are born. There
+    m mostly lies above 0.75, so an edge at 0.70 lowers it as well; at 0.95
+    or more it hardly does, and no limit is left.
 
     Level 3: the cadence (SOMBUNAL_APPROACH_EVERY), the phase (the cycle a
     breath begins), the edge's state (NEITHER: what the gauge cannot reach) and
