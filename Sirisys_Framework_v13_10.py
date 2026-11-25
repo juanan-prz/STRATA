@@ -1833,7 +1833,10 @@ def control_conflict_label(x_name: str, y_name: str) -> str:
 
 
 class ConcordancyOperator:
-    # Full tetralemmic compatibility matrix — 16/16 pairs. None = reversion.
+    # Level 3: the tetralemmic compatibility matrix, 16/16 pairs (None = reversion).
+    # No source fixes it. TMC renders [::] as an ALU call function (p.16) and gives a
+    # "Truth Table 16 Row Key to ALL Arithmetic Logic Units" (pp.102-103); this
+    # matrix is not drawn from that key, and on its own it never yields FALSE.
     COMPATIBLE: ClassVar[dict[tuple[TetraState, TetraState], TetraState | None]] = {
         (TetraState.TRUE,    TetraState.TRUE)   : TetraState.TRUE,
         (TetraState.TRUE,    TetraState.BOTH)   : TetraState.BOTH,
