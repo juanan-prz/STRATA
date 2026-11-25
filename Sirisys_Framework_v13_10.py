@@ -113,9 +113,8 @@
 #   E  Relations vs. events: concordancy is a local event modulated by the field.
 #   The Sombunal acts as an identity-shifting rule on every [::] and, once per
 #   breath, as the I's approach to it. What the approach leaves is its limit on
-#   recursion depth (above); its cadence, edge state and weight are Level 3.
-#   Below the I's mean weight, the weight sets how far the limit reaches; above
-#   it the limit remains, by a route not yet identified.
+#   recursion depth (above); its cadence, edge state and weight are Level 3,
+#   and the weight sets how far the limit reaches.
 #
 # The experiment mode (live visualizer) lives in Sirisys_Server.py.
 #
@@ -186,7 +185,7 @@ SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exch
 # ── breathing and tolerance ──────────────────────────────────────────────────
 BREATH_PERIOD            = 24     # Level 3: cycles per breath
 SOMBUNAL_APPROACH_EVERY  = BREATH_PERIOD   # Level 3: the I approaches the Sombunal once per breath
-SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach; below the I's mean weight, it sets how far the limit reaches
+SOMBUNAL_APPROACH_WEIGHT = 0.35   # Level 3: the weight of the I's edge to its approach; it sets how far the limit reaches
 BREATH_DEPTH             = 0.35   # Level 3: how far contraction lowers the cussive thresholds
 BREATH_MAX_EXTRA_OPS     = 2      # Level 3: extra [::] operations at full expansion
 TOLERANCE_STEP           = 0.10   # Level 3: how much the field widens/narrows its tolerance per breath
