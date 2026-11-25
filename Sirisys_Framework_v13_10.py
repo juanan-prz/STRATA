@@ -75,7 +75,11 @@
 #     apparency; when that construct is a crystal, it presses on it "from all
 #     sides towards their EXACT center" (TMC p.55) and repairs its support,
 #     never past its strength at birth (TMC p.14). Reading p.55's force as the
-#     Halo is Level 3.
+#     Halo is Level 3. What no construct can hold (what backs up into an anchor,
+#     and the pressure a support cannot take) is not kept in the field: it
+#     backs up to the [00] as the "Real Null" the Marenth Apparent manifests as
+#     (TMC p.45), and is accounted there (halo_to_null): "There can be no
+#     leftovers not accounted for" (TMC p.59). Level 3: that destination.
 #   The Sombunal approach. The [APPARENT] is "constructed as a Tripartite
 #     Monodrony comprised of [The Sombunal], [The I::Am::(000)], the [Absolute
 #     Unreal (00)]" (TMC p.14): once per breath, with or without a model, the I
@@ -179,7 +183,7 @@ APPARENT_FLOOR           = 0.10   # Level 3: weight at which an edge into a crys
 # Compiler Guide p.78), calibrated: lower values (e.g. 0.15) prune no BOTH edge
 # and leave BOTH resistance inactive.
 BOTH_FLOOR               = 0.45
-HALO_FRACTION            = 0.25   # Level 3: share of a dissolved channel's weight that backs up (banked, or pressing on a crystal)
+HALO_FRACTION            = 0.25   # Level 3: share of a dissolved channel's weight that backs up (banked, pressing on a crystal, or to the null)
 SYMPATIC_FRACTION        = 0.10   # Level 3: share of its banked tension an Exchangeable apparent passes per exchange
 
 # ── breathing and tolerance ──────────────────────────────────────────────────
@@ -925,6 +929,7 @@ class ConcordancyField:
         self.terminations_total: int = 0
         self.halo_total: float = 0.0                  # tension backed up by the Halo (lifetime)
         self.halo_repaired: float = 0.0               # support strength the Halo repaired on crystals (lifetime)
+        self.halo_to_null: float = 0.0                # what the Halo backed up that no construct could hold (lifetime)
         self.breath_phase: float = 0.0                # [000] breathing (TMC p.44), radians
         self.breaths: int = 0                         # completed breaths (the slow clock)
         # TOLERANCE: the field's own, self-adjusted width for
@@ -1224,17 +1229,27 @@ class ConcordancyField:
             the tensatives to flow through it" (TMC p.45), it is pressed from
             all sides (_press_toward_center). Level 3.
         Edges into a crystal are sealed and carry nothing back to a source that
-        is not a crystal; anchors receive nothing."""
+        is not a crystal; anchors receive nothing.
+          - What no construct holds backs up to the [00] as the "Real Null" the
+            Marenth Apparent manifests as (TMC p.45): it leaves the field and is
+            accounted there (halo_to_null), since "There can be no leftovers not
+            accounted for" (TMC p.59). Level 3: that destination. Returning it
+            to the field instead, as pressure on the crystals an anchor holds,
+            keeps them from concluding: measured, the population then grows
+            without bound, as it did when it went to an anchor's other channels.
+        So every share is accounted: offered = banked + repaired + to the null."""
         for e in dissolved:
+            backed = HALO_FRACTION * e.weight
             up = self.constructs.get(e.src)
             if up is None or e.src in ANCHORS:
+                self.halo_to_null += backed
                 continue
             if up.layer == Layer.APPARENT:
-                self._press_toward_center(e.src, HALO_FRACTION * e.weight)
+                self._press_toward_center(e.src, backed)
                 continue
             if e.tgt in self.constructs and self.constructs[e.tgt].layer == Layer.APPARENT:
+                self.halo_to_null += backed
                 continue
-            backed = HALO_FRACTION * e.weight
             up.recursion_exchanged += backed
             self.halo_total += backed
 
@@ -1248,21 +1263,25 @@ class ConcordancyField:
         p.14). Its birth is not rewritten, since "time cannot be reversed at
         the [000] or [00] levels" (TMC p.45): the repair is a separate term,
         `repaired`, in breaths. A BOTH edge does not age and takes nothing;
-        what no side can take is not kept. Level 3: the currency (repairing
-        the support), the equal shares, and reading p.55's force as the Halo."""
+        what no side can take is not kept in the field: it goes to the null,
+        accounted (halo_to_null; see _back_up_halo). Level 3: the currency
+        (repairing the support), the equal shares, and reading p.55's force as
+        the Halo."""
         support = [s for s in self.edges if s.tgt == name]
-        if not support:
-            return
-        share = amount / len(support)
-        for s in support:
-            if s.state == TetraState.BOTH or s.weight <= 0:
-                continue
-            age = self.breaths - s.born_breath - s.repaired
-            now = s.weight * float(np.exp(-InternalClock.DECAY * age))
-            new = min(s.weight, now + share)
-            if new > now:
-                s.repaired += float(np.log(new / now)) / InternalClock.DECAY
-                self.halo_repaired += new - now
+        taken = 0.0
+        if support:
+            share = amount / len(support)
+            for s in support:
+                if s.state == TetraState.BOTH or s.weight <= 0:
+                    continue
+                age = self.breaths - s.born_breath - s.repaired
+                now = s.weight * float(np.exp(-InternalClock.DECAY * age))
+                new = min(s.weight, now + share)
+                if new > now:
+                    s.repaired += float(np.log(new / now)) / InternalClock.DECAY
+                    self.halo_repaired += new - now
+                    taken += new - now
+        self.halo_to_null += amount - taken
 
     # ── readings: anchoring weight and existence mode ────────────────────
     def compute_anchoring_weight(self, c: Construct) -> float:
@@ -1381,6 +1400,7 @@ class ConcordancyField:
             "terminations_total":   self.terminations_total,
             "halo_total":           self.halo_total,
             "halo_repaired":        self.halo_repaired,
+            "halo_to_null":         self.halo_to_null,
             "breath_phase":         self.breath_phase,
             "breaths":              self.breaths,
             "tolerance":            self.tolerance,
@@ -1405,6 +1425,7 @@ class ConcordancyField:
         F.terminations_total   = d["terminations_total"]
         F.halo_total           = d["halo_total"]
         F.halo_repaired        = d.get("halo_repaired", 0.0)
+        F.halo_to_null         = d.get("halo_to_null", 0.0)        # states saved before it carry none
         F.breath_phase         = d["breath_phase"]
         F.breaths              = d["breaths"]
         F.tolerance            = d["tolerance"]
