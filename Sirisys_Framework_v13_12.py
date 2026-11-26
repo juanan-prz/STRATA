@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.11 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.12 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -36,6 +36,23 @@
 #   The fourth corner. The tetralemma "includes all flawed, erroneous,
 #     incomplete or otherwise paraconsistencies as valid" (TMC p.17): past the
 #     conflict cap, NEITHER×NEITHER yields an ordinary NEITHER product.
+#   The unreal meets the unreal. Unreal charges "can only be routed against
+#     each other ... They manifest at higher tiers as 'Artifact of Orientative
+#     Cussions'" (TMC p.44). A unit whose dominant state is NEITHER, the [00]
+#     that "cannot be an apparent" (TMC p.22), stays in the field and enters
+#     [::] only against another such unit: their NEITHER×NEITHER is the
+#     conflict, or past the cap the fourth corner. Which units count as unreal,
+#     and that they share the one orientation draw, are Level 3.
+#   [::] from the key. [::] "may be rendered as the [ALU(arithmetic logic
+#     unit)] call function [CONCORDANCY]" (TMC p.16), and the key to all ALUs
+#     has "one row for each binary function of the two binary variables" (TMC
+#     p.102). Read as the pair (is, is-not), a product is a function of the key
+#     on each bit; the matrix is the join, is OR and is-not OR, outside the
+#     NEITHER×NEITHER reversion. Of the governors p.16 allows ("You can run many
+#     different logical governors"), choosing the join is Level 3: on the cells
+#     the field lives in it is what the matrix already did, and it answers
+#     "Self :: Not Self" with BOTH, one of p.16's variants ("You are both the
+#     universal self and not the universal self").
 #   Exchangeable crystals. Apparents are "Exchangeable" or "Universal" (TMC
 #     p.22); Zero Points are the Universal ones, every other Apparent can be an
 #     operand and stays incontrovertible. A crystal relays a share of the
@@ -166,7 +183,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.11"                 # the one place the version is written; the file name agrees
+__version__ = "13.12"                 # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -246,6 +263,19 @@ class TetraState(Enum):
 # Only an existent unit crystallizes: "The non-existent [00] or Absolute Unreal
 # cannot be an apparent" (TMC p.22).
 EXISTENT_STATES = frozenset({TetraState.TRUE, TetraState.BOTH})
+
+# The same pairs as data, for [::] (TMC pp.16, 102; see ConcordancyOperator).
+IS_ISNOT: dict[TetraState, tuple[int, int]] = {
+    TetraState.TRUE: (1, 0), TetraState.FALSE: (0, 1),
+    TetraState.BOTH: (1, 1), TetraState.NEITHER: (0, 0),
+}
+_STATE_OF_PAIR = {pair: state for state, pair in IS_ISNOT.items()}
+
+
+def join_states(x: TetraState, y: TetraState) -> TetraState:
+    """The join of the 16-row key on the pair (is, is-not): is OR, is-not OR."""
+    (ax, bx), (ay, by) = IS_ISNOT[x], IS_ISNOT[y]
+    return _STATE_OF_PAIR[(ax | ay, bx | by)]
 
 
 # =============================================================================
@@ -1832,6 +1862,8 @@ class LLMIntermediary:
 # Incompatible pairs (NEITHER × NEITHER) produce a CONFLICT construct — not silence —
 # up to the Stop Chasm cap per cycle; beyond it they yield an ordinary NEITHER
 # product (the fourth corner, TMC pp.16-17). Silence only past the Adsurdic depth.
+# Such pairs come from the unreal pool: units in NEITHER, which cannot crystallize
+# (TMC p.22), routed only against each other (TMC p.44).
 # Discordancy is informative: it generates first-class ontological structure.
 #
 # Lifecycle of a conflict: BORN → INTENSIFY → CONCORDANCE (if energy matures)
@@ -1853,27 +1885,17 @@ def control_conflict_label(x_name: str, y_name: str) -> str:
 
 
 class ConcordancyOperator:
-    # Level 3: the tetralemmic compatibility matrix, 16/16 pairs (None = reversion).
-    # No source fixes it. TMC renders [::] as an ALU call function (p.16) and gives a
-    # "Truth Table 16 Row Key to ALL Arithmetic Logic Units" (pp.102-103); this
-    # matrix is not drawn from that key, and on its own it never yields FALSE.
+    # The tetralemmic compatibility matrix, drawn from the "Truth Table 16 Row Key
+    # to ALL Arithmetic Logic Units" (TMC p.102), [::] being the "[ALU(arithmetic
+    # logic unit)] call function [CONCORDANCY]" (TMC p.16): on the pair (is,
+    # is-not) a product is the join, is OR and is-not OR. NEITHER × NEITHER stays
+    # outside it, as the reversion (None, TMC pp.16-17). Level 3: the join among
+    # the governors p.16 allows. It equals the earlier table on every cell with
+    # TRUE or BOTH operands; with NEITHER it is the neutral element, and it can
+    # yield FALSE (FALSE :: FALSE, FALSE :: NEITHER).
     COMPATIBLE: ClassVar[dict[tuple[TetraState, TetraState], TetraState | None]] = {
-        (TetraState.TRUE,    TetraState.TRUE)   : TetraState.TRUE,
-        (TetraState.TRUE,    TetraState.BOTH)   : TetraState.BOTH,
-        (TetraState.TRUE,    TetraState.FALSE)  : TetraState.BOTH,
-        (TetraState.TRUE,    TetraState.NEITHER): TetraState.NEITHER,
-        (TetraState.BOTH,    TetraState.TRUE)   : TetraState.BOTH,
-        (TetraState.BOTH,    TetraState.BOTH)   : TetraState.BOTH,
-        (TetraState.BOTH,    TetraState.FALSE)  : TetraState.NEITHER,
-        (TetraState.BOTH,    TetraState.NEITHER): TetraState.NEITHER,
-        (TetraState.FALSE,   TetraState.TRUE)   : TetraState.BOTH,
-        (TetraState.FALSE,   TetraState.BOTH)   : TetraState.NEITHER,
-        (TetraState.FALSE,   TetraState.FALSE)  : TetraState.NEITHER,
-        (TetraState.FALSE,   TetraState.NEITHER): TetraState.NEITHER,
-        (TetraState.NEITHER, TetraState.TRUE)   : TetraState.NEITHER,
-        (TetraState.NEITHER, TetraState.BOTH)   : TetraState.NEITHER,
-        (TetraState.NEITHER, TetraState.FALSE)  : TetraState.NEITHER,
-        (TetraState.NEITHER, TetraState.NEITHER): None,
+        (x, y): None if x == y == TetraState.NEITHER else join_states(x, y)
+        for x in TetraState for y in TetraState
     }
 
     BOTH_MATURITY_THRESHOLD      = 2    # Level 3: BOTH edges must age before becoming generative
@@ -1972,6 +1994,11 @@ class ConcordancyOperator:
                  propagate "only forwards from their cussive instantiation"
                  (TMC p.46) — from what has been instantiated, not from raw
                  products.
+        Pool 4 — UNREAL UNITS: what is not an Apparent, an anchor, an approach
+                 or a conflict, and whose dominant state is NEITHER, the [00]
+                 that cannot crystallize (TMC p.22). Unreal charges "can only
+                 be routed against each other" (TMC p.44): they pair only
+                 among themselves, and their NEITHER × NEITHER is the conflict.
 
         Pairs: within each pool; exchangeable × pool 1. Each pair is weighted
         by the energy of its operands and ordered by an orientation draw
@@ -1994,10 +2021,14 @@ class ConcordancyOperator:
         exchange_cs = sorted((n for n, c in field.constructs.items()
                               if c.layer == Layer.APPARENT and n not in ZERO_POINTS),
                              key=lambda n: (-E[n], n))[:self.EXCHANGE_POOL_CAP]
+        unreal_cs   = [n for n, c in active.items()
+                       if n not in ANCHORS and not n.startswith("SOMBUNAL::") and not c.conflict
+                       and field.dominant_state(n) == TetraState.NEITHER]
 
         pairs = set()
         for group_a, group_b in ((both_cs, both_cs), (conflict_cs, conflict_cs),
-                                 (exchange_cs, both_cs), (exchange_cs, exchange_cs)):
+                                 (exchange_cs, both_cs), (exchange_cs, exchange_cs),
+                                 (unreal_cs, unreal_cs)):
             for a in group_a:
                 for b in group_b:
                     if a != b:
@@ -2010,6 +2041,7 @@ class ConcordancyOperator:
         telem = {"cycle": cycle, "both_pool_size": len(both_cs),
                  "conflict_pool_size": len(conflict_cs),
                  "exchange_pool_size": len(exchange_cs),
+                 "unreal_pool_size": len(unreal_cs),
                  "candidate_pairs": len(pairs),
                  "executions_attempted": 0, "executions_successful": 0,
                  "foundational_executions": 0, "exchange_executions": 0}

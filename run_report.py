@@ -154,6 +154,8 @@ def integrity_checks():
         "Halo toward the Apparent": "def _press_toward_center" in src,
         "each channel's own escapement": "ex.state, ex.both_age, armed = TetraState.BOTH, 0, True" in src,
         "only the existent crystallizes": "EXISTENT_STATES" in src and "name not in existent" in src,
+        "[::] from the key": "join_states(x, y)" in src,
+        "the unreal meets the unreal": "(unreal_cs, unreal_cs)" in src,
     }
     return checks, hashlib.sha256(src.encode()).hexdigest()[:16]
 

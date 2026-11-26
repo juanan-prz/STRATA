@@ -31,6 +31,10 @@ one guards what the field must be, from the primary source:
     TRUE or BOTH, never NEITHER.
   - The exchange makes existent (TMC p.25): a BOTH channel that completes its
     exchange at the quantum stays TRUE.
+  - [::] from the key (TMC pp.16, 102): on the pair (is, is-not) every product
+    is the join, is OR and is-not OR; NEITHER × NEITHER stays the reversion.
+  - The unreal meets the unreal (TMC p.44): units in NEITHER are routed only
+    against each other, and their encounter is the conflict.
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -254,6 +258,42 @@ check("only the existent crystallizes (TMC p.22): units in TRUE and BOTH become 
       layers == {"EXI::true": "APPARENT", "EXI::both": "APPARENT", "EXI::neither": "UNIT_1"}
       and tf.constructs["EXI::both"].crystal_state == S.TetraState.BOTH,
       f"{layers}")
+# [::] from the key (TMC pp.16, 102): the matrix is the join on the pair (is, is-not), with the encoding
+# written here independently of the framework; NEITHER x NEITHER stays outside it, as the reversion
+T_, F_, B_, N_ = S.TetraState.TRUE, S.TetraState.FALSE, S.TetraState.BOTH, S.TetraState.NEITHER
+enc = {T_: (1, 0), F_: (0, 1), B_: (1, 1), N_: (0, 0)}
+dec = {v: k for k, v in enc.items()}
+want = {(x, y): None if x == y == N_ else dec[(enc[x][0] | enc[y][0], enc[x][1] | enc[y][1])]
+        for x in S.TetraState for y in S.TetraState}
+earlier = {(T_, T_): T_, (T_, B_): B_, (B_, T_): B_, (B_, B_): B_, (T_, F_): B_, (F_, T_): B_}
+check("[::] from the key (TMC pp.16, 102): every product is the join of its operands' (is, is-not), "
+      "NEITHER x NEITHER stays the reversion, and the cells with TRUE or BOTH operands are as before",
+      dict(CO.COMPATIBLE) == want and all(CO.COMPATIBLE[k] == v for k, v in earlier.items()),
+      f"{sum(CO.COMPATIBLE.get(k) == v for k, v in want.items())}/16 cells")
+# The unreal meets the unreal (TMC p.44): units in NEITHER and one in TRUE; the NEITHER units are routed
+# against each other and give the conflict, and none of them is ever paired with an existent unit
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    ur = S.new_session(S.LLMIntermediary(backend="none"))
+uf = ur.field
+for name, state in (("UR::a", N_), ("UR::b", N_), ("UR::t", T_)):
+    uf.add_construct(name, S.Layer.UNIT_1)
+    uf.add_edge(f"{name}::source", "::", name, weight=0.6, state=state)
+unreal = {n for n, c in uf.constructs.items() if c.layer != S.Layer.APPARENT and n not in S.ANCHORS
+          and uf.dominant_state(n) == N_}
+with quiet():
+    ur.concordancy.scan_and_apply(uf, 0, {"used": 0})
+ops = [op for op in ur.concordancy._ops_log if op.get("cycle") == 0]
+met = [op for op in ops if op["x"] in unreal and op["y"] in unreal]
+mixed = [op for op in ops if (op["x"] in unreal) != (op["y"] in unreal)]
+cap = CO.MAX_CONFLICTS_PER_CYCLE
+expected = ["CONFLICT"] * min(len(met), cap) + ["NEITHER"] * max(0, len(met) - cap)
+check("the unreal meets the unreal (TMC p.44): units in NEITHER are routed against each other and give the "
+      "conflict, past the Stop Chasm the fourth corner (TMC pp.17, 41); none is paired with an existent unit",
+      "UR::a" in unreal and "UR::t" not in unreal and len(met) > cap
+      and [op["state"] for op in met] == expected
+      and not mixed and ur.concordancy.pool_telemetry[-1].get("unreal_pool_size") == len(unreal),
+      f"{len(unreal)} unreal units, met {[op['state'] for op in met]}, {len(mixed)} mixed")
 # The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a crystal's exchanges presses on its
 # support from all sides and repairs it, never past its strength at birth (TMC p.14); what no construct can
 # hold goes to the null, accounted (TMC pp.45, 59)
