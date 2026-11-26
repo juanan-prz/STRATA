@@ -168,7 +168,7 @@ La vista en vivo y el inspector dibujan el campo igual, y la leyenda lo recoge t
 
 Bajo el campo, respiración a respiración: los constructos nacidos (entre ellos los que concluyeron en su mismo ciclo y nunca llegaron a la pantalla), los que concluyeron, las subidas y las cristalizaciones junto a los cristales que concluyeron, y la población por capa. Nacidos menos concluidos es el cambio de la población, exactamente, en cada ciclo.
 
-El servidor guarda esa historia de toda la instancia (`GET /api/history`; pasados 2.048 registros, los más antiguos se funden por pares), de modo que quien abre tarde, o se perdió ciclos que leyó otro visor, la ve entera.
+El servidor guarda esa historia de toda la instancia (`GET /api/history`; pasados 2048 registros, los más antiguos se funden por pares), de modo que quien abre tarde, o se perdió ciclos que leyó otro visor, la ve entera.
 
 ### 3.4 Criterios
 
@@ -322,9 +322,9 @@ Ejecútalas desde la carpeta del proyecto. Ninguna usa modelo salvo que se pida.
 
 | Orden | Qué mide | Resultado |
 |---|---|---|
-| `measure_phase3.py [ciclos] [archivo del framework]` | Los criterios en los flujos sintéticos 0, 1 y 2 (5.000 ciclos cada uno por defecto) | `phase3_measurements.json`, y PASS o FAIL por flujo en pantalla |
-| `soak.py [ciclos] [flujo]` | Una vida larga con perceptos sintéticos (50.000 ciclos y flujo 0 por defecto): memoria, coste, no repetición, cristalización duradera | JSON por la salida estándar |
-| `live_c2.py [ciclos] [none\|ollama\|anthropic] [standard\|minimal] [--replay ARCHIVO]` | Los perceptos reales de la máquina durante una vida larga (3.000 ciclos, sin modelo y perfil standard por defecto); con `--replay`, los perceptos que grabó una ejecución anterior | JSON por la salida estándar; los mensajes para quien la ejecuta, en la terminal |
+| `measure_phase3.py [ciclos] [archivo del framework]` | Los criterios en los flujos sintéticos 0, 1 y 2 (5000 ciclos cada uno por defecto) | `phase3_measurements.json`, y PASS o FAIL por flujo en pantalla |
+| `soak.py [ciclos] [flujo]` | Una vida larga con perceptos sintéticos (50 000 ciclos y flujo 0 por defecto): memoria, coste, no repetición, cristalización duradera | JSON por la salida estándar |
+| `live_c2.py [ciclos] [none\|ollama\|anthropic] [standard\|minimal] [--replay ARCHIVO]` | Los perceptos reales de la máquina durante una vida larga (3000 ciclos, sin modelo y perfil standard por defecto); con `--replay`, los perceptos que grabó una ejecución anterior | JSON por la salida estándar; los mensajes para quien la ejecuta, en la terminal |
 
 ```bash
 python3 measure_phase3.py                                   # alrededor de un minuto

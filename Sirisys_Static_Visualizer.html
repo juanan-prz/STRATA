@@ -54,8 +54,8 @@
     --layer-APPARENT: #ede9d2;
 
     /* Tetralemmic states, on the edges: three hues apart from the layers and from the
-       interface's own, told apart with any colour vision; NEITHER, the most of them, is
-       neutral. On the canvas BOTH is also the thickest and the strongest, FALSE dashed and TRUE a
+       interface's own, told apart with any colour vision; NEITHER is neutral
+       (since v13.11 TRUE is most of the edges, and NEITHER few). On the canvas BOTH is also the thickest and the strongest, FALSE dashed and TRUE a
        little stronger; NEITHER is solid and the thinnest, so that its grey stays visible without
        outweighing a thin TRUE line beside it. The accent is never data */
     --col-TRUE: #5e92ff;
@@ -648,8 +648,8 @@ const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
 // How the canvas draws each edge state, besides its colour: BOTH the thickest and the
 // strongest, FALSE dashed, TRUE a little stronger. Their opacity follows the edge's weight
-// (alpha multiplies it, up to 1). NEITHER, most of the edges, is drawn solid and the
-// thinnest: its grey tells it apart without fading it out.
+// (alpha multiplies it, up to 1). NEITHER is drawn solid and the thinnest: its grey
+// tells it apart without fading it out.
 const EDGE_STYLE = {
   BOTH: { width: 1.4, alpha: 1.35 }, TRUE: { width: 0.75, alpha: 1.2 },
   FALSE: { width: 0.75, dash: [4, 3] }, NEITHER: { width: 0.55, solid: true },

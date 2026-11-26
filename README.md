@@ -48,9 +48,9 @@ python3 run_report.py --cycles 20 --seeds 1 --backend none    # a short measured
 
 **Layers.** Constructs live in four layers: `NULL_00` (held only by the origin anchor), `UMBRA_0` (where percepts, the approaches to the Sombunal, conflicts and most products are born), `UNIT_1` (active units, candidates to crystallize; a `BOTH` product is born here) and `APPARENT` (crystals). A construct rises a layer when enough tension reaches it (cussive collapse); an Apparent is incontrovertible.
 
-**Tetralemma.** Every relation carries one of four states: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Sustained `BOTH` drives emergence and closes once enough recursion has been exchanged through it. `NEITHER×NEITHER` materializes a conflict, or, past a per-cycle cap, the fourth corner itself: no combination is a dead end.
+**Tetralemma.** Every relation carries one of four states, which TMC writes as the pair (is, is-not): `TRUE` (1, 0), `FALSE` (0, 1), `BOTH` (1, 1) and `NEITHER` (0, 0). What keeps its «is», `TRUE` or `BOTH`, is existent, and only an existent unit crystallizes. Sustained `BOTH` drives emergence and closes into `TRUE` once enough recursion has been exchanged through it. Units in `NEITHER` meet only each other: `NEITHER×NEITHER` materializes a conflict, or, past a per-cycle cap, the fourth corner itself: no combination is a dead end.
 
-**Concordancy.** The operator `[::]` combines two constructs into a third and records the event as a proof. With opposite chirality the older operand orients the result, so `x::y ≠ y::x`.
+**Concordancy.** The operator `[::]` combines two constructs into a third and records the event as a proof. The third's state is the join of the operands' pairs (is, is-not), $x :: y = (a_x \lor a_y,\ b_x \lor b_y)$; `NEITHER×NEITHER` is the one combination outside it. With opposite chirality the older operand orients the result, so `x::y ≠ y::x`.
 
 **No randomness.** The framework has no pseudo-random generator. Every choice is derived from the ledger head (the whole irreversible history) and the question being decided: the same history reproduces the same run, and different histories never draw alike.
 
@@ -64,7 +64,7 @@ The glossary defines every term with its source.
 
 ## Status
 
-Research project under active development.
+Research project under active development. The current framework is v13.12; the list says what each version changed and how it was tested, from the oldest.
 
 - On synthetic percepts and without a model, the field meets its self-adjustment criteria: durable crystals every breath, little flicker, bounded size, flat memory and cost. On a machine's real percepts it held over 10,000 cycles: the lower crystallization of the first windows was the genesis.
 - With a local model (llama3.1, v13.4) the field met its criteria, and the model's meaning made no measurable difference to the dynamics. Since v13.5 the model only translates: its names are labels, and the approach to the Sombunal is a law of the field. On a Mac with v13.5 and real percepts, the field met its criteria over 10,000 cycles, and a life with the model (363 calls), replayed without it, sealed the same ledger.

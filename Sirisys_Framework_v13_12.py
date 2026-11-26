@@ -22,9 +22,11 @@
 #
 # ONE CYCLE (run_cycle — the only definition; run(), the server and
 # run_report.py all call it):
-#   perceive → tetralemma scan → breathe → intensify conflicts → [::] →
-#   cussive collapse → UCO erosion (sparing the support of the crystals just
-#   formed) → prune → (narration) → Sombunal approach (once per breath) → tick
+#   perceive → tetralemma scan → breathe → intensify conflicts → [::] (from
+#   four pools: matured BOTH, energetic conflicts, exchangeable crystals, the
+#   unreal) → cussive collapse → UCO erosion (sparing the support of the
+#   crystals just formed) → prune → (narration) → Sombunal approach (once per
+#   breath) → tick
 #
 # KEY PRINCIPLES AND THEIR ANCHORS
 #   No PRNG. Every choice is orient(key): a hash of the ledger head (the whole
@@ -1867,8 +1869,11 @@ class LLMIntermediary:
 # Discordancy is informative: it generates first-class ontological structure.
 #
 # Lifecycle of a conflict: BORN → INTENSIFY → CONCORDANCE (if energy matures)
-#                                          or CRYSTALLIZE (if tension holds)
+#                                          or CRYSTALLIZE (only if existent)
 #                                          or DECAY       (if pruned under UCO)
+# A conflict is born in NEITHER (a CONFLICT × CONFLICT synthesis, in BOTH), and
+# only a unit whose dominant state is existent crystallizes (TMC p.22): a
+# conflict does so only once that state has become TRUE or BOTH.
 # =============================================================================
 
 def control_emergent_name(x_name: str, y_name: str, cycle: int) -> str:
@@ -1908,7 +1913,7 @@ class ConcordancyOperator:
     MAX_CF_DEPTH            = 4     # Adsurdic Threshold for conflict recursion (TMC p.41)
     CF_BASE_WEIGHT          = 0.35  # Level 3: base edge weight for new conflict
     CF_MIN_ENERGY           = 0.30  # Level 3: min umbragiac_score for conflict concordancy eligibility
-    CF_COLLAPSE_ENERGY      = 3.50  # Level 3: score at which conflict is flagged for crystallization
+    CF_COLLAPSE_ENERGY      = 3.50  # Level 3: score at which a conflict's high energy is marked (a transform; it promotes nothing)
     CF_INTENSIFY_STEP       = 0.15  # Level 3: score a persistent conflict gains per cycle
     CF_RECENT_OPS           = 20    # Level 3: operations read for parents still in reversion
     MAX_CONFLICTS_PER_CYCLE = 2     # Stop Chasm — prevent combinatorial growth (TMC p.41)
@@ -1926,9 +1931,10 @@ class ConcordancyOperator:
         """
         Deepen persistent conflicts: if a conflict's parents are still generating
         reversions, its umbragiac_score grows each cycle — irresolvability acquires
-        ontological weight. When score reaches CF_COLLAPSE_ENERGY, the conflict is
-        flagged for crystallization into Apparent. Low-energy conflicts decay
-        naturally under UCO and are eventually pruned.
+        ontological weight. When score reaches CF_COLLAPSE_ENERGY, the conflict's
+        identity records it (a transform); crystallizing still asks what every
+        unit is asked, enough tension and an existent state (TMC p.22).
+        Low-energy conflicts decay naturally under UCO and are eventually pruned.
 
         Level 3 reading: irresolvability is not static — it accumulates, like
         scar tissue.
@@ -1973,7 +1979,7 @@ class ConcordancyOperator:
                 if c.umbragiac_score >= self.CF_COLLAPSE_ENERGY:
                     c.transform(f"CONFLICT::high_energy@c{cycle}", field.clock.T)
                     print(f"  [CONFLICT] '{name[:45]}' → CF_COLLAPSE_ENERGY — "
-                          f"crystallization eligible")
+                          f"high energy")
 
         if intensified:
             print(f"  [CONFLICT] {intensified} conflict(s) intensified "

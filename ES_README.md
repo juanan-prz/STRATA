@@ -48,9 +48,9 @@ python3 run_report.py --cycles 20 --seeds 1 --backend none    # una ejecución m
 
 **Capas.** Los constructos viven en cuatro capas: `NULL_00` (solo la ocupa el ancla de origen), `UMBRA_0` (donde nacen los perceptos, los acercamientos al Sombunal, los conflictos y la mayoría de los productos), `UNIT_1` (unidades activas, candidatas a cristalizar; aquí nace un producto `BOTH`) y `APPARENT` (cristales). Un constructo sube de capa cuando le llega tensión suficiente (colapso cúsico); un Apparent es incontrovertible.
 
-**Tetralema.** Cada relación tiene uno de cuatro estados: `TRUE`, `FALSE`, `BOTH`, `NEITHER`. Un `BOTH` sostenido impulsa la emergencia y se cierra cuando ha intercambiado recursión suficiente. `NEITHER×NEITHER` materializa un conflicto o, pasado un límite por ciclo, la cuarta esquina misma: ninguna combinación es un callejón sin salida.
+**Tetralema.** Cada relación tiene uno de cuatro estados, que TMC escribe como el par (es, no es): `TRUE` (1, 0), `FALSE` (0, 1), `BOTH` (1, 1) y `NEITHER` (0, 0). Lo que conserva su «es», `TRUE` o `BOTH`, es existente, y solo cristaliza una unidad existente. Un `BOTH` sostenido impulsa la emergencia y se cierra en `TRUE` cuando ha intercambiado recursión suficiente. Las unidades en `NEITHER` solo se encuentran entre sí: `NEITHER×NEITHER` materializa un conflicto o, pasado un límite por ciclo, la cuarta esquina misma: ninguna combinación es un callejón sin salida.
 
-**Concordancia.** El operador `[::]` combina dos constructos en un tercero y registra el evento como prueba. Con quiralidad opuesta, el operando mayor orienta el resultado, así que `x::y ≠ y::x`.
+**Concordancia.** El operador `[::]` combina dos constructos en un tercero y registra el evento como prueba. El estado del tercero es el join de los pares (es, no es) de los operandos, $x :: y = (a_x \lor a_y,\ b_x \lor b_y)$; `NEITHER×NEITHER` es la única combinación que queda fuera. Con quiralidad opuesta, el operando mayor orienta el resultado, así que `x::y ≠ y::x`.
 
 **Sin azar.** El framework no tiene generador pseudoaleatorio. Cada elección se deriva de la cabeza del ledger (toda la historia irreversible) y de la cuestión que se decide: la misma historia reproduce la misma ejecución, y historias distintas nunca eligen igual.
 
@@ -64,7 +64,7 @@ El glosario define cada término con su fuente.
 
 ## Estado
 
-Proyecto de investigación en desarrollo activo.
+Proyecto de investigación en desarrollo activo. El framework vigente es la v13.12; la lista dice qué cambió cada versión y cómo se probó, de la más antigua a la más reciente.
 
 - Con perceptos sintéticos y sin modelo, el campo cumple sus criterios de autoajuste: cristales duraderos en cada respiración, poco parpadeo, tamaño acotado, memoria y coste planos. Con los perceptos reales de una máquina se sostuvo durante 10 000 ciclos: la cristalización más baja de las primeras ventanas era la génesis.
 - Con un modelo local (llama3.1, v13.4), el campo cumplió sus criterios, y el sentido de lo que decía el modelo no cambió la dinámica de forma medible. Desde la v13.5 el modelo solo traduce: sus nombres son etiquetas, y el acercamiento al Sombunal es una ley del campo. En un Mac, con la v13.5 y perceptos reales, el campo cumplió sus criterios durante 10 000 ciclos, y una vida con el modelo (363 llamadas), repetida sin él, selló el mismo ledger.
