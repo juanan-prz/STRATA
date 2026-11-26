@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.12 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.13 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -43,8 +43,12 @@
 #     Cussions'" (TMC p.44). A unit whose dominant state is NEITHER, the [00]
 #     that "cannot be an apparent" (TMC p.22), stays in the field and enters
 #     [::] only against another such unit: their NEITHER×NEITHER is the
-#     conflict, or past the cap the fourth corner. Which units count as unreal,
-#     and that they share the one orientation draw, are Level 3.
+#     conflict, or past the cap the fourth corner. A conflict in NEITHER is an
+#     unreal charge too, so it meets the unreal: a deeper conflict, a
+#     CONFLICT × CONFLICT synthesis, or past the Adsurdic depth silence
+#     (TMC p.41). Which units count as unreal (by their dominant state, the
+#     conflicts among them), and that they share the one orientation draw, are
+#     Level 3.
 #   [::] from the key. [::] "may be rendered as the [ALU(arithmetic logic
 #     unit)] call function [CONCORDANCY]" (TMC p.16), and the key to all ALUs
 #     has "one row for each binary function of the two binary variables" (TMC
@@ -185,7 +189,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.12"                 # the one place the version is written; the file name agrees
+__version__ = "13.13"                 # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -1865,15 +1869,15 @@ class LLMIntermediary:
 # up to the Stop Chasm cap per cycle; beyond it they yield an ordinary NEITHER
 # product (the fourth corner, TMC pp.16-17). Silence only past the Adsurdic depth.
 # Such pairs come from the unreal pool: units in NEITHER, which cannot crystallize
-# (TMC p.22), routed only against each other (TMC p.44).
+# (TMC p.22), routed only against each other (TMC p.44), conflicts included.
 # Discordancy is informative: it generates first-class ontological structure.
 #
-# Lifecycle of a conflict: BORN → INTENSIFY → CONCORDANCE (if energy matures)
-#                                          or CRYSTALLIZE (only if existent)
-#                                          or DECAY       (if pruned under UCO)
-# A conflict is born in NEITHER (a CONFLICT × CONFLICT synthesis, in BOTH), and
-# only a unit whose dominant state is existent crystallizes (TMC p.22): a
-# conflict does so only once that state has become TRUE or BOTH.
+# Lifecycle of a conflict: BORN (in NEITHER; a CONFLICT × CONFLICT synthesis, in
+# BOTH) → ROUTED against the unreal while it stays in NEITHER (TMC p.44) → DECAY
+# (pruned). Two further paths are written but, measured, do not occur (IV8, at
+# least since v13.10): INTENSIFY, which needs both parents still in the field and
+# reverting, and CRYSTALLIZE, which needs an existent dominant state (TMC p.22)
+# and a support that prune would hold, above BOTH_FLOOR for a BOTH edge.
 # =============================================================================
 
 def control_emergent_name(x_name: str, y_name: str, cycle: int) -> str:
@@ -2000,11 +2004,12 @@ class ConcordancyOperator:
                  propagate "only forwards from their cussive instantiation"
                  (TMC p.46) — from what has been instantiated, not from raw
                  products.
-        Pool 4 — UNREAL UNITS: what is not an Apparent, an anchor, an approach
-                 or a conflict, and whose dominant state is NEITHER, the [00]
-                 that cannot crystallize (TMC p.22). Unreal charges "can only
-                 be routed against each other" (TMC p.44): they pair only
-                 among themselves, and their NEITHER × NEITHER is the conflict.
+        Pool 4 — UNREAL UNITS: what is not an Apparent, an anchor or an
+                 approach, and whose dominant state is NEITHER, the [00] that
+                 cannot crystallize (TMC p.22); a conflict in NEITHER is one of
+                 them. Unreal charges "can only be routed against each other"
+                 (TMC p.44): they pair only among themselves, and their
+                 NEITHER × NEITHER is the conflict.
 
         Pairs: within each pool; exchangeable × pool 1. Each pair is weighted
         by the energy of its operands and ordered by an orientation draw
@@ -2028,7 +2033,7 @@ class ConcordancyOperator:
                               if c.layer == Layer.APPARENT and n not in ZERO_POINTS),
                              key=lambda n: (-E[n], n))[:self.EXCHANGE_POOL_CAP]
         unreal_cs   = [n for n, c in active.items()
-                       if n not in ANCHORS and not n.startswith("SOMBUNAL::") and not c.conflict
+                       if n not in ANCHORS and not n.startswith("SOMBUNAL::")
                        and field.dominant_state(n) == TetraState.NEITHER]
 
         pairs = set()

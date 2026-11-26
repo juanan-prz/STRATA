@@ -34,7 +34,9 @@ one guards what the field must be, from the primary source:
   - [::] from the key (TMC pp.16, 102): on the pair (is, is-not) every product
     is the join, is OR and is-not OR; NEITHER × NEITHER stays the reversion.
   - The unreal meets the unreal (TMC p.44): units in NEITHER are routed only
-    against each other, and their encounter is the conflict.
+    against each other, and their encounter is the conflict. A conflict in
+    NEITHER is unreal too: it meets the unreal, and their encounter is a deeper
+    conflict (TMC p.41), never a pairing with an existent unit.
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -294,6 +296,31 @@ check("the unreal meets the unreal (TMC p.44): units in NEITHER are routed again
       and [op["state"] for op in met] == expected
       and not mixed and ur.concordancy.pool_telemetry[-1].get("unreal_pool_size") == len(unreal),
       f"{len(unreal)} unreal units, met {[op['state'] for op in met]}, {len(mixed)} mixed")
+# A conflict is unreal too (TMC pp.44, 22, 41): a conflict in NEITHER, below the conflict pool's energy,
+# meets an unreal unit and gives a deeper conflict; it is never paired with an existent unit
+with quiet():
+    S.set_ledger(S.ProofLedger(None))
+    uc = S.new_session(S.LLMIntermediary(backend="none"))
+cf_field = uc.field
+cf_field.add_construct("CF::x", S.Layer.UMBRA_0)
+cf_field.constructs["CF::x"].conflict = True
+cf_field.add_edge("I::AmNot", "::", "CF::x", weight=0.6, state=N_, concordancy_depth=2)
+for name, state in (("UC::n", N_), ("UC::t", T_)):
+    cf_field.add_construct(name, S.Layer.UNIT_1)
+    cf_field.add_edge(f"{name}::source", "::", name, weight=0.6, state=state)
+cf_unreal = {n for n, c in cf_field.constructs.items() if c.layer != S.Layer.APPARENT and n not in S.ANCHORS
+             and not n.startswith("SOMBUNAL::") and cf_field.dominant_state(n) == N_}
+with quiet():
+    uc.concordancy.scan_and_apply(cf_field, 0, {"used": 0})
+cf_ops = [op for op in uc.concordancy._ops_log if op.get("cycle") == 0 and "CF::x" in (op["x"], op["y"])]
+cf_met = [op for op in cf_ops if {op["x"], op["y"]} <= cf_unreal]
+cf_mixed = [op for op in cf_ops if not {op["x"], op["y"]} <= cf_unreal]
+check("a conflict is unreal too (TMC pp.44, 22): a conflict in NEITHER meets an unreal unit and gives a "
+      "deeper conflict (TMC p.41); it is never paired with an existent unit",
+      "CF::x" in cf_unreal and "UC::t" not in cf_unreal
+      and cf_field.constructs["CF::x"].umbragiac_score < CO.CF_MIN_ENERGY
+      and any(op["state"] == "CONFLICT" and op["depth"] == 3 for op in cf_met) and not cf_mixed,
+      f"{len(cf_met)} encounters {[(op['state'], op.get('depth')) for op in cf_met]}, {len(cf_mixed)} mixed")
 # The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a crystal's exchanges presses on its
 # support from all sides and repairs it, never past its strength at birth (TMC p.14); what no construct can
 # hold goes to the null, accounted (TMC pp.45, 59)
