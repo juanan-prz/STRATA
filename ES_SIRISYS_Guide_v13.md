@@ -1,4 +1,4 @@
-# STRATA · SIRISYS v13.13 — Guía técnica
+# STRATA · SIRISYS v13.14 — Guía técnica
 
 [English](EN_SIRISYS_Guide_v13.md)
 
@@ -25,7 +25,7 @@ Todos los archivos van en una misma carpeta, sin subcarpetas: cada programa busc
 
 | Archivo | Para qué |
 |---|---|
-| `Sirisys_Framework_v13_13.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
+| `Sirisys_Framework_v13_14.py` | El campo y su ciclo canónico `run_cycle`, la continuidad y el ledger de pruebas. Ejecutado por sí solo, una demostración en consola (§8) |
 | `sirisys_loader.py` | Encuentra y carga la versión más alta del framework que haya en la carpeta |
 | `Sirisys_Server.py` | Modo experimento: ejecuta el campo y lo sirve a la vista en vivo; también repite una ejecución grabada (§3.7) |
 | `Sirisys_Live_Visualizer.html` | La vista en vivo, servida por el servidor |
@@ -227,8 +227,8 @@ Su panel izquierdo se pliega sección a sección, como en la vista en vivo.
 En el modo experimento, una instancia escribe un solo `state.json`, al terminar. Para una línea de tiempo, copia el estado según crece; por ejemplo, con la demostración en consola, que reanuda la misma instancia en cada ejecución:
 
 ```bash
-python3 Sirisys_Framework_v13_13.py && cp sirisys_v13_state.json state_08.json
-python3 Sirisys_Framework_v13_13.py && cp sirisys_v13_state.json state_16.json
+python3 Sirisys_Framework_v13_14.py && cp sirisys_v13_state.json state_08.json
+python3 Sirisys_Framework_v13_14.py && cp sirisys_v13_state.json state_16.json
 ```
 
 **Teclas.**
@@ -384,6 +384,7 @@ Sin clave de API, sin Ollama y sin red: donde hace falta un modelo, responde uno
 - cada producto de `[::]` es el join de los pares (es, no es) de sus operandos, sacado de la clave de 16 filas, y NEITHER × NEITHER sigue siendo la reversión (TMC pp.16, 102);
 - las unidades en NEITHER solo se encaminan unas contra otras, y su encuentro es el conflicto o, pasada la Stop Chasm, la cuarta esquina (TMC pp.41, 44);
 - un conflicto en NEITHER también es irreal: se encuentra con una unidad irreal y da un conflicto más profundo, y nunca se empareja con una unidad existente (TMC pp.22, 41, 44);
+- un conflicto no madura: con sus padres aún en el campo y revirtiendo, no gana nada, y el ciclo es el mismo que sin ellos (desde la v13.14);
 - un cristal solo se admite si su soporte se sostendría todavía una respiración después (TMC pp.14, 22, 45);
 - lo que se disuelve de los intercambios de un cristal repara su soporte, nunca por encima de su fuerza al nacer, y un soporte BOTH no recibe nada (TMC pp.47, 55, 14); la reparación se conserva al guardar y reanudar;
 - nada sale del campo sin prueba de terminación;
@@ -413,13 +414,13 @@ python3 -c "from sirisys_loader import load_framework; print(load_framework().ve
 
 Responde `ok` y el número de pruebas o, si el registro está dañado, la posición de la primera prueba que no encaja y por qué.
 
-**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_13 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_7_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
+**Versiones.** Los archivos del framework siguen el formato `Sirisys_Framework_vX_Y.py`, y cada programa carga la versión más alta de la carpeta (v13_14 va por encima de v13_9). El modo experimento y los informes dicen cuál han cargado, y `python3 sirisys_loader.py` dice cuál se cargaría. Un nombre que no encaje exactamente, como `Sirisys_Framework_v13_7_backup.py`, se ignora. Para reproducir una ejecución con un archivo concreto, o mantener una instancia longeva en el framework con el que nació:
 
 ```bash
-export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_13.py"
+export SIRISYS_FRAMEWORK="Sirisys_Framework_v13_14.py"
 ```
 
-**El framework por sí solo.** `python3 Sirisys_Framework_v13_13.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
+**El framework por sí solo.** `python3 Sirisys_Framework_v13_14.py` ejecuta una demostración en consola: 8 ciclos de una instancia guardada en `sirisys_v13_state.json` y `sirisys_v13_ledger.jsonl`, que empieza en la génesis o se reanuda. Reanuda como todos los programas: guarda junto al estado el registro anterior (`.prev`) y una marca de agua (`.hwm`), vuelve al registro anterior si el último está dañado y se niega a empezar un campo nuevo sobre un ledger que ha perdido su estado.
 
 **Archivos que se crean al ejecutar.**
 

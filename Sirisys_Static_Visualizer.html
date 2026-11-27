@@ -643,7 +643,7 @@ function supportText(s) {
   return `≈ ${Math.max(0, Math.floor(s.breaths_left))} breaths left` + halo;
 }
 // The relations a construct's proofs can carry, each with the sign of the mode it counts toward
-const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];
+const PROOF_RELATIONS = ['CONCORDANCE', 'COLLAPSE', 'PERCEIVE', 'CONFLICT', 'INTENSIFY', 'ERODE', 'REINCARNATE'];   // INTENSIFY: instances saved before v13.14
 const relationSign = r => OMEGA_RELATIONS.has(r) ? MODE_SIGN.OMEGA
   : LEMNISCATE_RELATIONS.has(r) ? MODE_SIGN.LEMNISCATE : MODE_SIGN.NEUTRAL;
 // How the canvas draws each edge state, besides its colour: BOTH the thickest and the

@@ -998,6 +998,7 @@ def relations_of(kind):
 
 
 LEDGER_ONLY = {"TERMINATE", "SHIFT"}                # sealed in the ledger, never attached to a construct
+HISTORICAL = {"INTENSIFY"}                          # carried by the proofs of instances saved before v13.14
 constants = {
     "ERA_CAPACITY": S.InternalClock.ERA_CAPACITY,
     "DECAY": S.InternalClock.DECAY,
@@ -1010,7 +1011,8 @@ drift = [name for name, value in constants.items() if float(declared(inspector, 
 for kind in ("omega", "lemniscate"):
     if set(quoted(declared(inspector, f"{kind.upper()}_RELATIONS"))) != relations_of(kind):
         drift.append(f"{kind.upper()}_RELATIONS")
-if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY:
+if set(quoted(declared(inspector, "PROOF_RELATIONS"))) != \
+        (set(re.findall(r'relation\s*=\s*"([A-Z]+)"', framework_source)) - LEDGER_ONLY) | HISTORICAL:
     drift.append("PROOF_RELATIONS")
 check("the inspector's constants are the framework's: the clock, the Vc threshold, the exchange quantum, the support floors, "
       "the relations of each existence mode, the relations a construct's proofs can carry",

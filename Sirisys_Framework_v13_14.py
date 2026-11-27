@@ -1,5 +1,5 @@
 # =============================================================================
-# SIRISYS FRAMEWORK v13.13 — Recursive Ontological Field
+# SIRISYS FRAMEWORK v13.14 — Recursive Ontological Field
 #
 # An independent interpretation, in software, of the framework M. Daniel Walsh
 # describes with Sirisys; not an official SIRISYS work.
@@ -22,9 +22,9 @@
 #
 # ONE CYCLE (run_cycle — the only definition; run(), the server and
 # run_report.py all call it):
-#   perceive → tetralemma scan → breathe → intensify conflicts → [::] (from
-#   four pools: matured BOTH, energetic conflicts, exchangeable crystals, the
-#   unreal) → cussive collapse → UCO erosion (sparing the support of the
+#   perceive → tetralemma scan → breathe → [::] (from four pools: matured
+#   BOTH, energetic conflicts, exchangeable crystals, the unreal) → cussive
+#   collapse → UCO erosion (sparing the support of the
 #   crystals just formed) → prune → (narration) → Sombunal approach (once per
 #   breath) → tick
 #
@@ -189,7 +189,7 @@ try:
 except ImportError:                   # Windows: no lock; single-writer by convention
     fcntl = None
 
-__version__ = "13.13"                 # the one place the version is written; the file name agrees
+__version__ = "13.14"                 # the one place the version is written; the file name agrees
 
 # ── files ────────────────────────────────────────────────────────────────────
 STATE_FILE               = Path("sirisys_v13_state.json")
@@ -326,8 +326,8 @@ class LagrangianPoint(Enum):
 class ProofObject:
     id:       str                       # e.g. "concordancy::c3", "conflict::tensin_left::c7"
     subject:  str                       # witness of the construct being certified
-    relation: str                       # CONCORDANCE | CONFLICT | COLLAPSE | PERCEIVE | ERODE | INTENSIFY
-                                        # | REINCARNATE | TERMINATE | SHIFT
+    relation: str                       # CONCORDANCE | CONFLICT | COLLAPSE | PERCEIVE | ERODE
+                                        # | REINCARNATE | TERMINATE | SHIFT (INTENSIFY: ledgers before v13.14)
     object:   str                       # witness or ZP name validated against
     witness:  str                       # SHA-256[:16] of this proof's own identity
     anchor:   str                       # Zi — Zero Point anchoring this proof
@@ -342,8 +342,8 @@ class ProofObject:
     #   TENSIN_LEFT  — left intake  (x)
     #   TENSIN_RIGHT — right intake (y)
     #   TENSOUT      — outgoing emergent or conflict (z)
-    # Every other proof (PERCEIVE, ERODE, INTENSIFY, COLLAPSE, REINCARNATE,
-    # TERMINATE, SHIFT, genesis, question) stands alone: no role, no op_witness.
+    # Every other proof (PERCEIVE, ERODE, COLLAPSE, REINCARNATE, TERMINATE,
+    # SHIFT, genesis, question) stands alone: no role, no op_witness.
     op_witness:    str | None = None
     tensate_role:  str | None = None
 
@@ -1416,7 +1416,7 @@ class ConcordancyField:
         A construct's existence mode is orthogonal to its anchoring weight Vc.
         The same Vc can manifest as either:
           OMEGA      — densifying toward Apparency (concordance, collapse dominate)
-          LEMNISCATE — oscillating in unresolved recursion (conflict, intensify, erosion)
+          LEMNISCATE — oscillating in unresolved recursion (conflict, erosion)
           NEUTRAL    — insufficient proof history to classify
 
         This is a derived property — read from the structure of proof_chain,
@@ -1432,7 +1432,7 @@ class ConcordancyField:
         if not recent:
             return "NEUTRAL"
         omega_relations      = {"CONCORDANCE", "COLLAPSE", "PERCEIVE"}
-        lemniscate_relations = {"CONFLICT", "INTENSIFY", "ERODE"}
+        lemniscate_relations = {"CONFLICT", "INTENSIFY", "ERODE"}   # INTENSIFY: ledgers before v13.14
 
         omega_count      = sum(1 for p in recent if p.relation in omega_relations)
         lemniscate_count = sum(1 for p in recent if p.relation in lemniscate_relations)
@@ -1873,11 +1873,14 @@ class LLMIntermediary:
 # Discordancy is informative: it generates first-class ontological structure.
 #
 # Lifecycle of a conflict: BORN (in NEITHER; a CONFLICT × CONFLICT synthesis, in
-# BOTH) → ROUTED against the unreal while it stays in NEITHER (TMC p.44) → DECAY
-# (pruned). Two further paths are written but, measured, do not occur (IV8, at
-# least since v13.10): INTENSIFY, which needs both parents still in the field and
-# reverting, and CRYSTALLIZE, which needs an existent dominant state (TMC p.22)
-# and a support that prune would hold, above BOTH_FLOOR for a BOTH edge.
+# BOTH) → ROUTED against the unreal while it stays in NEITHER (TMC p.44), deeper
+# up to the Adsurdic depth and silent past it (TMC p.41) → DECAY (pruned). TMC
+# names no maturing of a conflict. Until v13.13 a Level 3 rule made a conflict
+# whose parents kept reverting gain score each cycle ("intensify"); since v13.12
+# it acted almost never (once in a measured genesis), and it was retired in
+# v13.14. A conflict crystallizes only by the rule every unit is asked: an
+# existent dominant state (TMC p.22) and a support prune would hold; a conflict
+# in NEITHER cannot, and none has in any measured version.
 # =============================================================================
 
 def control_emergent_name(x_name: str, y_name: str, cycle: int) -> str:
@@ -1916,10 +1919,7 @@ class ConcordancyOperator:
     # Conflict regulation
     MAX_CF_DEPTH            = 4     # Adsurdic Threshold for conflict recursion (TMC p.41)
     CF_BASE_WEIGHT          = 0.35  # Level 3: base edge weight for new conflict
-    CF_MIN_ENERGY           = 0.30  # Level 3: min umbragiac_score for conflict concordancy eligibility
-    CF_COLLAPSE_ENERGY      = 3.50  # Level 3: score at which a conflict's high energy is marked (a transform; it promotes nothing)
-    CF_INTENSIFY_STEP       = 0.15  # Level 3: score a persistent conflict gains per cycle
-    CF_RECENT_OPS           = 20    # Level 3: operations read for parents still in reversion
+    CF_MIN_ENERGY           = 0.30  # Level 3: min umbragiac_score (raised by UCO erosion) for pool C
     MAX_CONFLICTS_PER_CYCLE = 2     # Stop Chasm — prevent combinatorial growth (TMC p.41)
 
     def __init__(self, llm: LLMIntermediary, sombunal: Sombunal):
@@ -1930,66 +1930,7 @@ class ConcordancyOperator:
         # Read-only diagnostics (server, visualizer, run_report); no effect on the field.
         self._pool_telemetry: list[dict] = []
 
-    # ── one cycle: intensify, select, execute ────────────────────────────
-    def intensify_conflicts(self, field: ConcordancyField, cycle: int) -> int:
-        """
-        Deepen persistent conflicts: if a conflict's parents are still generating
-        reversions, its umbragiac_score grows each cycle — irresolvability acquires
-        ontological weight. When score reaches CF_COLLAPSE_ENERGY, the conflict's
-        identity records it (a transform); crystallizing still asks what every
-        unit is asked, enough tension and an existent state (TMC p.22).
-        Low-energy conflicts decay naturally under UCO and are eventually pruned.
-
-        Level 3 reading: irresolvability is not static — it accumulates, like
-        scar tissue.
-        """
-        intensified = 0
-
-        recent_parents = set()
-        for op in self._ops_log[-self.CF_RECENT_OPS:]:
-            if op.get("state") == "CONFLICT":
-                recent_parents.add(op.get("x", ""))
-                recent_parents.add(op.get("y", ""))
-
-        for name, c in field.constructs.items():
-            if name in ANCHORS or c.layer == Layer.APPARENT:
-                continue
-            # proof-record typing (Construct.conflict)
-            if not is_conflict_construct(c):
-                continue
-            cf_op = next(
-                (op for op in reversed(self._ops_log)
-                 if op.get("z") == name and op.get("state") == "CONFLICT"),
-                None
-            )
-            if not cf_op:
-                continue
-            px, py = cf_op.get("x", ""), cf_op.get("y", "")
-            if (px in field.constructs and py in field.constructs
-                    and px in recent_parents):
-                c.umbragiac_score = min(UCO.SCORE_CAP, c.umbragiac_score + self.CF_INTENSIFY_STEP)
-                intensified += 1
-                # Emit INTENSIFY proof — L2: paying the cost of tracking irresolvability
-                proof = ProofObject.make(
-                    id       = f"intensify::c{cycle}",
-                    subject  = c.witness,
-                    relation = "INTENSIFY",
-                    object   = "Z1::ORIGIN",
-                    anchor   = "Z1::ORIGIN",
-                    lagrange = LagrangianPoint.L2,
-                    T        = field.clock.T,
-                )
-                c.add_proof(proof)
-                if c.umbragiac_score >= self.CF_COLLAPSE_ENERGY:
-                    c.transform(f"CONFLICT::high_energy@c{cycle}", field.clock.T)
-                    print(f"  [CONFLICT] '{name[:45]}' → CF_COLLAPSE_ENERGY — "
-                          f"high energy")
-
-        if intensified:
-            print(f"  [CONFLICT] {intensified} conflict(s) intensified "
-                  f"(persistent irresolvability — energy deepening)")
-        return intensified
-
+    # ── one cycle: select, execute ───────────────────────────────────────
     def scan_and_apply(self, field: ConcordancyField,
                        cycle: int, llm_budget: dict,
                        max_ops: int = CONCORDANCY_OPS) -> list[str]:
@@ -3036,7 +2977,6 @@ def run_cycle(ss: Session, cycle: int, percepts: list[dict] | None = None,
     both_after  = sum(1 for e in field.edges if e.state == TetraState.BOTH)
 
     field.breathe()
-    ss.concordancy.intensify_conflicts(field, cycle)
     # expansion generates: more [::] operations as the field expands
     extra_ops   = round(BREATH_MAX_EXTRA_OPS * (1 - field.contraction))
     emergent    = ss.concordancy.scan_and_apply(field, cycle, budget, max_ops=CONCORDANCY_OPS + extra_ops)

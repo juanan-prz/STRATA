@@ -36,7 +36,9 @@ one guards what the field must be, from the primary source:
   - The unreal meets the unreal (TMC p.44): units in NEITHER are routed only
     against each other, and their encounter is the conflict. A conflict in
     NEITHER is unreal too: it meets the unreal, and their encounter is a deeper
-    conflict (TMC p.41), never a pairing with an existent unit.
+    conflict (TMC p.41), never a pairing with an existent unit. A conflict does
+    not mature: TMC names no growth of a conflict's energy, and since v13.14
+    its parents' persistence changes nothing.
   - No randomness with a model in the loop (TMC p.42): every request carries a
     seed oriented by the history, and two identical runs seal the same ledger.
 Every life runs the minimal profile. The model is a local, deterministic fake.
@@ -321,6 +323,40 @@ check("a conflict is unreal too (TMC pp.44, 22): a conflict in NEITHER meets an 
       and cf_field.constructs["CF::x"].umbragiac_score < CO.CF_MIN_ENERGY
       and any(op["state"] == "CONFLICT" and op["depth"] == 3 for op in cf_met) and not cf_mixed,
       f"{len(cf_met)} encounters {[(op['state'], op.get('depth')) for op in cf_met]}, {len(cf_mixed)} mixed")
+# A conflict does not mature (v13.14): TMC names no growth of a conflict's energy. Until v13.13 a conflict
+# whose parents were still in the field and had just reverted gained score each cycle ("intensify"). The
+# same cycle, with and without its parents' reversion on record, must now be the same cycle
+
+
+def conflict_cycle(parents_on_record):
+    with quiet():
+        S.set_ledger(S.ProofLedger(None))
+        ss = S.new_session(S.LLMIntermediary(backend="none"))
+    f = ss.field
+    for name in ("NI::a", "NI::b"):
+        f.add_construct(name, S.Layer.UMBRA_0)
+        f.add_edge(f"{name}::source", "::", name, weight=0.6, state=N_)
+    f.add_construct("NI::cf", S.Layer.UMBRA_0)
+    f.constructs["NI::cf"].conflict = True
+    f.constructs["NI::cf"].umbragiac_score = 0.4
+    f.add_edge("I::AmNot", "::", "NI::cf", weight=0.6, state=N_, concordancy_depth=2)
+    if parents_on_record:
+        ss.concordancy._ops_log.append({"cycle": 0, "x": "NI::a", "y": "NI::b", "z": "NI::cf",
+                                        "state": "CONFLICT", "depth": 2})
+    with quiet():
+        S.run_cycle(ss, 1, percepts=S.synthetic_percepts(1, 0, False), narrate=False, include_hour=False)
+    c = f.constructs.get("NI::cf")
+    intensified = sum(p.relation == "INTENSIFY" for k in f.constructs.values() for p in k.proof_chain)
+    return S.get_ledger().head, (c.umbragiac_score if c else None), intensified
+
+
+(head_on, score_on, int_on), (head_off, score_off, int_off) = conflict_cycle(True), conflict_cycle(False)
+check("a conflict does not mature (v13.14; TMC names no growth of a conflict): with its parents in the field "
+      "and their reversion on record, a cycle gives it no score, seals no INTENSIFY proof and seals the same "
+      "ledger as without that record",
+      head_on == head_off and score_on == score_off and int_on == int_off == 0
+      and not hasattr(CO, "intensify_conflicts"),
+      f"score {score_on} vs {score_off}, {int_on} INTENSIFY proofs, same ledger {head_on == head_off}")
 # The Halo toward the Apparent (TMC pp.47, 55): what dissolves of a crystal's exchanges presses on its
 # support from all sides and repairs it, never past its strength at birth (TMC p.14); what no construct can
 # hold goes to the null, accounted (TMC pp.45, 59)
